@@ -38,14 +38,15 @@
         }
         body {
             background: linear-gradient(160deg,
-                #e8d5a8 0%,
-                #ddc898 18%,
-                #cfc0a8 38%,
-                #c4b4c0 60%,
-                #baadc8 78%,
-                #c8b8d0 100%);
+                #241a0c 0%,
+                #3a2c14 18%,
+                #5c4826 38%,
+                #6b5230 55%,
+                #4a3826 72%,
+                #2e2118 88%,
+                #241a10 100%);
             background-attachment: fixed;
-            color: #3a2e26;
+            color: #ede1cf;
         }
 
         header {
