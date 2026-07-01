@@ -2940,7 +2940,9 @@ document.querySelectorAll('.card-dinamica').forEach(function(card) {
 var _pillBtns   = { biografia:'pillBiografia', productos:'pillProductos', ofertas:'pillOfertas', masvendidos:'pillMasVendidos' };
 var _pillPanels = { biografia:'panelPillBiografia', productos:null, ofertas:'panelPillOfertas', masvendidos:'panelPillMasVendidos' };
 
-function activarPill(cual) {
+function activarPill(cual, opts) {
+    var sinScroll = !!(opts && opts.sinScroll);
+
     // Desactivar todos
     Object.values(_pillBtns).forEach(function(id) {
         var el = document.getElementById(id);
@@ -2963,7 +2965,11 @@ function activarPill(cual) {
     var catalogo = document.getElementById('zona-catalogo');
     if (catalogo) catalogo.style.display = (cual === 'biografia') ? 'none' : 'block';
 
-    if (cual === 'productos') {
+    // El scroll automático hacia el catálogo solo ocurre cuando el usuario
+    // elige "Productos" manualmente (por ejemplo, desde la sección de biografía).
+    // En la carga inicial de la página (F5) se omite para que se muestre
+    // siempre el banner de arriba, sin desplazamiento automático.
+    if (cual === 'productos' && !sinScroll) {
         setTimeout(function() {
             if (catalogo) catalogo.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 80);
@@ -2998,12 +3004,20 @@ function _actualizarBotonesInicio(cual) {
     }
 }
 
-// Aplicar preferencia guardada (o productos por defecto)
+// Aplicar preferencia guardada (o productos por defecto).
+// Nunca hace scroll automático en la carga/recarga de la página:
+// siempre se muestra primero la parte de arriba (banner) y el usuario
+// decide cuándo bajar.
 (function() {
     var pref = localStorage.getItem('kukumita-inicio') || 'productos';
+    // Evita que el navegador restaure una posición de scroll previa al recargar (F5)
+    if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+    }
     _ready(function() {
-        activarPill(pref);
+        activarPill(pref, { sinScroll: true });
         _actualizarBotonesInicio(pref);
+        window.scrollTo(0, 0);
     });
 })();
 
