@@ -3009,7 +3009,7 @@ function _actualizarBotonesInicio(cual) {
 // siempre se muestra primero la parte de arriba (banner) y el usuario
 // decide cuándo bajar.
 (function() {
-    var pref = localStorage.getItem('kukumita-inicio') || 'productos';
+    var pref = 'productos'; // Siempre inicia en la zona de Catálogo, sin importar preferencias guardadas
     // Evita que el navegador restaure una posición de scroll previa al recargar (F5)
     if ('scrollRestoration' in window.history) {
         window.history.scrollRestoration = 'manual';
