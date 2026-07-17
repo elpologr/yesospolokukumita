@@ -540,7 +540,7 @@ function _abrirProductoDesdeURL() {
     var imagenes  = [];
     try { imagenes = JSON.parse(cardEncontrada.getAttribute('data-imagenes') || '[]'); } catch(e) {}
     var imagen    = imagenes[0] || '';
-    var urlProd   = window.location.href.split('?')[0] + '?producto=' + encodeURIComponent(nombre);
+    var urlProd   = window.location.origin + window.location.pathname + '?producto=' + encodeURIComponent(nombre);
 
     _actualizarMetaOG(nombre, desc, imagen, urlProd);
 
@@ -1281,7 +1281,7 @@ if (document.readyState === 'loading') {
         // Botón Compartir — actualiza OG y abre submenu
         document.getElementById('mpBtnCompartir').onclick = (e) => {
             e.stopPropagation();
-            const url    = window.location.href.split('?')[0] + '?producto=' + encodeURIComponent(nombre);
+            const url    = window.location.origin + window.location.pathname + '?producto=' + encodeURIComponent(nombre);
             const urlOG  = (typeof _urlOG === 'function') ? _urlOG(url) : url;
             // Actualizar meta OG con este producto antes de compartir
             if (typeof _actualizarMetaOG === 'function') {
@@ -4453,8 +4453,15 @@ function _copiarFallback(texto) {
 function _urlOG(urlPaginaReal) {
     if (!OG_WORKER_URL || !OG_WORKER_URL.trim()) return urlPaginaReal;
     try {
-        var params = new URL(urlPaginaReal).searchParams;
-        var producto = params.get('producto');
+        var urlObj = new URL(urlPaginaReal);
+        var producto = urlObj.searchParams.get('producto');
+        // Red de seguridad: si "producto" no está en el query string real
+        // (por ejemplo, quedó atrapado dentro de un hash tipo #pagina=6?producto=X),
+        // lo buscamos ahí también en vez de rendirnos.
+        if (!producto && urlObj.hash) {
+            var m = urlObj.hash.match(/[?&]producto=([^&]+)/);
+            if (m) producto = decodeURIComponent(m[1]);
+        }
         if (!producto) return urlPaginaReal;
         return OG_WORKER_URL.replace(/\/$/, '') + '/?producto=' + encodeURIComponent(producto);
     } catch(e) {
