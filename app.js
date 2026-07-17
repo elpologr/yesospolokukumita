@@ -555,16 +555,17 @@ function _abrirProductoDesdeURL() {
     var _tituloOriginal    = document.title;
     var _ogTitleOriginal   = 'Yesos Polo Kukúmita — Arreglos y Productos Artesanales';
     var _ogDescOriginal    = 'Descubre nuestros hermosos arreglos y productos artesanales de Yesos Polo Kukúmita.';
+    var _ogImagenOriginal  = 'https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp';
 
     document.addEventListener('modalProductoCerrado', function() {
         document.title = _tituloOriginal;
         function setMeta(id, val) { var el=document.getElementById(id); if(el) el.setAttribute('content',val); }
         setMeta('og-title',       _ogTitleOriginal);
         setMeta('og-description', _ogDescOriginal);
-        setMeta('og-image',       '');
+        setMeta('og-image',       _ogImagenOriginal);
         setMeta('tw-title',       _ogTitleOriginal);
         setMeta('tw-description', _ogDescOriginal);
-        setMeta('tw-image',       '');
+        setMeta('tw-image',       _ogImagenOriginal);
     });
 })();
 
@@ -2963,7 +2964,7 @@ function activarPill(cual, opts) {
 
     // Mostrar/ocultar catálogo de productos
     var catalogo = document.getElementById('zona-catalogo');
-    if (catalogo) catalogo.style.display = (cual === 'biografia') ? 'none' : 'block';
+    if (catalogo) catalogo.style.display = (cual === 'productos') ? 'block' : 'none';
 
     // El scroll automático hacia el catálogo solo ocurre cuando el usuario
     // elige "Productos" manualmente (por ejemplo, desde la sección de biografía).

@@ -2555,6 +2555,15 @@
             max-width: 1100px;
             margin: 0 auto 50px;
         }
+        .footer-logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(196,168,130,0.4);
+            display: block;
+            margin-bottom: 16px;
+        }
         .footer-brand h2 {
             font-size: 28px;
             font-weight: 700;
@@ -3150,17 +3159,7 @@ body.modo-oscuro .cart-total-valor { color: #f0e8e0; }
         padding: 0 !important;
     }
 
-    /* Botones de modo (Arreglos, Decoraciones…) — evita overflow */
-    .selector-modo-velas {
-        padding: 0 8px !important;
-        box-sizing: border-box !important;
-        width: 100% !important;
-    }
-
-    .btn-modo-velas {
-        font-size: 12px !important;
-        padding: 8px 12px !important;
-    }
+    /* Botones de modo (Mostrar Todo, Arreglos, Paquetes, Etiquetas) — misma disposición que .pill-nav-barra, sin overrides especiales */
 
     /* Panel de búsqueda unificado */
     .panel-busqueda-unificado {
