@@ -178,17 +178,18 @@ var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers
 //   C(2):  precio mayoreo
 //   D(3):  Descripcion
 //   E(4):  video youtube
-//   F(5):  Imagen
-//   G(6):  EtiquetaPrincipal
-//   H(7):  SubEtiqueta
-//   I(8):  EtiquetaEvento
-//   J(9):  en oferta          (escribe "si" para activar)
-//   K(10): mas vendido        (escribe "si" para activar)
-//   L(11): Alto
-//   M(12): Ancho
-//   N(13): SubImagen          (URLs separadas por coma)
-//   O(14): youtube img/vid
-//   P(15): existencia         (número de piezas en stock)
+//   F(5):  Imagen Polo       (galería imgbb de Yesos Polo Kukúmita — usada en este sitio)
+//   G(6):  Imagen Fer        (galería imgbb de Yesos Fer Kukúmita — IGNORADA en este sitio)
+//   H(7):  EtiquetaPrincipal
+//   I(8):  SubEtiqueta
+//   J(9):  EtiquetaEvento
+//   K(10): en oferta          (escribe "si" para activar)
+//   L(11): mas vendido        (escribe "si" para activar)
+//   M(12): Alto
+//   N(13): Ancho
+//   O(14): SubImagen          (URLs separadas por coma)
+//   P(15): youtube img/vid
+//   Q(16): existencia         (número de piezas en stock)
 // ══════════════════════════════════════════════════════════════════════════════
 
 var listaProductos = [];
@@ -242,53 +243,54 @@ function csvAProductos(filas) {
         // Saltar filas sin nombre
         if (!get(0)) continue;
 
-        // Nuevo orden de columnas (Google Sheets):
+        // Nuevo orden de columnas (Google Sheets) — recorrido 1 lugar a la derecha desde G:
         // A=0  nombre
         // B=1  precio
         // C=2  precioMayoreo (antes precioBazar)
         // D=3  descripcion
         // E=4  video youtube
-        // F=5  Imagen (URL principal + extras separadas por coma)
-        // G=6  EtiquetaPrincipal
-        // H=7  SubEtiqueta
-        // I=8  EtiquetaEvento
-        // J=9  en oferta  (si / vacío)
-        // K=10 mas vendido (si / vacío)
-        // L=11 Alto
-        // M=12 Ancho
-        // N=13 SubImagen (URLs o nombres separados por coma)
-        // O=14 youtube img/vid
-        // P=15 existencia (número de piezas en stock)
+        // F=5  Imagen Polo (URL principal + extras separadas por coma) — usada en este sitio
+        // G=6  Imagen Fer (galería imgbb de Yesos Fer Kukúmita — IGNORADA aquí)
+        // H=7  EtiquetaPrincipal
+        // I=8  SubEtiqueta
+        // J=9  EtiquetaEvento
+        // K=10 en oferta  (si / vacío)
+        // L=11 mas vendido (si / vacío)
+        // M=12 Alto
+        // N=13 Ancho
+        // O=14 SubImagen (URLs o nombres separados por coma)
+        // P=15 youtube img/vid
+        // Q=16 existencia (número de piezas en stock)
 
         // Video principal (E=4)
         var videoPrincipal = get(4).replace(/^"+|"+$/g, '').trim();
 
-        // Imágenes: columna F=5
+        // Imágenes: columna F=5 (Imagen Polo) — la columna G=6 (Imagen Fer) se ignora en este sitio
         var _rawImg = get(5).replace(/^"+|"+$/g, '').trim();
         var imagenesExtra = _rawImg
             ? _rawImg.split(',').map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
             : [];
 
-        // EtiquetaPrincipal G=6
-        var _rawTipos = get(6).replace(/^"+|"+$/g, '').trim();
+        // EtiquetaPrincipal H=7
+        var _rawTipos = get(7).replace(/^"+|"+$/g, '').trim();
         var tiposArray = _rawTipos
             ? _rawTipos.split(/[|,]/).map(function(s) { return s.trim().replace(/^"+|"+$/g, '').toLowerCase(); }).filter(Boolean)
             : ['arreglo'];
         var tipoPrincipal = tiposArray[0] || 'arreglo';
 
-        // Oferta y Más Vendido (J=9, K=10)
-        var enOferta   = get(9).toLowerCase()  === 'si' ? 1 : 0;
-        var masVendido = get(10).toLowerCase() === 'si' ? 1 : 0;
+        // Oferta y Más Vendido (K=10, L=11)
+        var enOferta   = get(10).toLowerCase() === 'si' ? 1 : 0;
+        var masVendido = get(11).toLowerCase() === 'si' ? 1 : 0;
 
-        // Existencia (P=15)
-        var existencia = parseInt(get(15).replace(/[^0-9]/g, '')) || 0;
+        // Existencia (Q=16)
+        var existencia = parseInt(get(16).replace(/[^0-9]/g, '')) || 0;
 
-        // YouTube img/vid (O=14)
+        // YouTube img/vid (P=15)
         function parsearRed(idx) {
             var raw = get(idx).replace(/^"+|"+$/g, '').trim();
             return raw ? raw.split(',').map(function(s){ return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean) : [];
         }
-        var redYoutube = parsearRed(14);
+        var redYoutube = parsearRed(15);
 
         productos.push({
             id:           i,
@@ -302,24 +304,24 @@ function csvAProductos(filas) {
             forma:        '',
             tipo:         tipoPrincipal,
             tipos:        tiposArray,
-            subtags:      get(7) ? get(7).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
-            eventos:      get(8)
-                            ? get(8).split(',').map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean).join(' ')
+            subtags:      get(8) ? get(8).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
+            eventos:      get(9)
+                            ? get(9).split(',').map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean).join(' ')
                             : '',
             etiquetas:    tiposArray,
             aditivos:     [],
             oferta:       enOferta,
             masVendido:   masVendido,
-            alto:         get(11),
-            ancho:        get(12),
+            alto:         get(12),
+            ancho:        get(13),
             existencia:   existencia,
             redYoutube:   redYoutube,
             redFacebook:  [],
             redInstagram: [],
             redTiktok:    [],
             subImagenes:  (function() {
-                // Columna N (índice 13): SubImagen — valores separados por coma
-                var rawSub = (f[13] || '').trim().replace(/^"+|"+$/g, '').trim();
+                // Columna O (índice 14): SubImagen — valores separados por coma
+                var rawSub = (f[14] || '').trim().replace(/^"+|"+$/g, '').trim();
                 return rawSub
                     ? rawSub.split(',').map(function(s){ return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
                     : [];
