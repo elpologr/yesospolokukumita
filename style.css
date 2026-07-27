@@ -38,12 +38,13 @@
         }
         body {
             background: linear-gradient(160deg,
-                #241a0c 0%,
-                #3a2c14 18%,
-                #5c4826 38%,
-                #6b5230 55%,
-                #4a3826 72%,
-                #2e2118 88%,
+                #2b2013 0%,
+                #4a3a1e 16%,
+                #6b5230 34%,
+                #8a6b3a 50%,
+                #6e5a52 64%,
+                #55454a 80%,
+                #34282a 92%,
                 #241a10 100%);
             background-attachment: fixed;
             color: #ede1cf;
