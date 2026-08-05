@@ -4524,29 +4524,71 @@ async function compartirConImagenOFallback(textoPlano, imagenUrl, numeroWhatsApp
     }
 }
 
+// ── Copia texto al portapapeles sin mostrar ningún aviso (uso interno,
+//    para dejar el link listo "por si acaso" mientras se abre la app).
+function _copiarAlPortapapelesSilencioso(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).catch(function() { /* silencioso */ });
+        return;
+    }
+    try {
+        var ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    } catch (e) { /* silencioso */ }
+}
+
 function compartirEnWhatsApp() {
-    // Usamos la URL del Worker (si está configurado) para que, en caso de
-    // recurrir al método clásico (computadora o sin soporte), WhatsApp
-    // lea las meta tags OG y muestre la imagen del producto en la vista previa.
+    // Usamos la URL del Worker (si está configurado) para que WhatsApp
+    // lea las meta tags OG y muestre la imagen del producto en la vista previa del link.
     var urlParaWhatsApp = _urlOG(_scUrlActual);
     var textoPlano = '🕯️ Mira este producto de Yesos Polo Kukúmita: ' + _scNombreActual + '\n' + urlParaWhatsApp;
-    // En celular, intenta adjuntar la imagen real vía el menú nativo de compartir.
-    // Si no es posible, cae automáticamente a wa.me con el texto (incluye el link,
-    // que sigue mostrando la imagen como vista previa del link).
-    compartirConImagenOFallback(textoPlano, _scImagenActual, null);
+
+    // Dejamos el link copiado por si el usuario lo quiere pegar en otro lado.
+    _copiarAlPortapapelesSilencioso(urlParaWhatsApp);
+
+    // Vamos DIRECTO al enlace clásico de WhatsApp (wa.me), sin pasar por el
+    // menú nativo de "compartir archivo" del celular (ese es el que solo
+    // dejaba "copiar imagen"). Con wa.me: se abre la app de WhatsApp, el
+    // usuario elige el contacto, se abre el chat y el texto con el link
+    // YA está escrito en la caja — solo falta presionar enviar.
+    var texto = encodeURIComponent(textoPlano);
+    window.open('https://wa.me/?text=' + texto, '_blank');
+    cerrarSubmenuCompartir();
 }
 
 function compartirEnFacebook() {
     // Usamos la URL del worker (si está configurado) para que Facebook
     // lea las meta tags OG y muestre la imagen del producto.
-    var urlParaFB = encodeURIComponent(_urlOG(_scUrlActual));
-    window.open('https://www.facebook.com/sharer/sharer.php?u=' + urlParaFB, '_blank', 'width=600,height=400');
+    var urlReal = _urlOG(_scUrlActual);
+    _copiarAlPortapapelesSilencioso(urlReal);
+    var urlParaFB = encodeURIComponent(urlReal);
+    // Sin width/height: en celular esto abre la app de Facebook (o pestaña
+    // completa) directo a la pantalla de compartir; en escritorio abre un popup.
+    window.open('https://www.facebook.com/sharer/sharer.php?u=' + urlParaFB, '_blank');
+    cerrarSubmenuCompartir();
 }
 
 function compartirEnInstagram() {
-    // Instagram no tiene share URL directa, copiamos el link
-    copiarLinkProducto();
-    mostrarToast('📸 Link copiado — pégalo en tu historia de Instagram');
+    // Instagram no permite prellenar texto/link en una publicación o mensaje,
+    // así que copiamos el link y abrimos la app directamente para que el
+    // usuario solo tenga que pegarlo (Ctrl+V / mantener presionado > Pegar).
+    var urlReal = _urlOG(_scUrlActual);
+    _copiarAlPortapapelesSilencioso(urlReal);
+    mostrarToast('📸 Link copiado — pégalo en tu historia o mensaje de Instagram');
+
+    var esMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (esMobile) {
+        // Intenta abrir la app de Instagram directamente vía deep link.
+        window.location.href = 'instagram://app';
+    } else {
+        window.open('https://www.instagram.com/', '_blank');
+    }
+    cerrarSubmenuCompartir();
 }
 
 // Cerrar al hacer clic en el fondo
