@@ -171,6 +171,14 @@ var SHEET_ID = '1GoIVWBIyl9s0wYo2qyv0GQwco_xBl3sajDwF0qcnf5o';
 // Mientras no lo tengas configurado, deja el valor vacío ('') y funcionará
 // como antes (sin imagen en Facebook).
 var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers.dev';
+
+// 🔧 Hoja de cálculo separada para el botón "Etiquetas" — se lee específicamente
+// la Hoja 2 de este otro Google Sheets (columnas en el mismo formato que el de
+// arriba: A Nombre, B precio, C precio mayoreo, D descripción, ... H EtiquetaPrincipal, etc.)
+// NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
+// tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
+var SHEET_ID_ETIQUETAS   = '1jin2wMYingvbPD2csGxIbm5AhulfRvCRvIzAKJTUNMw';
+var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 // ──────────────────────────────────────────────────────────────────────────────
 // COLUMNAS ESPERADAS EN LA HOJA (fila 1 = encabezados, datos desde fila 2):
 //   A(0):  Nombre
@@ -349,11 +357,16 @@ function mostrarEstadoCarga(mensaje, esError) {
 // Lee listaProductos y genera dinámicamente cada tarjeta .card-dinamica
 // ══════════════════════════════════════════════════════════════════════════════
 function renderizarCatalogoCompleto() {
-    var grid = document.getElementById('gridProductos');
-    if (!grid) { console.warn('renderizarCatalogoCompleto: #gridProductos no encontrado'); return; }
+    renderizarCatalogoEnGrid('gridProductos', listaProductos);
+}
+
+// ── Versión genérica: pinta cualquier lista de productos en cualquier grid ──
+function renderizarCatalogoEnGrid(gridId, productos) {
+    var grid = document.getElementById(gridId);
+    if (!grid) { console.warn('renderizarCatalogoEnGrid: #' + gridId + ' no encontrado'); return; }
     grid.innerHTML = '';
 
-    listaProductos.forEach(function(p) {
+    (productos || []).forEach(function(p) {
         var card = document.createElement('div');
         card.className = 'card-dinamica';
 
@@ -650,7 +663,119 @@ if (document.readyState === 'loading') {
     cargarDesdeGoogleSheets();
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CARGA DE PRODUCTOS PARA EL BOTÓN "ETIQUETAS" — Hoja 2 de un Google Sheets distinto
+// ══════════════════════════════════════════════════════════════════════════════
+var listaProductosEtiquetas = [];
+var _etiquetasCargando = false;
+var _etiquetasCargadas = false;
 
+function mostrarEstadoCargaEtiquetas(mensaje, esError) {
+    var grid = document.getElementById('gridProductosEtiquetas');
+    if (!grid) return;
+    grid.innerHTML =
+        '<div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:' +
+        (esError ? '#c0392b' : '#8c7565') + ';">' +
+        '<div style="font-size:2rem; margin-bottom:12px;">' + (esError ? '⚠️' : '⏳') + '</div>' +
+        '<p style="font-size:1rem; font-weight:600;">' + mensaje + '</p>' +
+        (esError ? '<p style="font-size:0.85rem; color:#999; margin-top:8px;">Revisa que "' + SHEET_NOMBRE_ETIQUETAS + '" sea el nombre correcto de la pestaña y que la hoja esté compartida como "Cualquiera con el enlace puede ver".</p>' : '') +
+        '</div>';
+}
+
+// Carga (una sola vez, con caché en memoria) los productos de la Hoja 2 del
+// Google Sheets de Etiquetas y los pinta en su propio grid.
+function cargarProductosEtiquetas(forzar) {
+    if (_etiquetasCargando) return;
+    if (_etiquetasCargadas && !forzar) {
+        renderizarCatalogoEnGrid('gridProductosEtiquetas', listaProductosEtiquetas);
+        return;
+    }
+    _etiquetasCargando = true;
+    mostrarEstadoCargaEtiquetas('Cargando productos desde Google Sheets…', false);
+
+    var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS +
+        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
+
+    fetch(csvUrl)
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        })
+        .then(function(texto) {
+            var filas = parsearCSV(texto);
+            var productos = csvAProductos(filas);
+
+            if (productos.length === 0) {
+                mostrarEstadoCargaEtiquetas('Esa hoja está vacía o no tiene el formato correcto.', true);
+                _etiquetasCargando = false;
+                return;
+            }
+
+            listaProductosEtiquetas = productos;
+            _etiquetasCargadas = true;
+            _etiquetasCargando = false;
+            renderizarCatalogoEnGrid('gridProductosEtiquetas', listaProductosEtiquetas);
+
+            if (typeof syncBotonesLike === 'function') syncBotonesLike();
+            document.dispatchEvent(new CustomEvent('catalogoEtiquetasCargado'));
+        })
+        .catch(function(err) {
+            console.error('Error cargando hoja de Etiquetas:', err);
+            _etiquetasCargando = false;
+            mostrarEstadoCargaEtiquetas('No se pudo cargar el catálogo de Etiquetas.', true);
+        });
+}
+
+
+
+// ===== BARRAS DE CATEGORÍA SOBRE CADA FILA (solo página 1, modo "Mostrar Todo") =====
+// Aparecen arriba de cada una de las 10 filas de 3 productos que forman los
+// primeros 30 productos de la hoja principal de productos (no aplica al grid de "Etiquetas").
+var TEXTOS_BARRAS_CATEGORIA = [
+    'Mostrar Más Animales',
+    'Mostrar Más Bases',
+    'Mostrar Más Macetas',
+    'Mostrar Más Porta Velas',
+    'Mostrar Más Tazones',
+    'Mostrar Más Porta Inciensos',
+    'Mostrar Más Alajeros',
+    'Mostrar Más Arreglos',
+    'Mostrar Más Velas'
+    // NOTA: solo se especificaron 9 textos para las 10 filas — revisa/ajusta el 10º abajo.
+];
+
+function insertarBarrasCategoriaProductos() {
+    var grid = document.getElementById('gridProductos');
+    if (!grid) return;
+
+    // Quitar barras insertadas previamente (se recalculan en cada render)
+    grid.querySelectorAll('.barra-categoria-fila').forEach(function(b) { b.remove(); });
+
+    // Solo debe aparecer en el modo "Mostrar Todo"
+    var btnTodosProductos = document.getElementById('btnModoTodosProductos');
+    var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
+    if (!esModoMostrarTodo) return;
+
+    // Solo en la página 1 de la paginación
+    var hashMatch = (window.location.hash || '').match(/pagina=(\d+)/);
+    var paginaActualNum = hashMatch ? parseInt(hashMatch[1], 10) : 1;
+    if (paginaActualNum !== 1) return;
+
+    var cards = Array.from(grid.querySelectorAll('.card-dinamica')).filter(function(c) {
+        return !c.classList.contains('oculto') && !c.classList.contains('paginacion-oculto');
+    });
+
+    for (var fila = 0; fila < 10; fila++) {
+        var idx = fila * 3;
+        if (idx >= cards.length) break;
+        var texto = TEXTOS_BARRAS_CATEGORIA[fila] || 'Mostrar Más Productos';
+        var barra = document.createElement('div');
+        barra.className = 'barra-categoria-fila';
+        barra.textContent = texto;
+        grid.insertBefore(barra, cards[idx]);
+    }
+}
+window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
 
 // ===== PAGINACIÓN DE 30 PRODUCTOS POR PÁGINA =====
 (function() {
@@ -691,6 +816,7 @@ if (document.readyState === 'loading') {
             }
         });
         renderControles();
+        insertarBarrasCategoriaProductos();
         if (_scrollAlCambiarPagina) {
             var grid = document.getElementById('gridProductos');
             if (grid) {
@@ -1668,6 +1794,13 @@ if (document.readyState === 'loading') {
         const panelTod  = document.getElementById('panelTodos');
         const bloqueArr = document.getElementById('bloqueFiltroPrecioArreglos');
         const bloqueTod = document.getElementById('bloqueFiltroPrecioTodos');
+        const gridPrincipal   = document.getElementById('gridProductos');
+        const gridEtiquetas   = document.getElementById('gridProductosEtiquetas');
+
+        // Por defecto: grid principal visible, grid de etiquetas oculto.
+        // (el bloque "etiquetas" de abajo invierte esto cuando corresponde)
+        if (gridPrincipal) gridPrincipal.style.display = '';
+        if (gridEtiquetas) gridEtiquetas.style.display = 'none';
 
         // Desactivar todos los botones y paneles
         [btnTodosProductos, btnArreglos, btnPaquetes, btnEtiquetas]
@@ -1695,6 +1828,9 @@ if (document.readyState === 'loading') {
         } else if (modo === 'etiquetas') {
             if (btnEtiquetas) btnEtiquetas.classList.add('activo');
             if (panelEtiq) panelEtiq.classList.add('visible');
+            if (gridPrincipal) gridPrincipal.style.display = 'none';
+            if (gridEtiquetas) gridEtiquetas.style.display = '';
+            cargarProductosEtiquetas();
             aplicarFiltrosUnificados('etiquetas');
         } else {
             // Fallback: mostrar todo
@@ -1899,7 +2035,10 @@ if (document.readyState === 'loading') {
             } else if (panel === 'decoraciones') {
                 card.classList.toggle('oculto', !tieneTipo(card, 'decoracion'));
             } else if (panel === 'etiquetas') {
-                card.classList.toggle('oculto', !(tieneTipo(card, 'etiqueta') && okEvento));
+                // Los productos de este panel vienen de una hoja dedicada (Hoja 2),
+                // así que se muestran todos por defecto; solo se filtran por
+                // nombre/evento si el usuario usa la búsqueda o los filtros de evento.
+                card.classList.toggle('oculto', !(okNombre && okEvento));
             } else if (panel === 'arreglos') {
                 // Respetar también el filtro de precio activo en arreglos
                 let okPrecio = true;
