@@ -840,26 +840,40 @@ var CATEGORIAS_BARRAS = [
 
 // Grupos de palabras equivalentes usados para reconocer la categoría de cada
 // producto a partir de su(s) data-tipos, igual que el sistema de filtros del sitio.
+// Se comparan sin acentos, espacios ni mayúsculas para tolerar variaciones de
+// escritura en la columna "EtiquetaPrincipal" de Google Sheets.
 var _VARIANTES_CATEGORIA_BARRA = {
-    figuras:        ['figura', 'figuras'],
+    figuras:        ['figura', 'figuras', 'animal', 'animales'],
     bases:          ['base', 'bases'],
     macetas:        ['maceta', 'macetas'],
-    portavelas:     ['porta vela', 'porta velas', 'portavela', 'portavelas', 'porta_vela', 'porta_velas'],
+    portavelas:     ['portavela', 'portavelas', 'porta vela', 'porta velas'],
     tazones:        ['tazon', 'tazones', 'tazón', 'tazónes'],
-    portainciensos: ['porta incienso', 'porta inciensos', 'portaincienso', 'portainciensos', 'porta_incienso', 'porta_inciensos'],
-    alajeros:       ['alajero', 'alajeros', 'alhajero', 'alhajeros'],
+    portainciensos: ['portaincienso', 'portainciensos', 'porta incienso', 'porta inciensos'],
+    alajeros:       ['alajero', 'alajeros', 'alhajero', 'alhajeros', 'joyero', 'joyeros'],
     arreglo:        ['arreglo', 'arreglos']
 };
+
+// Quita acentos, espacios, guiones y pasa a minúsculas para comparar sin
+// importar cómo se haya escrito la etiqueta en la hoja de cálculo.
+function _normalizarCategoriaBarra(str) {
+    return (str || '').toString().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\s_\-]+/g, '');
+}
 
 function _cardCoincideConCategoriaBarra(card, cfg) {
     if (cfg.origenExterno) {
         return card.getAttribute('data-origen-externo') === cfg.origenExterno;
     }
     var rawTipos = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
-    var tipos = rawTipos.toLowerCase().replace(/^"+|"+$/g, '').split(/[|,]/)
-        .map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean);
-    var lista = _VARIANTES_CATEGORIA_BARRA[cfg.tipo] || [cfg.tipo];
-    return tipos.some(function(t) { return lista.indexOf(t) !== -1; });
+    var rawSubtags = (card.getAttribute('data-subtags') || '');
+    var candidatos = (rawTipos + '|' + rawSubtags).split(/[|,]/)
+        .map(function(s) { return _normalizarCategoriaBarra(s.replace(/^"+|"+$/g, '')); })
+        .filter(Boolean);
+    var lista = (_VARIANTES_CATEGORIA_BARRA[cfg.tipo] || [cfg.tipo]).map(_normalizarCategoriaBarra);
+    return candidatos.some(function(c) {
+        return lista.some(function(v) { return c === v || c.indexOf(v) !== -1 || v.indexOf(c) !== -1; });
+    });
 }
 
 // Índice (0-9) de la barra actualmente usada como filtro, o null si no hay ninguna activa
@@ -877,9 +891,19 @@ function filtrarPorBarraCategoria(fila) {
         grid.querySelectorAll('.card-dinamica').forEach(function(c) { c.classList.remove('oculto'); });
     } else {
         _filtroBarraCategoriaActivo = fila;
+        var coincidencias = 0;
         grid.querySelectorAll('.card-dinamica').forEach(function(c) {
-            c.classList.toggle('oculto', !_cardCoincideConCategoriaBarra(c, cfg));
+            var coincide = _cardCoincideConCategoriaBarra(c, cfg);
+            if (coincide) coincidencias++;
+            c.classList.toggle('oculto', !coincide);
         });
+        if (coincidencias === 0) {
+            console.warn(
+                '[Barra de categoría] "' + cfg.texto + '" no encontró productos con la etiqueta "' +
+                cfg.tipo + '". Revisa el texto exacto que escribiste en la columna EtiquetaPrincipal ' +
+                '(H) de Google Sheets para esos productos.'
+            );
+        }
     }
 
     if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
