@@ -823,18 +823,71 @@ document.addEventListener('catalogoCargado', function() {
 // ===== BARRAS DE CATEGORÍA SOBRE CADA FILA (solo página 1, modo "Mostrar Todo") =====
 // Aparecen arriba de cada una de las 10 filas de 3 productos que forman los
 // primeros 30 productos de la hoja principal de productos (no aplica al grid de "Etiquetas").
-var TEXTOS_BARRAS_CATEGORIA = [
-    'Mostrar Más Animales',
-    'Mostrar Más Bases',
-    'Mostrar Más Macetas',
-    'Mostrar Más Porta Velas',
-    'Mostrar Más Tazones',
-    'Mostrar Más Porta Inciensos',
-    'Mostrar Más Alajeros',
-    'Mostrar Más Arreglos',
-    'Mostrar Más Etiquetas',
-    'Mostrar Más Velas'
+// Cada barra funciona como botón de filtro: al presionarla, filtra el catálogo
+// exactamente igual que si se hubiera seleccionado esa etiqueta en "Filtrar por".
+var CATEGORIAS_BARRAS = [
+    { texto: 'Mostrar Más Figuras',        tipo: 'figuras' },
+    { texto: 'Mostrar Más Bases',          tipo: 'bases' },
+    { texto: 'Mostrar Más Macetas',        tipo: 'macetas' },
+    { texto: 'Mostrar Más Porta Velas',    tipo: 'portavelas' },
+    { texto: 'Mostrar Más Tazones',        tipo: 'tazones' },
+    { texto: 'Mostrar Más Porta Inciensos',tipo: 'portainciensos' },
+    { texto: 'Mostrar Más Alajeros',       tipo: 'alajeros' },
+    { texto: 'Mostrar Más Arreglos',       tipo: 'arreglo' },
+    { texto: 'Mostrar Más Etiquetas',      origenExterno: 'etiquetas-externas' },
+    { texto: 'Mostrar Más Velas',          origenExterno: 'velas' }
 ];
+
+// Grupos de palabras equivalentes usados para reconocer la categoría de cada
+// producto a partir de su(s) data-tipos, igual que el sistema de filtros del sitio.
+var _VARIANTES_CATEGORIA_BARRA = {
+    figuras:        ['figura', 'figuras'],
+    bases:          ['base', 'bases'],
+    macetas:        ['maceta', 'macetas'],
+    portavelas:     ['porta vela', 'porta velas', 'portavela', 'portavelas', 'porta_vela', 'porta_velas'],
+    tazones:        ['tazon', 'tazones', 'tazón', 'tazónes'],
+    portainciensos: ['porta incienso', 'porta inciensos', 'portaincienso', 'portainciensos', 'porta_incienso', 'porta_inciensos'],
+    alajeros:       ['alajero', 'alajeros', 'alhajero', 'alhajeros'],
+    arreglo:        ['arreglo', 'arreglos']
+};
+
+function _cardCoincideConCategoriaBarra(card, cfg) {
+    if (cfg.origenExterno) {
+        return card.getAttribute('data-origen-externo') === cfg.origenExterno;
+    }
+    var rawTipos = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
+    var tipos = rawTipos.toLowerCase().replace(/^"+|"+$/g, '').split(/[|,]/)
+        .map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean);
+    var lista = _VARIANTES_CATEGORIA_BARRA[cfg.tipo] || [cfg.tipo];
+    return tipos.some(function(t) { return lista.indexOf(t) !== -1; });
+}
+
+// Índice (0-9) de la barra actualmente usada como filtro, o null si no hay ninguna activa
+var _filtroBarraCategoriaActivo = null;
+
+function filtrarPorBarraCategoria(fila) {
+    var grid = document.getElementById('gridProductos');
+    if (!grid) return;
+    var cfg = CATEGORIAS_BARRAS[fila];
+    if (!cfg) return;
+
+    if (_filtroBarraCategoriaActivo === fila) {
+        // Ya estaba activa esta categoría: se desactiva y vuelve a mostrar todo
+        _filtroBarraCategoriaActivo = null;
+        grid.querySelectorAll('.card-dinamica').forEach(function(c) { c.classList.remove('oculto'); });
+    } else {
+        _filtroBarraCategoriaActivo = fila;
+        grid.querySelectorAll('.card-dinamica').forEach(function(c) {
+            c.classList.toggle('oculto', !_cardCoincideConCategoriaBarra(c, cfg));
+        });
+    }
+
+    if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
+
+    var zonaFiltro = document.getElementById('panelTodos');
+    (zonaFiltro || grid).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.filtrarPorBarraCategoria = filtrarPorBarraCategoria;
 
 function insertarBarrasCategoriaProductos() {
     var grid = document.getElementById('gridProductos');
@@ -848,6 +901,21 @@ function insertarBarrasCategoriaProductos() {
     var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
     if (!esModoMostrarTodo) return;
 
+    // Mientras haya un filtro de barra activo, se muestra una única barra para
+    // quitarlo en vez de las 10 (el listado ya no conserva la estructura de
+    // 10 filas de 3, así que las barras normales no aplican)
+    if (_filtroBarraCategoriaActivo !== null) {
+        var primeraCard = grid.querySelector('.card-dinamica');
+        var barraQuitar = document.createElement('button');
+        barraQuitar.type = 'button';
+        barraQuitar.className = 'barra-categoria-fila barra-categoria-fila-quitar';
+        barraQuitar.textContent = '✕ Quitar filtro y ver todo';
+        barraQuitar.addEventListener('click', function() { filtrarPorBarraCategoria(_filtroBarraCategoriaActivo); });
+        if (primeraCard) grid.insertBefore(barraQuitar, primeraCard);
+        else grid.appendChild(barraQuitar);
+        return;
+    }
+
     // Solo en la página 1 de la paginación
     var hashMatch = (window.location.hash || '').match(/pagina=(\d+)/);
     var paginaActualNum = hashMatch ? parseInt(hashMatch[1], 10) : 1;
@@ -860,10 +928,14 @@ function insertarBarrasCategoriaProductos() {
     for (var fila = 0; fila < 10; fila++) {
         var idx = fila * 3;
         if (idx >= cards.length) break;
-        var texto = TEXTOS_BARRAS_CATEGORIA[fila] || 'Mostrar Más Productos';
-        var barra = document.createElement('div');
+        var cfg = CATEGORIAS_BARRAS[fila] || { texto: 'Mostrar Más Productos' };
+        var barra = document.createElement('button');
+        barra.type = 'button';
         barra.className = 'barra-categoria-fila';
-        barra.textContent = texto;
+        barra.textContent = cfg.texto;
+        (function(filaCerrada) {
+            barra.addEventListener('click', function() { filtrarPorBarraCategoria(filaCerrada); });
+        })(fila);
         grid.insertBefore(barra, cards[idx]);
     }
 }
@@ -1930,6 +2002,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             if (btnTodosProductos) btnTodosProductos.classList.add('activo');
             if (panelTod) panelTod.classList.add('visible');
             if (bloqueTod) bloqueTod.style.display = 'block';
+            _filtroBarraCategoriaActivo = null;
             aplicarFiltrosUnificados('mostrar_todo');
         } else if (modo === 'arreglos') {
             if (btnArreglos) btnArreglos.classList.add('activo');
@@ -1953,6 +2026,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             if (btnTodosProductos) btnTodosProductos.classList.add('activo');
             if (panelTod) panelTod.classList.add('visible');
             if (bloqueTod) bloqueTod.style.display = 'block';
+            _filtroBarraCategoriaActivo = null;
             aplicarFiltrosUnificados('mostrar_todo');
         }
     }

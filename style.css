@@ -2012,11 +2012,24 @@
         border-radius: 10px;
         margin-top: 6px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        border: none;
+        width: 100%;
+        font-family: inherit;
+        cursor: pointer;
+        transition: filter 0.15s, transform 0.1s;
+    }
+    .barra-categoria-fila:hover { filter: brightness(1.1); }
+    .barra-categoria-fila:active { transform: scale(0.99); }
+    .barra-categoria-fila-quitar {
+        background: linear-gradient(135deg, #c0392b, #922b21);
     }
     .barra-categoria-fila:first-child { margin-top: 0; }
     body.modo-oscuro .barra-categoria-fila {
         background: linear-gradient(135deg, #4a3c33, #362a22);
         color: #f0e8e0;
+    }
+    body.modo-oscuro .barra-categoria-fila-quitar {
+        background: linear-gradient(135deg, #7a2e24, #5c231c);
     }
     @media (max-width: 768px) {
         .barra-categoria-fila { font-size: 13px; padding: 8px 10px; grid-column: 1 / -1; }
