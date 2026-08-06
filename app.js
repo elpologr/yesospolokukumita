@@ -748,16 +748,16 @@ function cargarProductosEtiquetas(forzar) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Polo Kukúmita):
-//   • Zona "Mostrar Más Velas"     (fila 9,  posiciones 25-27) → primeros 3
-//     productos de la Hoja 1 de Velas Kukúmita.
-//   • Zona "Mostrar Más Etiquetas" (fila 10, posiciones 28-30) → primeras 3
+//   • Zona "Mostrar Más Etiquetas" (fila 9,  posiciones 26-28) → primeras 3
 //     etiquetas de la Hoja 2 de Velas Kukúmita.
+//   • Zona "Mostrar Más Velas"     (fila 10, posiciones 29-31) → primeros 3
+//     productos de la Hoja 1 de Velas Kukúmita.
 // En la hoja de Yesos, las filas 26-31 deben quedar SIN link de imagen en la
 // columna F para que csvAProductos() las ignore y así dejar ese hueco libre
 // para estos 6 productos "prestados".
 // ══════════════════════════════════════════════════════════════════════════════
-var FILA_INICIO_VELAS     = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de Velas
-var FILA_INICIO_ETIQUETAS = 29; // ídem para el 1er producto de "Etiquetas"
+var FILA_INICIO_ETIQUETAS = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de "Etiquetas"
+var FILA_INICIO_VELAS     = 29; // ídem para el 1er producto de Velas
 var _especialesInsertados = false;
 
 // Clona un producto (ya parseado desde OTRA hoja) y le asigna el "id" que le
@@ -784,11 +784,11 @@ function cargarProductosEspecialesVelas() {
         var productosEtiquetas = csvAProductos(parsearCSV(textos[1])).slice(0, 3);
 
         var especiales = [];
-        productosVelas.forEach(function(p, i) {
-            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_VELAS + i, 'velas'));
-        });
         productosEtiquetas.forEach(function(p, i) {
             especiales.push(_prepararProductoEspecial(p, FILA_INICIO_ETIQUETAS + i, 'etiquetas-externas'));
+        });
+        productosVelas.forEach(function(p, i) {
+            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_VELAS + i, 'velas'));
         });
 
         _insertarProductosEspecialesEnListaPrincipal(especiales);
@@ -801,7 +801,7 @@ function _insertarProductosEspecialesEnListaPrincipal(especiales) {
     if (!especiales || especiales.length === 0) return;
     // Punto de inserción: justo antes del primer producto real cuya fila de
     // Google Sheets sea igual o mayor a donde deberían ir estos especiales.
-    var idx = listaProductos.findIndex(function(p) { return (p.id + 1) >= FILA_INICIO_VELAS; });
+    var idx = listaProductos.findIndex(function(p) { return (p.id + 1) >= FILA_INICIO_ETIQUETAS; });
     if (idx === -1) idx = listaProductos.length;
     listaProductos.splice.apply(listaProductos, [idx, 0].concat(especiales));
 
