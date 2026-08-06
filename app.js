@@ -172,11 +172,15 @@ var SHEET_ID = '1GoIVWBIyl9s0wYo2qyv0GQwco_xBl3sajDwF0qcnf5o';
 // como antes (sin imagen en Facebook).
 var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers.dev';
 
-// 🔧 Hoja de cálculo separada para el botón "Etiquetas" — se lee específicamente
-// la Hoja 2 de este otro Google Sheets (columnas en el mismo formato que el de
-// arriba: A Nombre, B precio, C precio mayoreo, D descripción, ... H EtiquetaPrincipal, etc.)
+// 🔧 Hoja de cálculo de Velas Kukúmita — se reutiliza en TRES lugares:
+//   1) Botón "Etiquetas" (grid propio)                → Hoja 2 completa
+//   2) Zona "Mostrar Más Velas" en la 1ª hoja de Yesos → primeros 3 de la Hoja 1
+//   3) Zona "Mostrar Más Etiquetas" en la 1ª hoja      → primeros 3 de la Hoja 2
+// Columnas en el mismo formato que la hoja de arriba (A Nombre, B precio,
+// C precio mayoreo, D descripción, ... H EtiquetaPrincipal, etc.)
 // NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
 // tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
+// La Hoja 1 no necesita nombre: se lee automáticamente como pestaña por defecto.
 var SHEET_ID_ETIQUETAS   = '1jin2wMYingvbPD2csGxIbm5AhulfRvCRvIzAKJTUNMw';
 var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 // ──────────────────────────────────────────────────────────────────────────────
@@ -203,6 +207,10 @@ var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 var listaProductos = [];
 
 // ── Parser de CSV que maneja campos entre comillas con comas internas ──
+// IMPORTANTE: conserva TODAS las líneas, incluidas las completamente vacías.
+// Esto es necesario para que el número de fila de cada producto (usado en el
+// badge "# fila" del modal) siga coincidiendo con la fila real de Google Sheets
+// aunque haya huecos/filas vacías en medio de la hoja.
 function parsearCSV(texto) {
     var lineas = [];
     var filaActual = [];
@@ -224,22 +232,33 @@ function parsearCSV(texto) {
         } else if ((c === '\n' || c === '\r') && !dentroDeComillas) {
             if (c === '\r' && texto[i + 1] === '\n') i++;
             filaActual.push(campoActual.trim());
-            if (filaActual.some(function(f) { return f !== ''; })) {
-                lineas.push(filaActual);
-            }
+            lineas.push(filaActual);
             filaActual = [];
             campoActual = '';
         } else {
             campoActual += c;
         }
     }
-    // Última celda
-    filaActual.push(campoActual.trim());
-    if (filaActual.some(function(f) { return f !== ''; })) lineas.push(filaActual);
+    // Última celda — solo se agrega si el texto no terminaba ya en salto de línea
+    if (filaActual.length > 0 || campoActual !== '') {
+        filaActual.push(campoActual.trim());
+        lineas.push(filaActual);
+    }
+    // Quita únicamente líneas colgantes al final del archivo (por el último \n)
+    while (lineas.length > 0) {
+        var ultima = lineas[lineas.length - 1];
+        if (ultima.every(function(f) { return f === ''; })) {
+            lineas.pop();
+        } else {
+            break;
+        }
+    }
     return lineas;
 }
 
 // ── Convierte filas CSV en objetos de producto ──
+// Un producto solo se genera si la columna F (Imagen Polo) tiene contenido.
+// Si la fila solo tiene nombre/precio pero no imagen, se ignora (no aparece en la web).
 function csvAProductos(filas) {
     if (filas.length < 2) return [];
     // Omitir la fila de encabezados (fila 0)
@@ -248,8 +267,8 @@ function csvAProductos(filas) {
         var f = filas[i];
         var get = function(idx) { return (f[idx] || '').trim(); };
 
-        // Saltar filas sin nombre
-        if (!get(0)) continue;
+        // Saltar filas sin imagen en la columna F (aunque tengan nombre o precio)
+        if (!get(5)) continue;
 
         // Nuevo orden de columnas (Google Sheets) — recorrido 1 lugar a la derecha desde G:
         // A=0  nombre
@@ -398,6 +417,7 @@ function renderizarCatalogoEnGrid(gridId, productos) {
         card.setAttribute('data-red-facebook',    JSON.stringify(p.redFacebook  || []));
         card.setAttribute('data-red-instagram',   JSON.stringify(p.redInstagram || []));
         card.setAttribute('data-red-tiktok',      JSON.stringify(p.redTiktok    || []));
+        card.setAttribute('data-origen-externo',  p._origenExterno || '');
         card.style.cursor = 'pointer';
 
         // ── Imagen principal ──
@@ -726,6 +746,78 @@ function cargarProductosEtiquetas(forzar) {
         });
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Polo Kukúmita):
+//   • Zona "Mostrar Más Velas"     (fila 9,  posiciones 25-27) → primeros 3
+//     productos de la Hoja 1 de Velas Kukúmita.
+//   • Zona "Mostrar Más Etiquetas" (fila 10, posiciones 28-30) → primeras 3
+//     etiquetas de la Hoja 2 de Velas Kukúmita.
+// En la hoja de Yesos, las filas 26-31 deben quedar SIN link de imagen en la
+// columna F para que csvAProductos() las ignore y así dejar ese hueco libre
+// para estos 6 productos "prestados".
+// ══════════════════════════════════════════════════════════════════════════════
+var FILA_INICIO_VELAS     = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de Velas
+var FILA_INICIO_ETIQUETAS = 29; // ídem para el 1er producto de "Etiquetas"
+var _especialesInsertados = false;
+
+// Clona un producto (ya parseado desde OTRA hoja) y le asigna el "id" que le
+// haría mostrar en el badge del modal la fila que le correspondería dentro
+// del catálogo de Yesos (data-sheet-row = id + 1), en vez de su fila real
+// en la hoja de Velas Kukúmita.
+function _prepararProductoEspecial(p, filaSheetsSimulada, origen) {
+    var clone = Object.assign({}, p);
+    clone.id = filaSheetsSimulada - 1;
+    clone._origenExterno = origen;
+    return clone;
+}
+
+function cargarProductosEspecialesVelas() {
+    var urlHoja1 = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS + '/gviz/tq?tqx=out:csv';
+    var urlHoja2 = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS +
+        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
+
+    Promise.all([
+        fetch(urlHoja1).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }),
+        fetch(urlHoja2).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    ]).then(function(textos) {
+        var productosVelas     = csvAProductos(parsearCSV(textos[0])).slice(0, 3);
+        var productosEtiquetas = csvAProductos(parsearCSV(textos[1])).slice(0, 3);
+
+        var especiales = [];
+        productosVelas.forEach(function(p, i) {
+            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_VELAS + i, 'velas'));
+        });
+        productosEtiquetas.forEach(function(p, i) {
+            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_ETIQUETAS + i, 'etiquetas-externas'));
+        });
+
+        _insertarProductosEspecialesEnListaPrincipal(especiales);
+    }).catch(function(err) {
+        console.error('No se pudieron cargar los productos especiales de Velas Kukúmita:', err);
+    });
+}
+
+function _insertarProductosEspecialesEnListaPrincipal(especiales) {
+    if (!especiales || especiales.length === 0) return;
+    // Punto de inserción: justo antes del primer producto real cuya fila de
+    // Google Sheets sea igual o mayor a donde deberían ir estos especiales.
+    var idx = listaProductos.findIndex(function(p) { return (p.id + 1) >= FILA_INICIO_VELAS; });
+    if (idx === -1) idx = listaProductos.length;
+    listaProductos.splice.apply(listaProductos, [idx, 0].concat(especiales));
+
+    renderizarCatalogoCompleto();
+    if (typeof syncBotonesLike === 'function') syncBotonesLike();
+    document.dispatchEvent(new CustomEvent('catalogoCargado'));
+}
+
+// Se dispara una sola vez, justo después de que el catálogo principal de
+// Yesos haya cargado por primera vez.
+document.addEventListener('catalogoCargado', function() {
+    if (_especialesInsertados) return;
+    _especialesInsertados = true;
+    cargarProductosEspecialesVelas();
+});
+
 
 
 // ===== BARRAS DE CATEGORÍA SOBRE CADA FILA (solo página 1, modo "Mostrar Todo") =====
@@ -740,8 +832,8 @@ var TEXTOS_BARRAS_CATEGORIA = [
     'Mostrar Más Porta Inciensos',
     'Mostrar Más Alajeros',
     'Mostrar Más Arreglos',
+    'Mostrar Más Etiquetas',
     'Mostrar Más Velas'
-    // NOTA: solo se especificaron 9 textos para las 10 filas — revisa/ajusta el 10º abajo.
 ];
 
 function insertarBarrasCategoriaProductos() {
@@ -1417,6 +1509,30 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             }
             abrirSubmenuCompartir(url, nombre, galeriaImagenes[0] || '');
         };
+
+        // ── Producto especial traído desde Velas Kukúmita (zona "Mostrar Más Velas") ──
+        // Para estos productos: sin Favoritos, sin Carrito y sin Compartir —
+        // solo WhatsApp y un botón para ver el producto en velaskukumita.com
+        const origenExterno    = card.getAttribute('data-origen-externo') || '';
+        const filaFavCarrito   = document.getElementById('mpFilaFavCarrito');
+        const btnCompartirModal = document.getElementById('mpBtnCompartir');
+        const btnVisitarVelas   = document.getElementById('mpBtnVisitarVelas');
+
+        if (origenExterno === 'velas') {
+            if (filaFavCarrito)    filaFavCarrito.style.display = 'none';
+            if (btnCompartirModal) btnCompartirModal.style.display = 'none';
+            if (btnVisitarVelas) {
+                btnVisitarVelas.style.display = '';
+                btnVisitarVelas.onclick = () => {
+                    const urlVelas = 'https://velaskukumita.com/?producto=' + encodeURIComponent(nombre);
+                    window.open(urlVelas, '_blank');
+                };
+            }
+        } else {
+            if (filaFavCarrito)    filaFavCarrito.style.display = '';
+            if (btnCompartirModal) btnCompartirModal.style.display = '';
+            if (btnVisitarVelas)   btnVisitarVelas.style.display = 'none';
+        }
 
         renderizarGaleria();
 

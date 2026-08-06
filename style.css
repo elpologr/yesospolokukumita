@@ -2126,6 +2126,7 @@
         height: 340px;
         overflow: hidden;
         border-radius: 6px;
+        position: relative;
     }
 
     /* 📱 RESPONSIVO: Ajuste automático para Celulares */
@@ -2251,8 +2252,8 @@
         /* ===== BOTÓN ME GUSTA ===== */
         .btn-like {
             position: absolute;
-            top: 8px;
-            right: 8px;
+            bottom: 8px;
+            left: 8px;
             width: 64px;
             height: 64px;
             border-radius: 50%;
@@ -2275,8 +2276,8 @@
 
         .btn-carrito-card {
             position: absolute;
-            top: 8px;
-            right: 80px;
+            bottom: 8px;
+            left: 80px;
             width: 64px;
             height: 64px;
             border-radius: 50%;
@@ -3133,15 +3134,15 @@ body.modo-oscuro .cart-total-valor { color: #f0e8e0; }
         width: 34px !important;
         height: 34px !important;
         font-size: 15px !important;
-        top: 6px !important;
-        right: 6px !important;
+        bottom: 6px !important;
+        left: 6px !important;
     }
     .btn-carrito-card {
         width: 34px !important;
         height: 34px !important;
         font-size: 15px !important;
-        top: 6px !important;
-        right: 46px !important;
+        bottom: 6px !important;
+        left: 46px !important;
     }
 }
 
