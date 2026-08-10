@@ -569,10 +569,14 @@
         <div style="margin-bottom:18px; position:relative; display:block; overflow:visible;">
             <button id="btnYesosKukumita"
                     onclick="toggleSubmenuYesos()"
-                    style="display:inline-flex; align-items:center; gap:8px; background:#fff; color:#5c4d43; border:2px solid #c9a98a; border-radius:999px; padding:9px 22px; font-size:0.84rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all 0.22s; box-shadow:0 2px 8px rgba(140,117,101,0.12);"
-                    onmouseover="this.style.background='#fdf6f0'; this.style.borderColor='#8c7565';"
-                    onmouseout="this.style.background='#fff'; this.style.borderColor='#c9a98a';">
-                🪨 También vendemos Velas — presiona aquí para visitar la página ▾
+                    style="display:inline-flex; align-items:center; gap:10px; background:linear-gradient(135deg, #d4af37, #b8860b); color:#ffffff; border:none; border-radius:999px; padding:9px 44px; font-size:1.05rem; font-weight:700; font-family:inherit; cursor:pointer; transition:filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; box-shadow:0 4px 10px rgba(184,134,11,0.35);"
+                    onmouseover="this.style.filter='brightness(1.08)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 14px rgba(184,134,11,0.45)';"
+                    onmouseout="this.style.filter='brightness(1)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(184,134,11,0.35)';">
+                <img src="imagenes/logo-velas-kukumita.webp" alt="Velas Kukúmita"
+                     style="width:22px; height:22px; border-radius:50%; object-fit:cover; flex-shrink:0; box-shadow:0 2px 6px rgba(0,0,0,0.2); display:block;"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                <span style="display:none; width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.25); align-items:center; justify-content:center; font-size:1rem; flex-shrink:0;">🪨</span>
+                También vendemos Velas — presiona aquí para visitar la página ▾
             </button>
             <!-- Submenú desplegable con logo + texto + botón píldora -->
             <div id="submenuYesosKukumita"
@@ -580,9 +584,15 @@
                 <!-- Logo -->
                 <div style="background:linear-gradient(135deg,#f5f0eb,#ede4db); padding:22px 20px 14px;">
                     <img src="imagenes/logo-velas-kukumita.webp" alt="Velas Kukúmita"
-                         style="width:110px; height:110px; border-radius:50%; object-fit:cover; box-shadow:0 4px 16px rgba(0,0,0,0.12); display:block; margin:0 auto 14px;"
+                         onclick="window.open('https://velaskukumita.com','_blank')"
+                         title="Visitar Velas Kukúmita"
+                         style="width:110px; height:110px; border-radius:50%; object-fit:cover; box-shadow:0 4px 16px rgba(0,0,0,0.12); display:block; margin:0 auto 14px; cursor:pointer; transition:transform 0.2s, box-shadow 0.2s;"
+                         onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 22px rgba(0,0,0,0.2)';"
+                         onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)';"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div style="display:none; width:110px; height:110px; border-radius:50%; background:#e8ddd5; align-items:center; justify-content:center; margin:0 auto 14px; font-size:2.8rem;">🪨</div>
+                    <div onclick="window.open('https://velaskukumita.com','_blank')"
+                         title="Visitar Velas Kukúmita"
+                         style="display:none; width:110px; height:110px; border-radius:50%; background:#e8ddd5; align-items:center; justify-content:center; margin:0 auto 14px; font-size:2.8rem; cursor:pointer;">🪨</div>
                     <p style="font-size:1.05rem; font-weight:800; color:#362a22; line-height:1.6; margin:0 0 6px;">
                         También vendemos Velas
                     </p>

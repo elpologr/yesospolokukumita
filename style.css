@@ -2164,6 +2164,13 @@
         .card-dinamica [style*="font-size: 28px"] {
             font-size: 14px !important;
         }
+        /* Botón "También vendemos Velas" — ajuste fino en móvil para que
+           no se desborde en pantallas angostas (mantiene la altura baja). */
+        #btnYesosKukumita {
+            font-size: 0.92rem !important;
+            padding: 9px 26px !important;
+            gap: 8px !important;
+        }
     }
     @media (max-width: 400px) {
         .grid-productos-inteligente {
