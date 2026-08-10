@@ -3,28 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yesos Fer Kukúmita</title>
+    <title>Yesos Polo Kukúmita</title>
 
     <!-- Open Graph / Facebook / WhatsApp — se actualizan dinámicamente por app.js,
          PERO los bots de redes sociales no ejecutan JavaScript, así que dejamos
-         valores por defecto reales aquí en vez de vacíos. -->
+         valores por defecto reales aquí (imagen de perfil) en vez de vacíos.
+         Así, si alguien comparte el link crudo del sitio (sin pasar por el
+         Cloudflare Worker), al menos se ve la imagen de perfil y no una en
+         blanco o una elegida al azar por Facebook. -->
     <meta property="og:type"        content="website" id="og-type">
-    <meta property="og:site_name"   content="Yesos Fer Kukúmita" id="og-site-name">
-    <meta property="og:url"         content="https://dulcefer.github.io/yesosferkukumita/" id="og-url">
-    <meta property="og:title"       content="Yesos Fer Kukúmita — Arreglos y Productos Artesanales" id="og-title">
-    <meta property="og:description" content="Descubre nuestros hermosos arreglos y productos artesanales de Yesos Fer Kukúmita." id="og-description">
-    <meta property="og:image"       content="https://dulcefer.github.io/yesosferkukumita/imagenes/perfil-yesoskukumita.webp" id="og-image">
+    <meta property="og:site_name"   content="Yesos Polo Kukúmita" id="og-site-name">
+    <meta property="og:url"         content="https://elpologr.github.io/yesospolokukumita/" id="og-url">
+    <meta property="og:title"       content="Yesos Polo Kukúmita — Arreglos y Productos Artesanales" id="og-title">
+    <meta property="og:description" content="Descubre nuestros hermosos arreglos y productos artesanales de Yesos Polo Kukúmita." id="og-description">
+    <meta property="og:image"       content="https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp" id="og-image">
     <meta property="og:image:width" content="1200" id="og-image-width">
     <meta property="og:image:height"content="630"  id="og-image-height">
     <!-- Twitter Card -->
     <meta name="twitter:card"        content="summary_large_image" id="tw-card">
-    <meta name="twitter:title"       content="Yesos Fer Kukúmita" id="tw-title">
+    <meta name="twitter:title"       content="Yesos Polo Kukúmita" id="tw-title">
     <meta name="twitter:description" content="Descubre nuestros hermosos arreglos y productos artesanales." id="tw-description">
-    <meta name="twitter:image"       content="https://dulcefer.github.io/yesosferkukumita/imagenes/perfil-yesoskukumita.webp" id="tw-image">
+    <meta name="twitter:image"       content="https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp" id="tw-image">
 
     <!-- Favicon -->
     <link rel="icon" type="image/webp" href="imagenes/perfil-yesoskukumita.webp">
-    <link rel="icon" type="image/webp" sizes="192x192" href="imagenes/perfil-yesoskukumita.webp">
     <link rel="apple-touch-icon" href="imagenes/perfil-yesoskukumita.webp">
 
     <!-- Fuentes de Google -->
@@ -40,34 +42,19 @@
 
     <!-- Estilos botones de modo catálogo -->
     <style>
-    /* ── Wrapper: una sola fila con los 4 botones ── */
+    /* ── Wrapper: misma fila centrada con wrap que la barra de píldoras (Biografía/Catálogo/Ofertas/Más Vendidos) ── */
     .selector-modo-velas-wrap {
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        padding: 0 12px 14px;
-    }
-
-    /* ── Fila de los 4 botones (Mostrar Todo + categorías), igual que la barra de píldoras ── */
-    .selector-modo-velas {
-        display: flex;
-        flex-wrap: wrap;
         justify-content: center;
         gap: 10px;
-        width: 100%;
+        margin: 8px auto 0;
+        max-width: 1200px;
+        padding: 0 12px 14px;
+        flex-wrap: wrap;
     }
 
-    /* ── Base del botón: mismo tamaño/forma cuadrada que .pill-btn ── */
+    /* ── Base del botón: mismo tamaño cuadrado que .pill-btn (135x135) ── */
     .btn-modo-velas {
-        border: none;
-        font-size: 19px;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        transition: background 0.18s, color 0.18s, transform 0.12s, box-shadow 0.18s;
-        white-space: nowrap;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.10);
         display: inline-flex;
         flex-direction: column;
         align-items: center;
@@ -76,12 +63,18 @@
         width: 135px;
         height: 135px;
         padding: 12px 9px;
+        border: none;
+        border-radius: 24px;
+        font-size: 18px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.18s, color 0.18s, transform 0.12s, box-shadow 0.18s;
         box-sizing: border-box;
         text-align: center;
         line-height: 1.2;
         overflow: hidden;
-        border-radius: 24px;
-        white-space: normal;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
     }
     .btn-modo-velas:active {
         transform: scale(0.96);
@@ -196,11 +189,6 @@
     .btn-modo-portainciensos:hover { background: #9272b5; }
     .btn-modo-portainciensos.activo { background: #6b4a9a; color: #fff; box-shadow: 0 3px 10px rgba(107,74,154,0.35); }
 
-    /* ── Alajero: rosa viejo / rosa oscuro activo ── */
-    .btn-modo-alajero { background: #c9899a; color: #fff; }
-    .btn-modo-alajero:hover { background: #b56f82; }
-    .btn-modo-alajero.activo { background: #8a4a5c; color: #fff; box-shadow: 0 3px 10px rgba(138,74,92,0.35); }
-
     /* ── Más: gris oscuro ── */
     .btn-modo-mas { background: #6b6b6b; color: #fff; }
     .btn-modo-mas:hover { background: #555; }
@@ -258,7 +246,7 @@
 
             <h2 class="privacidad-seccion-titulo">1. Responsable del tratamiento de datos</h2>
             <p class="privacidad-parrafo">
-                <strong>Yesos Fer Kukumita</strong> (en adelante "nosotros" o "el sitio") es el responsable del tratamiento de los datos personales que se recaben a través de este sitio web, de conformidad con la <strong>Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP)</strong> y su Reglamento.
+                <strong>Yesos Polo Kukumita</strong> (en adelante "nosotros" o "el sitio") es el responsable del tratamiento de los datos personales que se recaben a través de este sitio web, de conformidad con la <strong>Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP)</strong> y su Reglamento.
             </p>
             <p class="privacidad-parrafo">Para cualquier consulta o ejercicio de derechos, puedes contactarnos en: <strong>yesosferkukumita@gmail.com</strong></p>
 
@@ -288,7 +276,7 @@
                 <li><strong>Google Fonts</strong> — carga de tipografías desde servidores de Google, lo que puede transmitir tu dirección IP a Google al cargar la página.</li>
                 <li><strong>Google Sheets</strong> — el catálogo de productos se obtiene de una hoja de cálculo pública; no implica recopilación de datos del usuario.</li>
             </ul>
-            <p class="privacidad-parrafo">Al utilizar este sitio, reconoces que los servicios de Google operan bajo sus propias políticas de privacidad, sobre las cuales Yesos Fer Kukumita no tiene control directo.</p>
+            <p class="privacidad-parrafo">Al utilizar este sitio, reconoces que los servicios de Google operan bajo sus propias políticas de privacidad, sobre las cuales Yesos Polo Kukumita no tiene control directo.</p>
 
             <h2 class="privacidad-seccion-titulo">5. Uso de cookies y almacenamiento local</h2>
             <p class="privacidad-parrafo">Este sitio <strong>no utiliza cookies propias</strong> de rastreo o publicidad. Sin embargo, utiliza <strong>almacenamiento local del navegador (localStorage)</strong> para guardar:</p>
@@ -304,7 +292,7 @@
                 El uso continuado de este sitio web, independientemente de si aceptas o ignoras el presente aviso, implica la interacción con los servicios de infraestructura necesarios para su funcionamiento, en particular <strong>Google Firebase</strong>. En tal caso, el tratamiento de datos técnicos que estos servicios puedan recopilar (como dirección IP o datos de sesión) queda sujeto exclusivamente a las <strong>Políticas de Privacidad y Términos de Servicio de Google</strong>, disponibles en <a class="privacidad-enlace" href="https://policies.google.com/privacy" target="_blank" rel="noopener">policies.google.com/privacy</a>.
             </p>
             <p class="privacidad-parrafo">
-                Yesos Fer Kukumita <strong>no asume responsabilidad</strong> por el tratamiento de datos que Google o Firebase realicen en el marco de sus propios servicios, de conformidad con la legislación aplicable en materia de protección de datos, que establece que el responsable no responde por los actos de terceros que actúen con base en sus propios términos de servicio.
+                Yesos Polo Kukumita <strong>no asume responsabilidad</strong> por el tratamiento de datos que Google o Firebase realicen en el marco de sus propios servicios, de conformidad con la legislación aplicable en materia de protección de datos, que establece que el responsable no responde por los actos de terceros que actúen con base en sus propios términos de servicio.
             </p>
 
             <h2 class="privacidad-seccion-titulo">7. Derechos ARCO</h2>
@@ -393,7 +381,7 @@
 
         <!-- Cabecera -->
         <div class="drawer-header">
-            <span class="drawer-header-titulo">🕯️ Yesos Fer Kukúmita</span>
+            <span class="drawer-header-titulo">🕯️ Yesos Polo Kukúmita</span>
             <button class="btn-cerrar-drawer" onclick="cerrarDrawer()">✕</button>
         </div>
 
@@ -478,7 +466,7 @@
                         🕯️ Biografía
                     </button>
                 </div>
-                <a href="https://wa.me/524431322032?text=Hola,%20me%20interesa%20una%20vela"
+                <a href="https://wa.me/524431382094?text=Hola,%20me%20interesa%20una%20vela"
                    target="_blank" style="text-decoration:none; margin-top:6px; display:block;">
                     <button class="drawer-sub-btn" style="width:100%; background:#e8fef0; border-color:#25D366; color:#128c35;">
                         💬 WhatsApp del negocio
@@ -499,14 +487,23 @@
 
     <!-- ===== BANDA DE REDES SOCIALES ===== -->
     <div class="banda-redes">
-        <a class="red-social wa" href="https://wa.me/524431322032" target="_blank" aria-label="WhatsApp">
+        <a class="red-social wa" href="https://wa.me/524431382094" target="_blank" aria-label="WhatsApp">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.557 4.12 1.532 5.848L.054 23.447a.5.5 0 0 0 .598.598l5.6-1.478A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.955 9.955 0 0 1-5.073-1.38l-.363-.217-3.767.993.993-3.767-.217-.363A9.955 9.955 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
             <span>WhatsApp</span>
         </a>
-        <a class="red-social fb" href="https://www.facebook.com/profile.php?id=61569224514602" target="_blank" aria-label="Facebook">
+        <a class="red-social yt" href="https://www.youtube.com/@yesospolokukumita" target="_blank" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            <span>YouTube</span>
+        </a>
+        <a class="red-social ig" href="https://www.instagram.com/yesospolokukumita/" target="_blank" aria-label="Instagram">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+            <span>Instagram</span>
+        </a>
+        <a class="red-social fb" href="https://www.facebook.com/yesospolokukumita" target="_blank" aria-label="Facebook">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             <span>Facebook</span>
         </a>
+
 
         <button class="red-social uber" onclick="abrirModalUber()" aria-label="Uber Envíos">
             <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c.96 0 1.86.25 2.65.68L6.68 14.65A4.97 4.97 0 0 1 7 12c0-2.76 2.24-5 5-5zm0 14c-.96 0-1.86-.25-2.65-.68l7.97-7.97c.43.79.68 1.69.68 2.65 0 2.76-2.24 5-5 5z"/></svg>
@@ -526,12 +523,12 @@
                  style="width:220px; height:220px; max-width:70vw; max-height:70vw; border-radius:50%; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.15); cursor:pointer; transition:transform 0.2s, box-shadow 0.2s; position:relative; border:3px solid #e8ddd5;"
                  onmouseover="this.style.transform='scale(1.015)'; this.style.boxShadow='0 8px 32px rgba(0,0,0,0.22)';"
                  onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 24px rgba(0,0,0,0.15)';">
-                <img src="imagenes/perfil-yesoskukumita.webp" alt="Yesos Fer Kukúmita" style="width:100%; height:100%; object-fit:cover; display:block;">
+                <img src="imagenes/perfil-yesoskukumita.webp" alt="Yesos Polo Kukúmita" style="width:100%; height:100%; object-fit:cover; display:block;">
             </div>
             <!-- Submenú de imagen -->
             <div id="submenuImagen" style="display:none; position:absolute; top:calc(100% + 12px); left:50%; transform:translateX(-50%); background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); border:1.5px solid #e8ddd5; min-width:240px; z-index:500; overflow:hidden; animation:submenuFadeIn 0.2s ease;">
                 <div style="padding:16px 18px 14px; text-align:center;">
-                    <p style="margin:0 0 14px; font-size:0.82rem; color:#8c7565; line-height:1.6;">Fábrica artesanal de velas — fundada en Morelia, Michoacán.</p>
+                    <p style="margin:0 0 14px; font-size:0.82rem; color:#8c7565; line-height:1.6;">Taller artesanal de yesos y decoración — Morelia, Michoacán.</p>
                     <button onclick="irAZonaInteractiva(); cerrarSubmenus();"
                         style="width:100%; background:linear-gradient(135deg,#f5a623,#e8921a); color:white; border:none; border-radius:999px; padding:12px 20px; font-size:0.9rem; font-weight:800; cursor:pointer; font-family:inherit; transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
@@ -548,17 +545,17 @@
         <div style="position:relative; display:inline-block; margin-bottom:14px;">
             <h1 id="tituloVelasKukumita"
                 onclick="event.stopPropagation(); toggleSubmenuPerfil('titulo')"
-                style="font-size:4rem; font-weight:900; color:#111; letter-spacing:3px; margin:0; font-family:'Playfair Display',Georgia,serif; font-style:italic; line-height:1.1; cursor:pointer; transition:color 0.2s; user-select:none; display:block;"
-                onmouseover="this.style.color='#8c7565'"
-                onmouseout="this.style.color='#111'">Yesos Fer Kukúmita</h1>
+                style="font-size:4rem; font-weight:900; color:#f0e4cc; letter-spacing:3px; margin:0; font-family:'Playfair Display',Georgia,serif; font-style:italic; line-height:1.1; cursor:pointer; transition:color 0.2s; user-select:none; display:block;"
+                onmouseover="this.style.color='#e0b878'"
+                onmouseout="this.style.color='#f0e4cc'">Yesos Polo Kukúmita</h1>
             <!-- Submenú del título — aparece debajo, centrado -->
             <div id="submenuTitulo" style="display:none; position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); border:1.5px solid #e8ddd5; min-width:280px; z-index:600; overflow:hidden; animation:submenuFadeIn 0.2s ease;">
                 <div style="padding:14px 18px 10px; border-bottom:1px solid #f0eae4;">
                     <p style="margin:0; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#aaa;">Nombre del negocio</p>
                 </div>
                 <div style="padding:18px 18px 14px;">
-                    <p style="font-family:'Playfair Display',Georgia,serif; font-style:italic; font-size:1.5rem; font-weight:900; color:#111; margin:0 0 16px; text-align:center; letter-spacing:2px;">Yesos Fer Kukúmita</p>
-                    <p style="font-size:0.82rem; color:#8c7565; margin:0 0 16px; text-align:center; line-height:1.6;">Fábrica artesanal de velas, fundada por Claudia Guzmán en el año 2000 en Morelia, Michoacán.</p>
+                    <p style="font-family:'Playfair Display',Georgia,serif; font-style:italic; font-size:1.5rem; font-weight:900; color:#111; margin:0 0 16px; text-align:center; letter-spacing:2px;">Yesos Polo Kukúmita</p>
+                    <p style="font-size:0.82rem; color:#8c7565; margin:0 0 16px; text-align:center; line-height:1.6;">Taller de yesos y decoración, en Morelia, Michoacán.</p>
                     <button onclick="irAZonaInteractiva(); cerrarSubmenus();"
                         style="width:100%; background:linear-gradient(135deg,#f5a623,#e8921a); color:white; border:none; border-radius:999px; padding:12px 20px; font-size:0.9rem; font-weight:800; cursor:pointer; font-family:inherit; transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
@@ -568,7 +565,7 @@
             </div>
         </div>
 
-        <!-- Botón píldora Yesos Fer Kukúmita — justo debajo del título, encima de los botones principales -->
+        <!-- Botón píldora Yesos Polo Kukúmita — justo debajo del título, encima de los botones principales -->
         <div style="margin-bottom:18px; position:relative; display:block; overflow:visible;">
             <button id="btnYesosKukumita"
                     onclick="toggleSubmenuYesos()"
@@ -647,7 +644,7 @@
                 <iframe
                     src="https://maps.google.com/maps?q=Velas+Kukumita,+Calle+Las+Primaveras+519,+Prados+Verdes,+Morelia,+Michoacan&output=embed&z=17"
                     width="100%" height="230" style="border:none; display:block; pointer-events:none;"
-                    loading="lazy" title="Ubicación Velas Kukumita">
+                    loading="lazy" title="Ubicación Yesos Polo Kukúmita">
                 </iframe>
                 <div style="background:linear-gradient(135deg,#e8f0fe 0%,#f1f8e9 40%,#fff8e1 70%,#fce4ec 100%); padding:11px 14px; display:flex; align-items:center; gap:10px; border-top:1px solid #dde8ff;">
                     <!-- Logo oficial de Google Maps (SVG) -->
@@ -681,7 +678,7 @@
                 </p>
             </div>
             <!-- Botón WhatsApp cita -->
-            <a href="https://wa.me/524431322032?text=Hola,%20me%20gustaría%20agendar%20una%20cita%20para%20visitar%20la%20tienda"
+            <a href="https://wa.me/524431382094?text=Hola,%20me%20gustaría%20agendar%20una%20cita%20para%20visitar%20la%20tienda"
                target="_blank"
                style="display:flex; align-items:center; justify-content:center; gap:10px; background:#25D366; color:white; text-decoration:none; border-radius:12px; padding:14px 20px; font-size:1rem; font-weight:700; font-family:inherit; transition:background 0.2s;"
                onmouseover="this.style.background='#1ebe5d'" onmouseout="this.style.background='#25D366'">
@@ -694,7 +691,7 @@
     <div class="modal-qr-overlay" id="modalQR">
         <div class="modal-qr-caja">
             <button class="modal-qr-cerrar" onclick="cerrarModalQR()">✕</button>
-            <div class="modal-qr-titulo">🕯️ Comparte Kukumita</div>
+            <div class="modal-qr-titulo">🪨 Comparte Yesos Polo Kukúmita</div>
             <p class="modal-qr-sub">Escanea el código QR para abrir esta página</p>
             <canvas id="qrCanvas" width="200" height="200"></canvas>
             <div class="modal-qr-url" id="qrUrlTexto"></div>
@@ -791,7 +788,7 @@
 
             <!-- Párrafo 1 -->
             <p style="color:#5c4d43; line-height:1.9; font-size:0.93rem; margin-bottom:18px;">
-                El camino de Velas Kukumita comenzó con el motor más puro que existe: el amor de una madre. Con el gran reto de criar a sus dos hijos y el deseo inquebrantable de salir adelante, nuestra fundadora comenzó a moldear un sueño hecho de cera y luz. Lo que empezó en la calidez del hogar, poco a poco se transformó en un arte único; cada vela cobró un estilo propio, reflejando una dedicación que no pasó desapercibida.
+                El camino de Yesos Polo Kukúmita comenzó con el motor más puro que existe: el amor de una madre. Con el gran reto de criar a sus dos hijos y el deseo inquebrantable de salir adelante, nuestra fundadora comenzó a moldear un sueño hecho de cera y luz. Lo que empezó en la calidez del hogar, poco a poco se transformó en un arte único; cada vela cobró un estilo propio, reflejando una dedicación que no pasó desapercibida.
             </p>
 
             <!-- Párrafo 2 -->
@@ -830,7 +827,7 @@
             </p>
             <!-- Botón → WhatsApp / Cita -->
             <div style="text-align:center; margin-bottom:28px;">
-                <a href="https://wa.me/524431322032?text=Hola,%20me%20interesa%20una%20cita%20o%20cotización" target="_blank"
+                <a href="https://wa.me/524431382094?text=Hola,%20me%20interesa%20una%20cita%20o%20cotización" target="_blank"
                    style="display:inline-flex; align-items:center; gap:8px; background:#25D366; color:white; text-decoration:none; border-radius:999px; padding:11px 26px; font-size:0.92rem; font-weight:700; font-family:inherit; box-shadow:0 3px 10px rgba(37,211,102,0.3); transition:all 0.22s;">
                     💬 Pedir cita o cotización por WhatsApp
                 </a>
@@ -931,7 +928,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        Velas Kukumita tuvo a un hijo muy trabajador, él creó esta página web, y si quieres tener tu página web con tu nombre y el famoso <strong>.com</strong>, entra a su página web, te la dejo a continuación:
+                        Yesos Polo Kukúmita tuvo a un hijo muy trabajador, él creó esta página web, y si quieres tener tu página web con tu nombre y el famoso <strong>.com</strong>, entra a su página web, te la dejo a continuación:
                     </p>
 
                     <div style="margin-bottom:20px;">
@@ -966,7 +963,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        Elba Rodríguez Avalos es la mamá de Velas Kukumita, pero sobre todo, es el pilar de la familia, quien nos ha apoyado de muchas maneras. Sin embargo su historia es más grande que eso, y muchos en Morelia lo saben porque la conocen: ella es cantautora para las infancias desde hace más de 40 años, componiendo hermosas canciones infantiles y creando cuentos, poemas y presentaciones donde su objetivo es dar un rato de diversión y alegría a los niños que se encuentren en el lugar.
+                        Elba Rodríguez Avalos es la mamá de Yesos Polo Kukúmita, pero sobre todo, es el pilar de la familia, quien nos ha apoyado de muchas maneras. Sin embargo su historia es más grande que eso, y muchos en Morelia lo saben porque la conocen: ella es cantautora para las infancias desde hace más de 40 años, componiendo hermosas canciones infantiles y creando cuentos, poemas y presentaciones donde su objetivo es dar un rato de diversión y alegría a los niños que se encuentren en el lugar.
                     </p>
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:20px;">
                         Polo y Fer, sus nietos, siempre nos hemos inspirado en su nobleza. Polo ha seguido su ejemplo artístico convirtiéndose en un gran bailarín en la misma ciudad de Morelia, pero esa aún no es ni la mitad de la historia — todavía hay varios talentos en la familia que debes conocer. Pero antes, te invito a visitar la página de Elba Rodríguez Avalos:
@@ -1000,7 +997,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        Lady Monchis, una de las hermanas de Velas Kukumita, es una increíble chef gourmet. Siempre le he pedido que me haga unas hamburguesas grasosas estilo chatarra, pero ella es exclusivamente gourmet — simplemente no puede permitirse usar elementos saturados de grasas o conservadores artificiales, ni productos animales, y siempre hace conciencia sobre los productos que se crean abusando de animales.
+                        Lady Monchis, una de las hermanas de Yesos Polo Kukúmita, es una increíble chef gourmet. Siempre le he pedido que me haga unas hamburguesas grasosas estilo chatarra, pero ella es exclusivamente gourmet — simplemente no puede permitirse usar elementos saturados de grasas o conservadores artificiales, ni productos animales, y siempre hace conciencia sobre los productos que se crean abusando de animales.
                     </p>
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:20px;">
                         Ella jamás te va a hacer un chocolate con excesos de azúcares; para darle una firma de producción de lujo, sabe dónde conseguirte los productos de la más alta calidad, con los mejores sabores y sin conservadores — probablemente con nutrientes escondidos y con un sabor que define su calidad. También puedes visitar su página web a continuación:
@@ -1034,7 +1031,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        Lady Orlando es otra hermana de Velas Kukumita, y otro gran talento artístico de la familia. Es una destacada artista visual e ilustradora: desde que tenía 4 años comenzó a dibujar, pero sin duda destacó por su gran talento, especialmente en el puntillismo y el trazo fino.
+                        Lady Orlando es otra hermana de Yesos Polo Kukúmita, y otro gran talento artístico de la familia. Es una destacada artista visual e ilustradora: desde que tenía 4 años comenzó a dibujar, pero sin duda destacó por su gran talento, especialmente en el puntillismo y el trazo fino.
                     </p>
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:20px;">
                         Ha sido reconocida internacionalmente por su técnica minuciosa y detallada, y su estilo melancólico y solitario. Puede lograr retratos detallados de personajes reales o imaginarios, incluyendo magníficas ilustraciones inspiradas en músicos y cineastas. También puedes visitar su página web a continuación:
@@ -1068,7 +1065,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        El Biólogo Polo no es el mismo Polo que creó la página — esta vez estamos hablando del hermano de Velas Kukumita. El Biólogo Polo tiene un acuario y ofrece los servicios más profesionales y completos para instalación de peceras, adaptación de entornos marinos, filtros de agua dulce y salada para diferentes especies, y aditivos de todo tipo necesarios para la alimentación y el cuidado de tus mascotas acuáticas.
+                        El Biólogo Polo no es el mismo Polo que creó la página — esta vez estamos hablando del hermano de Yesos Polo Kukúmita. El Biólogo Polo tiene un acuario y ofrece los servicios más profesionales y completos para instalación de peceras, adaptación de entornos marinos, filtros de agua dulce y salada para diferentes especies, y aditivos de todo tipo necesarios para la alimentación y el cuidado de tus mascotas acuáticas.
                     </p>
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:20px;">
                         Te invito a que visites su página web — te recordará aquellas visitas al acuario del vecindario o al zoológico de tu infancia:
@@ -1102,7 +1099,7 @@
                     </div>
 
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                        Víctor Morán es otro talento artístico de la familia — esta vez no es hermano ni hijo de Velas Kukumita, sino su primo. Al igual que Elba Rodríguez, siguió el camino de la música y la composición de letras, sobre todo enfocado al Pop, Rock, Funk y R&B.
+                        Víctor Morán es otro talento artístico de la familia — esta vez no es hermano ni hijo de Yesos Polo Kukúmita, sino su primo. Al igual que Elba Rodríguez, siguió el camino de la música y la composición de letras, sobre todo enfocado al Pop, Rock, Funk y R&B.
                     </p>
                     <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:20px;">
                         Su camino lo llevó a convertirse en vocalista de Marco Antonio Solís, y continúa construyendo su marca con nueva música a su propio estilo. Puedes visitar su página a continuación:
@@ -1181,27 +1178,36 @@
 
         <!-- ===== TÍTULO FIJO PRODUCTOS ===== -->
         <div style="text-align:center; padding: 48px 16px 36px;">
-            <h2 style="font-size: 3.6rem; font-weight: 900; color: #111; letter-spacing: 2px; margin: 0; font-family: 'Playfair Display', Georgia, serif; font-style: italic; line-height: 1.1;">Catálogo</h2>
+            <h2 style="font-size: 3.6rem; font-weight: 900; color: #f0e4cc; letter-spacing: 2px; margin: 0; font-family: 'Playfair Display', Georgia, serif; font-style: italic; line-height: 1.1;">Catálogo</h2>
         </div>
 
         <!-- Barra de búsqueda global eliminada (queda la de cada categoría) -->
 
         <!-- ===== BOTONES DE MODO: MOSTRAR TODO + PRODUCTOS / ARREGLOS / DECORACIONES / ETIQUETAS ===== -->
-        <div class="selector-modo-velas-wrap">
-            <!-- Una sola fila con los 4 botones, mismo tamaño/forma que la barra de píldoras -->
-            <div class="selector-modo-velas" id="selectorModoVelas">
-                <button class="btn-modo-velas btn-modo-mostrar-todo activo" id="btnModoTodosProductos" onclick="cambiarModoVelas('mostrar_todo')">Mostrar Todo</button>
-                <button class="btn-modo-velas btn-modo-arreglos" id="btnModoArreglos" onclick="cambiarModoVelas('arreglos')">🕯️ Arreglos</button>
-                <button class="btn-modo-velas btn-modo-paquetes" id="btnModoPaquetes" onclick="cambiarModoVelas('paquetes')">📦 Paquetes</button>
-                <button class="btn-modo-velas btn-modo-etiquetas" id="btnModoEtiquetas" onclick="cambiarModoVelas('etiquetas')">🏷️ Etiquetas</button>
-            </div>
+        <div class="selector-modo-velas-wrap" id="selectorModoVelas">
+            <button class="btn-modo-velas btn-modo-mostrar-todo activo" id="btnModoTodosProductos" onclick="cambiarModoVelas('mostrar_todo')">
+                <span style="font-size:2.25rem; line-height:1;">🗂️</span>
+                <span class="pill-btn-label">Mostrar Todo</span>
+            </button>
+            <button class="btn-modo-velas btn-modo-arreglos" id="btnModoArreglos" onclick="cambiarModoVelas('arreglos')">
+                <span style="font-size:2.25rem; line-height:1;">🕯️</span>
+                <span class="pill-btn-label">Arreglos</span>
+            </button>
+            <button class="btn-modo-velas btn-modo-paquetes" id="btnModoPaquetes" onclick="cambiarModoVelas('paquetes')">
+                <span style="font-size:2.25rem; line-height:1;">📦</span>
+                <span class="pill-btn-label">Paquetes</span>
+            </button>
+            <button class="btn-modo-velas btn-modo-etiquetas" id="btnModoEtiquetas" onclick="cambiarModoVelas('etiquetas')">
+                <span style="font-size:2.25rem; line-height:1;">🏷️</span>
+                <span class="pill-btn-label">Etiquetas</span>
+            </button>
         </div>
 
         <!-- ===== BUSCA POR EVENTO Y FORMA ===== -->
         <div style="padding: 0 0 8px 0;">
             <div style="display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;">
-                <p id="btnToggleEventos" onclick="togglePanelEventos()" style="text-align:center; font-size:1.1rem; font-weight:800; color:#5c4d43; margin:0; letter-spacing:0.3px; cursor:pointer; user-select:none; padding:10px 0;">🎉 Busca por Evento <span id="iconToggleEventos" style="font-size:0.85rem; font-weight:400;">▼</span></p>
-                <p id="btnToggleFormas" onclick="togglePanelFormas()" style="text-align:center; font-size:1.1rem; font-weight:800; color:#5c4d43; margin:0; letter-spacing:0.3px; cursor:pointer; user-select:none; padding:10px 0;">🔷 Filtrar por Forma <span id="iconToggleFormas" style="font-size:0.85rem; font-weight:400;">▼</span></p>
+                <p id="btnToggleEventos" onclick="togglePanelEventos()" style="text-align:center; font-size:1.1rem; font-weight:800; color:#ffffff; margin:0; letter-spacing:0.3px; cursor:pointer; user-select:none; padding:10px 0;">🎉 Busca por Evento <span id="iconToggleEventos" style="font-size:0.85rem; font-weight:400;">▼</span></p>
+                <p id="btnToggleFormas" onclick="togglePanelFormas()" style="text-align:center; font-size:1.1rem; font-weight:800; color:#ffffff; margin:0; letter-spacing:0.3px; cursor:pointer; user-select:none; padding:10px 0;">🔷 Filtrar por Forma <span id="iconToggleFormas" style="font-size:0.85rem; font-weight:400;">▼</span></p>
             </div>
             <div id="panelEventoCarrusel" style="display:none; overflow:hidden;">
             <div style="height:10px;"></div>
@@ -1248,7 +1254,6 @@
                 <button class="btn-evento-carrusel btn-forma-carrusel btn-modo-tazones" data-forma="tazones" onclick="seleccionarFormaCarrusel(this,'tazones')">🥣 Tazones</button>
                 <button class="btn-evento-carrusel btn-forma-carrusel btn-modo-portavelas" data-forma="portavelas" onclick="seleccionarFormaCarrusel(this,'portavelas')">🕯️ Porta Velas</button>
                 <button class="btn-evento-carrusel btn-forma-carrusel btn-modo-portainciensos" data-forma="portainciensos" onclick="seleccionarFormaCarrusel(this,'portainciensos')">🪔 Porta Inciensos</button>
-                <button class="btn-evento-carrusel btn-forma-carrusel btn-modo-alajero" data-forma="alajero" onclick="seleccionarFormaCarrusel(this,'alajero')">💍 Alajero</button>
             </div>
             </div><!-- /panelFormaCarrusel -->
         </div>
@@ -1305,51 +1310,51 @@
                     <button class="btn-scroll-precios" onclick="scrollPrecios('lista-precios-arreglos', -200)" title="Ver precios anteriores" style="margin-left:0; margin-right:6px;">‹</button>
                     <div class="lista-precios-velas" id="lista-precios-arreglos">
                     <button class="btn-precio-velas activo" onclick="filtrarPrecioArreglos(this,'todos')">Ver Todo</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'1')">$1</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'2')">$2</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'5')">$5</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'8')">$8</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'10')">$10</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'12')">$12</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'15')">$15</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'20')">$20</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'25')">$25</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'30')">$30</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'35')">$35</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'40')">$40</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'45')">$45</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'50')">$50</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'55')">$55</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'60')">$60</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'65')">$65</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'70')">$70</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'75')">$75</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'80')">$80</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'85')">$85</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'90')">$90</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'95')">$95</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'100')">$100</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'120')">$120</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'150')">$150</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'180')">$180</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'200')">$200</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'220')">$220</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'250')">$250</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'280')">$280</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'300')">$300</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'320')">$320</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'350')">$350</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'380')">$380</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'400')">$400</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'420')">$420</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'450')">$450</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'480')">$480</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'500')">$500</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'550')">$550</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'600')">$600</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'650')">$650</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'700')">$700</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioArreglos(this,'800')">$800</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'1')">$1</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'2')">$2</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'5')">$5</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'8')">$8</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'10')">$10</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'12')">$12</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'15')">$15</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'20')">$20</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'25')">$25</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'30')">$30</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'35')">$35</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'40')">$40</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'45')">$45</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'50')">$50</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'55')">$55</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'60')">$60</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'65')">$65</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'70')">$70</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'75')">$75</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'80')">$80</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'85')">$85</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'90')">$90</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'95')">$95</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'100')">$100</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'120')">$120</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'150')">$150</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'180')">$180</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'200')">$200</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'220')">$220</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'250')">$250</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'280')">$280</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'300')">$300</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'320')">$320</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'350')">$350</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'380')">$380</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'400')">$400</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'420')">$420</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'450')">$450</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'480')">$480</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'500')">$500</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'550')">$550</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'600')">$600</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'650')">$650</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'700')">$700</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioArreglos(this,'800')">$800</button>
                 </div>
                     <button class="btn-scroll-precios" onclick="scrollPrecios('lista-precios-arreglos', 200)" title="Ver más precios">›</button>
                 </div>
@@ -1392,51 +1397,51 @@
                     <button class="btn-scroll-precios" onclick="scrollPrecios('lista-precios-todos', -200)" title="Ver precios anteriores" style="margin-left:0; margin-right:6px;">‹</button>
                     <div class="lista-precios-velas" id="lista-precios-todos">
                     <button class="btn-precio-velas activo" onclick="filtrarPrecioTodos(this,'todos')">Ver Todo</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'1')">$1</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'2')">$2</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'5')">$5</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'8')">$8</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'10')">$10</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'12')">$12</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'15')">$15</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'20')">$20</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'25')">$25</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'30')">$30</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'35')">$35</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'40')">$40</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'45')">$45</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'50')">$50</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'55')">$55</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'60')">$60</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'65')">$65</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'70')">$70</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'75')">$75</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'80')">$80</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'85')">$85</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'90')">$90</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'95')">$95</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'100')">$100</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'120')">$120</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'150')">$150</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'180')">$180</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'200')">$200</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'220')">$220</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'250')">$250</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'280')">$280</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'300')">$300</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'320')">$320</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'350')">$350</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'380')">$380</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'400')">$400</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'420')">$420</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'450')">$450</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'480')">$480</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'500')">$500</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'550')">$550</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'600')">$600</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'650')">$650</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'700')">$700</button>
-                    <button class="btn-precio-velas btn-precio-monto" onclick="filtrarPrecioTodos(this,'800')">$800</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'1')">$1</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'2')">$2</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'5')">$5</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'8')">$8</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'10')">$10</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'12')">$12</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'15')">$15</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'20')">$20</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'25')">$25</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'30')">$30</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'35')">$35</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'40')">$40</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'45')">$45</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'50')">$50</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'55')">$55</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'60')">$60</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'65')">$65</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'70')">$70</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'75')">$75</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'80')">$80</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'85')">$85</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'90')">$90</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'95')">$95</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'100')">$100</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'120')">$120</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'150')">$150</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'180')">$180</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'200')">$200</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'220')">$220</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'250')">$250</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'280')">$280</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'300')">$300</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'320')">$320</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'350')">$350</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'380')">$380</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'400')">$400</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'420')">$420</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'450')">$450</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'480')">$480</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'500')">$500</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'550')">$550</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'600')">$600</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'650')">$650</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'700')">$700</button>
+                    <button class="btn-precio-velas" onclick="filtrarPrecioTodos(this,'800')">$800</button>
                 </div>
                     <button class="btn-scroll-precios" onclick="scrollPrecios('lista-precios-todos', 200)" title="Ver más precios">›</button>
                 </div>
@@ -1500,8 +1505,8 @@
 
 <!-- Texto informativo: todos son de YESO -->
 <div style="text-align:center; padding:14px 16px 6px;">
-    <p style="font-size:1.64rem; color:#8c7565; margin:0; line-height:1.5; font-weight:500;">
-        <strong style="color:#5c4d43;">Todos</strong> los productos de esta página son de <strong style="color:#5c4d43;">YESO</strong>, así es, <strong style="color:#5c4d43;">TODOS</strong>.
+    <p style="font-size:1.64rem; color:#ffffff; margin:0; line-height:1.5; font-weight:500;">
+        <strong style="color:#ffffff;">Todos</strong> los productos de esta página son de <strong style="color:#ffffff;">YESO</strong>.
     </p>
 </div>
 
@@ -1617,7 +1622,7 @@
             </div>
 
             <!-- 9a. Botones Favoritos / Carrito -->
-            <div class="mp-botones-accion" style="margin-top:6px; margin-bottom:0;">
+            <div class="mp-botones-accion" id="mpFilaFavCarrito" style="margin-top:6px; margin-bottom:0;">
                 <button class="mp-btn-favoritos" id="mpBtnFavoritos">❤️ Favoritos</button>
                 <button class="mp-btn-carrito" id="mpBtnCarrito">🛒 Añadir al carrito</button>
             </div>
@@ -1626,6 +1631,7 @@
             <div class="mp-botones-accion">
                 <button class="mp-btn-wa" id="mpBtnWhatsapp">💬 WhatsApp</button>
                 <button class="mp-btn-compartir" id="mpBtnCompartir">🔗 Compartir</button>
+                <button class="mp-btn-compartir" id="mpBtnVisitarVelas" style="display:none;">🕯️ Visitar Velas Kukúmita</button>
             </div>
         </div>
     </div>
@@ -1648,8 +1654,8 @@
 <div class="modal-auth-overlay" id="modalGoogleAuth">
     <div class="modal-auth-caja">
         <button class="modal-auth-cerrar" onclick="cerrarModalGoogle()">✕</button>
-        <div class="modal-auth-logo">🕯️</div>
-        <h2 class="modal-auth-titulo">Bienvenida a Kukumita</h2>
+        <img src="imagenes/perfil-yesoskukumita.webp" alt="Yesos Polo Kukúmita" class="modal-auth-logo">
+        <h2 class="modal-auth-titulo">Bienvenida a Yesos Polo Kukúmita</h2>
         <p class="modal-auth-sub">Inicia sesión para guardar tus favoritos y hacer pedidos</p>
         <button class="btn-google-auth" onclick="iniciarSesionGoogle()">
             <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
@@ -1664,11 +1670,9 @@
 
 <!-- Firebase SDK (versión compat para uso directo en HTML) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<!-- firebase-storage-compat.js retirado: el proyecto usa el plan Spark (sin Cloud Storage).
-     La foto de perfil se guarda solo localmente en el dispositivo. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
 </div></div>
 
@@ -1676,13 +1680,13 @@
 <footer>
     <div class="footer-grid">
         <div class="footer-brand">
-            <img src="imagenes/perfil-yesoskukumita.webp" alt="Yesos Fer Kukúmita" class="footer-logo">
-            <h2>🕯️ Velas Kukumita</h2>
-            <p>Velas artesanales hechas a mano en Morelia, Michoacán. Cada pieza es única, elaborada con amor y dedicación para iluminar tus momentos especiales.</p>
+            <img src="imagenes/perfil-yesoskukumita.webp" alt="Yesos Polo Kukúmita" class="footer-logo">
+            <h2>Yesos Polo Kukúmita</h2>
+            <p>Yesos artesanales hechos a mano en Morelia, Michoacán. Cada pieza es única, elaborada con amor y dedicación.</p>
             <br>
-            <a href="https://www.facebook.com/profile.php?id=61569224514602" target="_blank" class="footer-fb">
+            <a href="https://www.facebook.com/yesospolokukumita" target="_blank" class="footer-fb">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                @VelasKukumita
+                @YesosPoloKukumita
             </a>
         </div>
         <div class="footer-col">
@@ -1697,7 +1701,7 @@
         <div class="footer-col">
             <h4>Contacto</h4>
             <ul>
-                <li><a href="https://wa.me/524431322032" target="_blank">WhatsApp</a></li>
+                <li><a href="https://wa.me/524431382094" target="_blank">WhatsApp</a></li>
                 <li><a href="mailto:velaskukumita@gmail.com">velaskukumita@gmail.com</a></li>
                 <li><a href="#">Morelia, Michoacán</a></li>
                 <li><a href="#">Pedidos por mayoreo</a></li>
@@ -1705,7 +1709,7 @@
         </div>
     </div>
     <div class="footer-bottom">
-        <span>© 2025 Velas Kukumita · Todos los derechos reservados</span>
+        <span>© 2025 Yesos Polo Kukúmita · Todos los derechos reservados</span>
         <span>Hecho con ♥ en Morelia, Mich.</span>
     </div>
 </footer>
@@ -1736,9 +1740,9 @@
             <button onclick="cerrarModalBazar()" style="position:absolute; top:12px; right:12px; z-index:20; width:34px; height:34px; border-radius:50%; background:rgba(0,0,0,0.48); color:white; border:none; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
             <!-- Imagen bazar.webp -->
             <div style="width:100%; max-height:280px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
-                <img src="imagenes/bazar.webp" alt="Velas Kukumita en Bazar"
+                <img src="imagenes/bazar.webp" alt="Yesos Polo Kukúmita en Bazar"
                      style="width:100%; height:280px; object-fit:cover; display:block;"
-                     onerror="this.parentElement.innerHTML='<div style=\'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#3d2b1f,#6b4c37);\'><div style=\'font-size:5rem;\'>🏪</div><p style=\'color:rgba(255,255,255,0.7);font-size:1rem;font-style:italic;letter-spacing:2px;font-family:Cormorant Garamond,Georgia,serif;margin-top:12px;\'>Velas Kukumita en Bazar</p></div>'">
+                     onerror="this.parentElement.innerHTML='<div style=\'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#3d2b1f,#6b4c37);\'><div style=\'font-size:5rem;\'>🏪</div><p style=\'color:rgba(255,255,255,0.7);font-size:1rem;font-style:italic;letter-spacing:2px;font-family:Cormorant Garamond,Georgia,serif;margin-top:12px;\'>Yesos Polo Kukúmita en Bazar</p></div>'">
             </div>
         </div>
 
@@ -1981,20 +1985,11 @@
                 <span>Copiar link para Instagram</span>
             </button>
         </div>
-
-        <!-- Zona exclusiva para los productos de vela: reemplaza las opciones
-             normales de compartir por un único botón hacia Velas Kukúmita. -->
-        <div class="sc-redes" id="scVelasZona" style="display:none;">
-            <button class="sc-btn-red sc-btn-velas" onclick="visitarVelasKukumita()">
-                <span class="sc-red-icon">🕯️</span>
-                <span>Visitar Velas Kukúmita</span>
-            </button>
-        </div>
     </div>
 </div>
 
     <!-- JavaScript externo -->
-    <script src="app.js?v=1"></script>
+    <script src="app.js"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
     <script>
@@ -2037,7 +2032,7 @@
     })();
     </script>
 
-    <!-- Función submenú Yesos Fer Kukúmita -->
+    <!-- Función submenú Yesos Polo Kukúmita -->
     <script>
         function toggleSubmenuYesos() {
             var sub = document.getElementById('submenuYesosKukumita');
