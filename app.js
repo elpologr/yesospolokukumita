@@ -170,7 +170,7 @@ var SHEET_ID = '1GoIVWBIyl9s0wYo2qyv0GQwco_xBl3sajDwF0qcnf5o';
 // Ejemplo: 'https://kukumita-og.TU-USUARIO.workers.dev'
 // Mientras no lo tengas configurado, deja el valor vacío ('') y funcionará
 // como antes (sin imagen en Facebook).
-var OG_WORKER_URL = 'https://yesos-fer-kukumita-linker.dulceprincesa086.workers.dev';
+var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers.dev';
 
 // 🔧 Hoja de cálculo de Velas Kukúmita — se reutiliza en TRES lugares:
 //   1) Botón "Etiquetas" (grid propio)                → Hoja 2 completa
@@ -190,8 +190,8 @@ var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 //   C(2):  precio mayoreo
 //   D(3):  Descripcion
 //   E(4):  video youtube
-//   F(5):  Imagen Polo       (galería imgbb de Yesos Polo Kukúmita — IGNORADA en este sitio)
-//   G(6):  Imagen Fer        (galería imgbb de Yesos Fer Kukúmita — usada en este sitio)
+//   F(5):  Imagen Polo       (galería imgbb de Yesos Polo Kukúmita — usada en este sitio)
+//   G(6):  Imagen Fer        (galería imgbb de Yesos Fer Kukúmita — IGNORADA en este sitio)
 //   H(7):  EtiquetaPrincipal
 //   I(8):  SubEtiqueta
 //   J(9):  EtiquetaEvento
@@ -207,6 +207,10 @@ var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 var listaProductos = [];
 
 // ── Parser de CSV que maneja campos entre comillas con comas internas ──
+// IMPORTANTE: conserva TODAS las líneas, incluidas las completamente vacías.
+// Esto es necesario para que el número de fila de cada producto (usado en el
+// badge "# fila" del modal) siga coincidiendo con la fila real de Google Sheets
+// aunque haya huecos/filas vacías en medio de la hoja.
 function parsearCSV(texto) {
     var lineas = [];
     var filaActual = [];
@@ -253,6 +257,8 @@ function parsearCSV(texto) {
 }
 
 // ── Convierte filas CSV en objetos de producto ──
+// Un producto solo se genera si la columna F (Imagen Polo) tiene contenido.
+// Si la fila solo tiene nombre/precio pero no imagen, se ignora (no aparece en la web).
 function csvAProductos(filas) {
     if (filas.length < 2) return [];
     // Omitir la fila de encabezados (fila 0)
@@ -261,8 +267,8 @@ function csvAProductos(filas) {
         var f = filas[i];
         var get = function(idx) { return (f[idx] || '').trim(); };
 
-        // Saltar filas sin nombre
-        if (!get(0)) continue;
+        // Saltar filas sin imagen en la columna F (aunque tengan nombre o precio)
+        if (!get(5)) continue;
 
         // Nuevo orden de columnas (Google Sheets) — recorrido 1 lugar a la derecha desde G:
         // A=0  nombre
@@ -270,8 +276,8 @@ function csvAProductos(filas) {
         // C=2  precioMayoreo (antes precioBazar)
         // D=3  descripcion
         // E=4  video youtube
-        // F=5  Imagen Polo (galería imgbb de Yesos Polo Kukúmita — IGNORADA aquí)
-        // G=6  Imagen Fer (URL principal + extras separadas por coma) — usada en este sitio
+        // F=5  Imagen Polo (URL principal + extras separadas por coma) — usada en este sitio
+        // G=6  Imagen Fer (galería imgbb de Yesos Fer Kukúmita — IGNORADA aquí)
         // H=7  EtiquetaPrincipal
         // I=8  SubEtiqueta
         // J=9  EtiquetaEvento
@@ -286,8 +292,8 @@ function csvAProductos(filas) {
         // Video principal (E=4)
         var videoPrincipal = get(4).replace(/^"+|"+$/g, '').trim();
 
-        // Imágenes: columna G=6 (Imagen Fer) — la columna F=5 (Imagen Polo) se ignora en este sitio
-        var _rawImg = get(6).replace(/^"+|"+$/g, '').trim();
+        // Imágenes: columna F=5 (Imagen Polo) — la columna G=6 (Imagen Fer) se ignora en este sitio
+        var _rawImg = get(5).replace(/^"+|"+$/g, '').trim();
         var imagenesExtra = _rawImg
             ? _rawImg.split(',').map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
             : [];
@@ -525,55 +531,6 @@ function renderizarCatalogoEnGrid(gridId, productos) {
     if (typeof syncBotonesLike === 'function') syncBotonesLike();
 }
 
-// ── Lleva al usuario al filtro "Filtrar por Forma" y activa la categoría indicada ──
-function irAFiltroForma(forma) {
-    // Asegurar que estamos en el modo "Mostrar Todo" (donde vive el catálogo general)
-    if (typeof cambiarModoVelas === 'function') {
-        var btnTodo = document.getElementById('btnModoTodosProductos');
-        if (btnTodo && !btnTodo.classList.contains('activo')) cambiarModoVelas('mostrar_todo');
-    }
-    // Abrir el panel de formas si está colapsado
-    var panel = document.getElementById('panelFormaCarrusel');
-    if (panel && panel.style.display === 'none' && typeof togglePanelFormas === 'function') {
-        togglePanelFormas();
-    }
-    var btnForma = document.querySelector('.btn-forma-carrusel[data-forma="' + forma + '"]');
-    if (btnForma && typeof seleccionarFormaCarrusel === 'function') {
-        seleccionarFormaCarrusel(btnForma, forma);
-    }
-    setTimeout(function() {
-        var destino = panel || document.getElementById('gridProductos');
-        if (destino) destino.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 60);
-}
-
-// ── Lleva al usuario a la sección "Etiquetas" del catálogo ──
-function irAModoEtiquetas() {
-    if (typeof cambiarModoVelas === 'function') cambiarModoVelas('etiquetas');
-    setTimeout(function() {
-        var destino = document.getElementById('panelEtiquetas') || document.getElementById('gridProductos');
-        if (destino) destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-}
-
-// ── Lleva al usuario a la sección "Arreglos" del catálogo ──
-function irAModoArreglos() {
-    if (typeof cambiarModoVelas === 'function') cambiarModoVelas('arreglos');
-    setTimeout(function() {
-        var destino = document.getElementById('panelArreglos') || document.getElementById('gridProductos');
-        if (destino) destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-}
-
-// ── Redirige a la página de Velas Kukúmita (negocio hermano) ──
-function visitarVelasKukumita() {
-    window.open('https://velaskukumita.com', '_blank');
-}
-window.irAFiltroForma      = irAFiltroForma;
-window.irAModoEtiquetas    = irAModoEtiquetas;
-window.irAModoArreglos     = irAModoArreglos;
-window.visitarVelasKukumita = visitarVelasKukumita;
-
 // ══════════════════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════════════════
 // OPEN GRAPH DINÁMICO — actualiza meta tags según el producto en la URL
@@ -586,14 +543,14 @@ function _actualizarMetaOG(titulo, descripcion, imagen, url) {
     }
     var urlFinal = url || window.location.href;
     setMeta('og-url',         urlFinal);
-    setMeta('og-title',       titulo + ' — Yesos Fer Kukúmita');
-    setMeta('og-description', descripcion || 'Descubre este producto en Yesos Fer Kukúmita.');
+    setMeta('og-title',       titulo + ' — Yesos Polo Kukúmita');
+    setMeta('og-description', descripcion || 'Descubre este producto en Yesos Polo Kukúmita.');
     setMeta('og-image',       imagen);
-    setMeta('tw-title',       titulo + ' — Yesos Fer Kukúmita');
-    setMeta('tw-description', descripcion || 'Descubre este producto en Yesos Fer Kukúmita.');
+    setMeta('tw-title',       titulo + ' — Yesos Polo Kukúmita');
+    setMeta('tw-description', descripcion || 'Descubre este producto en Yesos Polo Kukúmita.');
     setMeta('tw-image',       imagen);
     // Actualizar también el <title> de la página
-    document.title = titulo + ' — Yesos Fer Kukúmita';
+    document.title = titulo + ' — Yesos Polo Kukúmita';
 }
 
 function _abrirProductoDesdeURL() {
@@ -631,9 +588,9 @@ function _abrirProductoDesdeURL() {
 // Restaurar meta OG genéricos al cerrar el modal
 (function() {
     var _tituloOriginal    = document.title;
-    var _ogTitleOriginal   = 'Yesos Fer Kukúmita — Arreglos y Productos Artesanales';
-    var _ogDescOriginal    = 'Descubre nuestros hermosos arreglos y productos artesanales de Yesos Fer Kukúmita.';
-    var _ogImagenOriginal  = 'https://dulcefer.github.io/yesosferkukumita/imagenes/perfil-yesoskukumita.webp';
+    var _ogTitleOriginal   = 'Yesos Polo Kukúmita — Arreglos y Productos Artesanales';
+    var _ogDescOriginal    = 'Descubre nuestros hermosos arreglos y productos artesanales de Yesos Polo Kukúmita.';
+    var _ogImagenOriginal  = 'https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp';
 
     document.addEventListener('modalProductoCerrado', function() {
         document.title = _tituloOriginal;
@@ -790,13 +747,13 @@ function cargarProductosEtiquetas(forzar) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Fer Kukúmita):
+// PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Polo Kukúmita):
 //   • Zona "Mostrar Más Etiquetas" (fila 9,  posiciones 26-28) → primeras 3
 //     etiquetas de la Hoja 2 de Velas Kukúmita.
 //   • Zona "Mostrar Más Velas"     (fila 10, posiciones 29-31) → primeros 3
 //     productos de la Hoja 1 de Velas Kukúmita.
 // En la hoja de Yesos, las filas 26-31 deben quedar SIN link de imagen en la
-// columna G para que csvAProductos() las ignore y así dejar ese hueco libre
+// columna F para que csvAProductos() las ignore y así dejar ese hueco libre
 // para estos 6 productos "prestados".
 // ══════════════════════════════════════════════════════════════════════════════
 var FILA_INICIO_ETIQUETAS = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de "Etiquetas"
@@ -968,12 +925,6 @@ function insertarBarrasCategoriaProductos() {
     var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
     if (!esModoMostrarTodo) return;
 
-    // Tampoco deben aparecer si el usuario está buscando algo por texto en el
-    // buscador de "Todos los productos" (los resultados ya no respetan el
-    // orden de 10 filas de 3 por categoría, así que las barras no aplican).
-    var inputBusquedaTodos = document.getElementById('inputBusquedaTodos');
-    if (inputBusquedaTodos && inputBusquedaTodos.value.trim()) return;
-
     // Mientras haya un filtro de barra activo, se muestra una única barra para
     // quitarlo en vez de las 10 (el listado ya no conserva la estructura de
     // 10 filas de 3, así que las barras normales no aplican)
@@ -1013,8 +964,6 @@ function insertarBarrasCategoriaProductos() {
     }
 }
 window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
-
-
 
 // ===== PAGINACIÓN DE 30 PRODUCTOS POR PÁGINA =====
 (function() {
@@ -1307,9 +1256,6 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
     let galeriaIndice = 0;
 
     function abrirModalProducto(card) {
-        // ── ¿Este producto pertenece al grupo "Velas" (traído de Velas Kukúmita)? ──
-        const esGrupoVelas = (card.getAttribute('data-origen-externo') || '') === 'velas';
-
         const nombre = card.getAttribute('data-nombre') || card.querySelector('h3')?.textContent || 'Producto';
         const descripcion = card.getAttribute('data-descripcion') || '';
         const alto = card.getAttribute('data-alto') || '';
@@ -1645,7 +1591,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
         document.getElementById('mpBtnWhatsapp').onclick = () => {
             const textoPlano = 'Hola, me interesa el producto: ' + nombre + (precioNum ? ' ($' + precioNum + ' MXN)' : '');
             const imagenProducto = (galeriaImagenes && galeriaImagenes[0]) || '';
-            compartirConImagenOFallback(textoPlano, imagenProducto, '524431322032');
+            compartirConImagenOFallback(textoPlano, imagenProducto, '524431382094');
         };
 
         // Botón Compartir — actualiza OG y abre submenu
@@ -1657,8 +1603,32 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             if (typeof _actualizarMetaOG === 'function') {
                 _actualizarMetaOG(nombre, descripcion, galeriaImagenes[0] || '', urlOG);
             }
-            abrirSubmenuCompartir(url, nombre, galeriaImagenes[0] || '', esGrupoVelas);
+            abrirSubmenuCompartir(url, nombre, galeriaImagenes[0] || '');
         };
+
+        // ── Producto especial traído desde Velas Kukúmita (zona "Mostrar Más Velas") ──
+        // Para estos productos: sin Favoritos, sin Carrito y sin Compartir —
+        // solo WhatsApp y un botón para ver el producto en velaskukumita.com
+        const origenExterno    = card.getAttribute('data-origen-externo') || '';
+        const filaFavCarrito   = document.getElementById('mpFilaFavCarrito');
+        const btnCompartirModal = document.getElementById('mpBtnCompartir');
+        const btnVisitarVelas   = document.getElementById('mpBtnVisitarVelas');
+
+        if (origenExterno === 'velas') {
+            if (filaFavCarrito)    filaFavCarrito.style.display = 'none';
+            if (btnCompartirModal) btnCompartirModal.style.display = 'none';
+            if (btnVisitarVelas) {
+                btnVisitarVelas.style.display = '';
+                btnVisitarVelas.onclick = () => {
+                    const urlVelas = 'https://velaskukumita.com/?producto=' + encodeURIComponent(nombre);
+                    window.open(urlVelas, '_blank');
+                };
+            }
+        } else {
+            if (filaFavCarrito)    filaFavCarrito.style.display = '';
+            if (btnCompartirModal) btnCompartirModal.style.display = '';
+            if (btnVisitarVelas)   btnVisitarVelas.style.display = 'none';
+        }
 
         renderizarGaleria();
 
@@ -2080,6 +2050,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             if (btnTodosProductos) btnTodosProductos.classList.add('activo');
             if (panelTod) panelTod.classList.add('visible');
             if (bloqueTod) bloqueTod.style.display = 'block';
+            _filtroBarraCategoriaActivo = null;
             aplicarFiltrosUnificados('mostrar_todo');
         }
     }
@@ -2236,10 +2207,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             'tazones':         ['tazon','tazones','tazón','tazónes'],
             'portavelas':      ['porta vela','porta velas','portavela','portavelas','porta_vela','porta_velas'],
             'portainciensos':  ['porta incienso','porta inciensos','portaincienso','portainciensos','porta_incienso','porta_inciensos'],
-            'aditamentos':     ['aditamento','aditamentos'],
-            // Alajero (alhajero): admite las variantes/erratas más comunes que se
-            // escriben en la columna H (EtiquetaPrincipal) de la hoja de cálculo.
-            'alajero':         ['alajero','alajeros','alajro','alajros','aljero','aljeros','ajalero','ajaleros','ajlaero','ajlaeros']
+            'aditamentos':     ['aditamento','aditamentos']
         };
         return buscar.some(function(b) {
             const lista = variantes[b] || [b];
@@ -2710,12 +2678,8 @@ window.addEventListener('popstate', function(e) {
     // Modal de producto (ya tenía su propio manejo, lo respetamos)
     var modalProd = document.getElementById('modalProducto');
     if (modalProd && modalProd.classList.contains('abierto')) {
-        if (typeof cerrarModalProducto === 'function') {
-            cerrarModalProducto();
-        } else {
-            modalProd.classList.remove('abierto');
-            document.body.style.overflow = 'auto';
-        }
+        modalProd.classList.remove('abierto');
+        document.body.style.overflow = 'auto';
         _modalActivo = null;
         return;
     }
@@ -2868,9 +2832,9 @@ function elegirFotoGaleria() {
 function aplicarFotoPerfil(event) {
     const archivo = event.target.files[0];
     if (!archivo) return;
+    const user = (typeof auth !== 'undefined') ? auth.currentUser : null;
 
-    // Guardamos la foto solo en este dispositivo (localStorage), sin usar
-    // Firebase Storage (requiere plan Blaze, y este proyecto se mantiene en Spark).
+    // Vista previa inmediata mientras sube
     const reader = new FileReader();
     reader.onload = e => {
         const src = e.target.result;
@@ -2878,16 +2842,33 @@ function aplicarFotoPerfil(event) {
         const avatarPantalla = document.getElementById('pantallaAvatar');
         if (avatarDrawer) avatarDrawer.src = src;
         if (avatarPantalla) avatarPantalla.src = src;
-        try {
-            localStorage.setItem('velas-foto-perfil', src);
-            mostrarToast('✅ Foto actualizada en este dispositivo');
-        } catch (e2) {
-            // La imagen puede ser demasiado grande para localStorage
-            console.warn('No se pudo guardar la foto localmente:', e2);
-            mostrarToast('⚠️ No se pudo guardar la foto (muy pesada). Intenta con una imagen más pequeña.');
-        }
+        localStorage.setItem('velas-foto-perfil', src); // fallback local
     };
     reader.readAsDataURL(archivo);
+
+    // Subir a Firebase Storage si hay sesión
+    if (user && typeof firebase !== 'undefined' && firebase.storage) {
+        mostrarToast('⏳ Subiendo foto…');
+        const storage = firebase.storage();
+        const ref = storage.ref('fotos-perfil/' + user.uid + '/avatar.jpg');
+        ref.put(archivo).then(function() {
+            return ref.getDownloadURL();
+        }).then(function(url) {
+            return user.updateProfile({ photoURL: url }).then(function() {
+                localStorage.setItem('velas-foto-perfil', url);
+                const avatarDrawer = document.getElementById('drawerAvatar');
+                const avatarPantalla = document.getElementById('pantallaAvatar');
+                if (avatarDrawer) avatarDrawer.src = url;
+                if (avatarPantalla) avatarPantalla.src = url;
+                mostrarToast('✅ Foto de perfil actualizada');
+            });
+        }).catch(function(err) {
+            console.error('Error subiendo foto:', err);
+            mostrarToast('⚠️ Foto guardada solo en este dispositivo');
+        });
+    } else {
+        mostrarToast('✅ Foto actualizada en este dispositivo');
+    }
 }
 
 _ready(function() {
@@ -3027,27 +3008,18 @@ function renderizarResultadosDrawer(lista, titulo) {
 //  FIREBASE CONFIGURACIÓN
 // ═══════════════════════════════════════════
 const firebaseConfig = {
-    apiKey: "AIzaSyBF09xyHMIy0nZH4nnSKEoYHycUmVCJBdQ",
-    authDomain: "yesosferkukumita-4a379.firebaseapp.com",
-    projectId: "yesosferkukumita-4a379",
-    storageBucket: "yesosferkukumita-4a379.firebasestorage.app",
-    messagingSenderId: "667938933315",
-    appId: "1:667938933315:web:ba47732f4a119c8b41e2f6",
-    measurementId: "G-EX63CLDFSB"
+    apiKey: "AIzaSyBc_AUz1lfgAPFuQd9oKvDYGm1lyrHALGs",
+    authDomain: "velas-kukumita.firebaseapp.com",
+    projectId: "velas-kukumita",
+    storageBucket: "velas-kukumita.firebasestorage.app",
+    messagingSenderId: "76727611900",
+    appId: "1:76727611900:web:d0f8b3c2a04e6fb340c279",
+    measurementId: "G-RWNN074LVT"
 };
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const providerGoogle = new firebase.auth.GoogleAuthProvider();
-
-// Analytics (opcional — no rompe el sitio si el navegador bloquea el script)
-try {
-    if (firebase.analytics) {
-        firebase.analytics();
-    }
-} catch (e) {
-    console.warn('Firebase Analytics no se pudo inicializar:', e);
-}
 
 // ─── TOAST ───
 function mostrarToast(msg) {
@@ -3244,14 +3216,13 @@ async function gestionarContrasena() {
     }
 }
 
-// ─── FOTO DE PERFIL (override) — solo local, sin Firebase Storage ───
-// Nota: el proyecto se mantiene en el plan Spark de Firebase, que no da acceso
-// a Cloud Storage. La foto de perfil se guarda únicamente en este dispositivo
-// (localStorage), no se sincroniza entre dispositivos ni se sube a la nube.
+// ─── FOTO DE PERFIL (override con Firebase Storage si se desea) ───
 function aplicarFotoPerfil(event) {
     const archivo = event.target.files[0];
     if (!archivo) return;
+    const user = (typeof auth !== 'undefined') ? auth.currentUser : null;
 
+    // Vista previa inmediata
     const reader = new FileReader();
     reader.onload = e => {
         const src = e.target.result;
@@ -3259,15 +3230,33 @@ function aplicarFotoPerfil(event) {
         const avatarPantalla = document.getElementById('pantallaAvatar');
         if (avatarDrawer) avatarDrawer.src = src;
         if (avatarPantalla) avatarPantalla.src = src;
-        try {
-            localStorage.setItem('velas-foto-perfil', src);
-            mostrarToast('✅ Foto actualizada en este dispositivo');
-        } catch (e2) {
-            console.warn('No se pudo guardar la foto localmente:', e2);
-            mostrarToast('⚠️ No se pudo guardar la foto (muy pesada). Intenta con una imagen más pequeña.');
-        }
+        localStorage.setItem('velas-foto-perfil', src);
     };
     reader.readAsDataURL(archivo);
+
+    // Subir a Firebase Storage si hay sesión
+    if (user && typeof firebase !== 'undefined' && firebase.storage) {
+        mostrarToast('⏳ Subiendo foto…');
+        const storage = firebase.storage();
+        const ref = storage.ref('fotos-perfil/' + user.uid + '/avatar.jpg');
+        ref.put(archivo).then(function() {
+            return ref.getDownloadURL();
+        }).then(function(url) {
+            return user.updateProfile({ photoURL: url }).then(function() {
+                localStorage.setItem('velas-foto-perfil', url);
+                const avatarDrawer = document.getElementById('drawerAvatar');
+                const avatarPantalla = document.getElementById('pantallaAvatar');
+                if (avatarDrawer) avatarDrawer.src = url;
+                if (avatarPantalla) avatarPantalla.src = url;
+                mostrarToast('✅ Foto de perfil actualizada');
+            });
+        }).catch(function(err) {
+            console.error('Error subiendo foto:', err);
+            mostrarToast('⚠️ Foto guardada solo en este dispositivo');
+        });
+    } else {
+        mostrarToast('✅ Foto actualizada en este dispositivo');
+    }
 }
 
 // ─── ABRIR PANTALLA PERFIL (override con datos reales) ───
@@ -3307,7 +3296,9 @@ document.querySelectorAll('.card-dinamica').forEach(function(card) {
 var _pillBtns   = { biografia:'pillBiografia', productos:'pillProductos', ofertas:'pillOfertas', masvendidos:'pillMasVendidos' };
 var _pillPanels = { biografia:'panelPillBiografia', productos:null, ofertas:'panelPillOfertas', masvendidos:'panelPillMasVendidos' };
 
-function activarPill(cual) {
+function activarPill(cual, opts) {
+    var sinScroll = !!(opts && opts.sinScroll);
+
     // Desactivar todos
     Object.values(_pillBtns).forEach(function(id) {
         var el = document.getElementById(id);
@@ -3328,9 +3319,13 @@ function activarPill(cual) {
 
     // Mostrar/ocultar catálogo de productos
     var catalogo = document.getElementById('zona-catalogo');
-    if (catalogo) catalogo.style.display = (cual === 'biografia') ? 'none' : 'block';
+    if (catalogo) catalogo.style.display = (cual === 'productos') ? 'block' : 'none';
 
-    if (cual === 'productos') {
+    // El scroll automático hacia el catálogo solo ocurre cuando el usuario
+    // elige "Productos" manualmente (por ejemplo, desde la sección de biografía).
+    // En la carga inicial de la página (F5) se omite para que se muestre
+    // siempre el banner de arriba, sin desplazamiento automático.
+    if (cual === 'productos' && !sinScroll) {
         setTimeout(function() {
             if (catalogo) catalogo.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 80);
@@ -3365,12 +3360,20 @@ function _actualizarBotonesInicio(cual) {
     }
 }
 
-// Aplicar preferencia guardada (o productos por defecto)
+// Aplicar preferencia guardada (o productos por defecto).
+// Nunca hace scroll automático en la carga/recarga de la página:
+// siempre se muestra primero la parte de arriba (banner) y el usuario
+// decide cuándo bajar.
 (function() {
-    var pref = localStorage.getItem('kukumita-inicio') || 'productos';
+    var pref = 'productos'; // Siempre inicia en la zona de Catálogo, sin importar preferencias guardadas
+    // Evita que el navegador restaure una posición de scroll previa al recargar (F5)
+    if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+    }
     _ready(function() {
-        activarPill(pref);
+        activarPill(pref, { sinScroll: true });
         _actualizarBotonesInicio(pref);
+        window.scrollTo(0, 0);
     });
 })();
 
@@ -4360,7 +4363,7 @@ function pedirCotizacionWA() {
     var total = carrito.reduce(function(sum, i){ return sum + i.precio * i.cantidad; }, 0);
 
     // Construir mensaje
-    var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Fer Kukúmita:\n'];
+    var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Polo Kukúmita:\n'];
     carrito.forEach(function(item, i) {
         lineas.push((i+1) + '. *' + item.nombre + '*');
         lineas.push('   Cantidad: ' + item.cantidad + ' piezas');
@@ -4375,7 +4378,7 @@ function pedirCotizacionWA() {
     btn.disabled = true;
     btn.textContent = '⏳ Enviando...';
     setTimeout(function() {
-        window.open('https://wa.me/524431322032?text=' + encodeURIComponent(mensaje), '_blank');
+        window.open('https://wa.me/524431382094?text=' + encodeURIComponent(mensaje), '_blank');
         btn.disabled = false;
         btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> Pedir Cotización por WhatsApp';
     }, 800);
@@ -4758,26 +4761,12 @@ var _scUrlActual = '';
 var _scNombreActual = '';
 var _scImagenActual = '';
 
-function abrirSubmenuCompartir(url, nombre, imagen, esVelas) {
+function abrirSubmenuCompartir(url, nombre, imagen) {
     _scUrlActual = url;
     _scNombreActual = nombre || 'Producto';
     _scImagenActual = imagen || '';
     var linkEl = document.getElementById('scLinkTexto');
     if (linkEl) linkEl.textContent = url;
-
-    // ── Productos del grupo "Velas": ocultar las opciones normales de
-    //    compartir y mostrar únicamente el botón hacia Velas Kukúmita. ──
-    var zonaLink  = document.querySelector('#submenuCompartir .sc-link-zona');
-    var separador = document.querySelector('#submenuCompartir .sc-separador');
-    var redes     = document.querySelector('#submenuCompartir .sc-redes');
-    var zonaVelas = document.getElementById('scVelasZona');
-    var mostrarSoloVelas = !!esVelas;
-
-    if (zonaLink)  zonaLink.style.display  = mostrarSoloVelas ? 'none' : '';
-    if (separador) separador.style.display = mostrarSoloVelas ? 'none' : '';
-    if (redes)     redes.style.display     = mostrarSoloVelas ? 'none' : '';
-    if (zonaVelas) zonaVelas.style.display = mostrarSoloVelas ? 'flex' : 'none';
-
     document.getElementById('submenuCompartir').classList.add('abierto');
     document.body.style.overflow = 'hidden';
 }
@@ -4821,6 +4810,9 @@ function _urlOG(urlPaginaReal) {
     try {
         var urlObj = new URL(urlPaginaReal);
         var producto = urlObj.searchParams.get('producto');
+        // Red de seguridad: si "producto" no está en el query string real
+        // (por ejemplo, quedó atrapado dentro de un hash tipo #pagina=6?producto=X),
+        // lo buscamos ahí también en vez de rendirnos.
         if (!producto && urlObj.hash) {
             var m = urlObj.hash.match(/[?&]producto=([^&]+)/);
             if (m) producto = decodeURIComponent(m[1]);
@@ -4836,7 +4828,7 @@ function _urlOG(urlPaginaReal) {
 //    (Web Share API). Si no es posible (computadora, navegador sin soporte,
 //    el usuario cancela, etc.), cae automáticamente al método clásico de
 //    abrir un chat de WhatsApp con el número indicado (solo texto).
-//    numeroWhatsApp: opcional, ej. '524431322032'. Si se omite, usa wa.me/?text=
+//    numeroWhatsApp: opcional, ej. '524431382094'. Si se omite, usa wa.me/?text=
 async function compartirConImagenOFallback(textoPlano, imagenUrl, numeroWhatsApp) {
     const abrirWaMeFallback = () => {
         const texto = encodeURIComponent(textoPlano);
@@ -4885,29 +4877,71 @@ async function compartirConImagenOFallback(textoPlano, imagenUrl, numeroWhatsApp
     }
 }
 
+// ── Copia texto al portapapeles sin mostrar ningún aviso (uso interno,
+//    para dejar el link listo "por si acaso" mientras se abre la app).
+function _copiarAlPortapapelesSilencioso(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).catch(function() { /* silencioso */ });
+        return;
+    }
+    try {
+        var ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    } catch (e) { /* silencioso */ }
+}
+
 function compartirEnWhatsApp() {
-    // Usamos la URL del Worker (si está configurado) para que, en caso de
-    // recurrir al método clásico (computadora o sin soporte), WhatsApp
-    // lea las meta tags OG y muestre la imagen del producto en la vista previa.
+    // Usamos la URL del Worker (si está configurado) para que WhatsApp
+    // lea las meta tags OG y muestre la imagen del producto en la vista previa del link.
     var urlParaWhatsApp = _urlOG(_scUrlActual);
-    var textoPlano = '🕯️ Mira este producto de Yesos Fer Kukúmita: ' + _scNombreActual + '\n' + urlParaWhatsApp;
-    // En celular, intenta adjuntar la imagen real vía el menú nativo de compartir.
-    // Si no es posible, cae automáticamente a wa.me con el texto (incluye el link,
-    // que sigue mostrando la imagen como vista previa del link).
-    compartirConImagenOFallback(textoPlano, _scImagenActual, null);
+    var textoPlano = '🕯️ Mira este producto de Yesos Polo Kukúmita: ' + _scNombreActual + '\n' + urlParaWhatsApp;
+
+    // Dejamos el link copiado por si el usuario lo quiere pegar en otro lado.
+    _copiarAlPortapapelesSilencioso(urlParaWhatsApp);
+
+    // Vamos DIRECTO al enlace clásico de WhatsApp (wa.me), sin pasar por el
+    // menú nativo de "compartir archivo" del celular (ese es el que solo
+    // dejaba "copiar imagen"). Con wa.me: se abre la app de WhatsApp, el
+    // usuario elige el contacto, se abre el chat y el texto con el link
+    // YA está escrito en la caja — solo falta presionar enviar.
+    var texto = encodeURIComponent(textoPlano);
+    window.open('https://wa.me/?text=' + texto, '_blank');
+    cerrarSubmenuCompartir();
 }
 
 function compartirEnFacebook() {
     // Usamos la URL del worker (si está configurado) para que Facebook
     // lea las meta tags OG y muestre la imagen del producto.
-    var urlParaFB = encodeURIComponent(_urlOG(_scUrlActual));
-    window.open('https://www.facebook.com/sharer/sharer.php?u=' + urlParaFB, '_blank', 'width=600,height=400');
+    var urlReal = _urlOG(_scUrlActual);
+    _copiarAlPortapapelesSilencioso(urlReal);
+    var urlParaFB = encodeURIComponent(urlReal);
+    // Sin width/height: en celular esto abre la app de Facebook (o pestaña
+    // completa) directo a la pantalla de compartir; en escritorio abre un popup.
+    window.open('https://www.facebook.com/sharer/sharer.php?u=' + urlParaFB, '_blank');
+    cerrarSubmenuCompartir();
 }
 
 function compartirEnInstagram() {
-    // Instagram no tiene share URL directa, copiamos el link
-    copiarLinkProducto();
-    mostrarToast('📸 Link copiado — pégalo en tu historia de Instagram');
+    // Instagram no permite prellenar texto/link en una publicación o mensaje,
+    // así que copiamos el link y abrimos la app directamente para que el
+    // usuario solo tenga que pegarlo (Ctrl+V / mantener presionado > Pegar).
+    var urlReal = _urlOG(_scUrlActual);
+    _copiarAlPortapapelesSilencioso(urlReal);
+    mostrarToast('📸 Link copiado — pégalo en tu historia o mensaje de Instagram');
+
+    var esMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (esMobile) {
+        // Intenta abrir la app de Instagram directamente vía deep link.
+        window.location.href = 'instagram://app';
+    } else {
+        window.open('https://www.instagram.com/', '_blank');
+    }
+    cerrarSubmenuCompartir();
 }
 
 // Cerrar al hacer clic en el fondo
@@ -5069,7 +5103,7 @@ function _cargarFavoritosFirestore(uid) {
         var total       = carrito.reduce(function(s,i){ return s+(i.precio||0)*i.cantidad; }, 0);
         var descuento   = (typeof calcularDescuentoCupones==='function') ? calcularDescuentoCupones(carrito) : 0;
 
-        var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Fer Kukúmita:\n'];
+        var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Polo Kukúmita:\n'];
         carrito.forEach(function(item, i) {
             lineas.push((i+1)+'. *'+item.nombre+'*');
             lineas.push('   Cantidad: '+item.cantidad+' piezas');
@@ -5094,7 +5128,7 @@ function _cargarFavoritosFirestore(uid) {
         var btn = document.getElementById('btnPedirCotizacion');
         if (btn) { btn.disabled=true; btn.textContent='⏳ Enviando...'; }
         setTimeout(function() {
-            window.open('https://wa.me/524431322032?text='+encodeURIComponent(mensaje), '_blank');
+            window.open('https://wa.me/524431382094?text='+encodeURIComponent(mensaje), '_blank');
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> Pedir Cotización por WhatsApp';
