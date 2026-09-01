@@ -183,6 +183,11 @@ var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers
 // La Hoja 1 no necesita nombre: se lee automáticamente como pestaña por defecto.
 var SHEET_ID_ETIQUETAS   = '1jin2wMYingvbPD2csGxIbm5AhulfRvCRvIzAKJTUNMw';
 var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
+
+// 🔧 Segunda pestaña de ESTA MISMA hoja (SHEET_ID) con la info del modal "Búscanos en Bazar".
+// NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
+// tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
+var SHEET_NOMBRE_BAZAR = 'Hoja 2';
 // ──────────────────────────────────────────────────────────────────────────────
 // COLUMNAS ESPERADAS EN LA HOJA (fila 1 = encabezados, datos desde fila 2):
 //   A(0):  Nombre
@@ -3559,11 +3564,92 @@ _ready(syncBotonesLike);
 
 
 
+// ══════════════════════════════════════════════════════════════════════════════
+// DATOS DINÁMICOS DEL MODAL "BÚSCANOS EN BAZAR" (2ª pestaña de la hoja de Sheets)
+// ──────────────────────────────────────────────────────────────────────────────
+// Columnas esperadas en esa pestaña (fila 1 = encabezados, datos desde fila 2):
+//   A: imagen imgbb            → 3 filas de datos:
+//                                 fila de datos 1 = Plaza del Carmen
+//                                 fila de datos 2 = Bosque Cuauhtémoc
+//                                 fila de datos 3 = Villas del Pedregal
+//   B: imagen elegida          → solo se usa la 1ª fila de datos.
+//                                 Escribe "plaza"/"plaza del carmen",
+//                                 "bosque"/"bosque cuahutemoc" o
+//                                 "villas"/"villas del pedregal" para elegir
+//                                 cuál de las 3 imágenes de la columna A se muestra.
+//   C: descripcion              → solo se usa la 1ª fila de datos. Escribe "1" o "2"
+//                                 para elegir cuál texto de la columna H se muestra.
+//   D: dias                     → (aún sin usar)
+//   E: Estado                   → (aún sin usar)
+//   F: opciones de lugar        → (aún sin usar)
+//   G: opciones de estado       → (aún sin usar)
+//   H: opciones de descripcion  → fila de datos 1 = texto de la opción "1"
+//                                 fila de datos 2 = texto de la opción "2"
+//      Dentro de ese texto puedes usar "(etiqueta: contenido)" como marcador —
+//      por ejemplo "(lugar: Plaza del Carmen )" o "(dias: 7, 8 y 9 de Septiembre )" —
+//      y en la página solo se mostrará el "contenido" (sin la etiqueta ni paréntesis).
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Reemplaza cualquier "(etiqueta: contenido)" por solo "contenido" (recortado).
+function _resolverPlaceholdersBazar(texto) {
+    if (!texto) return '';
+    return texto.replace(/\(([^():]+):([^)]*)\)/g, function(_, _etiqueta, contenido) {
+        return contenido.trim();
+    }).trim();
+}
+
+function cargarDatosBazar() {
+    var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_BAZAR);
+
+    fetch(csvUrl)
+        .then(function(res) { return res.text(); })
+        .then(function(texto) {
+            var filas = parsearCSV(texto);
+            var datos = filas.slice(1); // quita la fila de encabezados
+            if (datos.length === 0) return;
+
+            var filaDatos1 = datos[0] || [];
+            var filaDatos2 = datos[1] || [];
+            var filaDatos3 = datos[2] || [];
+
+            // ── Imagen a mostrar (columna B decide, columna A trae la imagen) ──
+            var imagenElegida = (filaDatos1[1] || '').toLowerCase();
+            var urlImagen = '';
+            if (imagenElegida.indexOf('plaza') !== -1) {
+                urlImagen = filaDatos1[0];
+            } else if (imagenElegida.indexOf('bosque') !== -1) {
+                urlImagen = filaDatos2[0];
+            } else if (imagenElegida.indexOf('villas') !== -1) {
+                urlImagen = filaDatos3[0];
+            }
+            var imgEl = document.getElementById('bazarImgDinamica');
+            if (imgEl && urlImagen) imgEl.src = urlImagen;
+
+            // ── Texto del aviso (columna C decide, columna H trae el texto) ──
+            var opcionDescripcion = (filaDatos1[2] || '').trim();
+            var textoOpcion = '';
+            if (opcionDescripcion === '1') {
+                textoOpcion = filaDatos1[7];
+            } else if (opcionDescripcion === '2') {
+                textoOpcion = filaDatos2[7];
+            }
+            var textoFinal = _resolverPlaceholdersBazar(textoOpcion);
+            var avisoEl = document.getElementById('bazarAvisoTexto');
+            if (avisoEl && textoFinal) avisoEl.textContent = textoFinal;
+        })
+        .catch(function(err) {
+            console.error('[Kukumita] No se pudo cargar la info del bazar (¿la 2ª pestaña está publicada/compartida?):', err);
+        });
+}
+_ready(cargarDatosBazar);
+
 function abrirModalBazar() {
     var modal = document.getElementById('modalBazar');
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     if (typeof window._actualizarContadorBazar === 'function') window._actualizarContadorBazar();
+    if (typeof cargarDatosBazar === 'function') cargarDatosBazar();
 }
 function cerrarModalBazar() {
     var modal = document.getElementById('modalBazar');
