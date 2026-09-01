@@ -3620,12 +3620,13 @@ _ready(syncBotonesLike);
 //                                 "Bosque Cuahutemoc" o "Villas del Pedregal") —
 //                                 además de usarse en el texto del aviso, decide
 //                                 cuál de las 3 imágenes de la columna A se muestra.
-//   F: estado                   → solo se usa la 1ª fila de datos. Escribe una de las
-//                                 opciones de la columna H (ej. "Estamos en Bazar" o
-//                                 "Próximamente") — se muestra como etiqueta en la
-//                                 zona de "Aviso Actual".
+//   F: estado                   → solo se usa la 1ª fila de datos. Escribe "1" o "2"
+//                                 para elegir cuál opción de la columna H se muestra
+//                                 como etiqueta en la zona de "Aviso Actual"
+//                                 (1 = fila de datos 1 de H, 2 = fila de datos 2 de H).
 //   G: opciones de lugar        → lista de referencia para la columna E (no se lee por código).
-//   H: opciones de estado       → lista de referencia para la columna F (no se lee por código).
+//   H: opciones de estado       → fila de datos 1 = etiqueta de la opción "1"
+//                                 fila de datos 2 = etiqueta de la opción "2"
 //   I: opciones de descripcion  → fila de datos 1 = plantilla de la opción "1"
 //                                 fila de datos 2 = plantilla de la opción "2"
 //      Dentro de esas plantillas, dondequiera que escribas "(lugar: )" se reemplaza
@@ -3682,15 +3683,21 @@ function cargarDatosBazar() {
             }
 
             var diasTexto   = filaDatos1[3] || '';
-            var estadoTexto = filaDatos1[5] || '';
 
             var textoFinal = _resolverPlaceholdersBazar(plantilla, lugarTexto, diasTexto);
             var avisoEl = document.getElementById('bazarAvisoTexto');
             if (avisoEl && textoFinal) avisoEl.textContent = textoFinal;
 
-            // ── Etiqueta de estado (columna F) ──
+            // ── Etiqueta de estado (columna F decide, columna H trae la etiqueta) ──
+            var opcionEstado = (filaDatos1[5] || '').trim();
+            var estadoTexto = '';
+            if (opcionEstado === '1') {
+                estadoTexto = filaDatos1[7];
+            } else if (opcionEstado === '2') {
+                estadoTexto = filaDatos2[7];
+            }
             var estadoEl = document.getElementById('bazarEstadoBadge');
-            if (estadoEl && estadoTexto.trim()) estadoEl.textContent = estadoTexto.trim();
+            if (estadoEl && estadoTexto && estadoTexto.trim()) estadoEl.textContent = estadoTexto.trim();
         })
         .catch(function(err) {
             console.error('[Kukumita] No se pudo cargar la info del bazar (¿la 2ª pestaña está publicada/compartida?):', err);
