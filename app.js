@@ -956,6 +956,19 @@ function filtrarPorBarraCategoria(fila) {
 }
 window.filtrarPorBarraCategoria = filtrarPorBarraCategoria;
 
+// Detecta si hay una búsqueda de texto activa en cualquiera de los 3 buscadores
+// del sitio (buscador global superior, drawer de búsqueda, o el campo de texto
+// del panel "Todos"). Mientras haya búsqueda activa, los resultados ya no
+// corresponden a las categorías ordenadas manualmente entre los primeros 30
+// productos, así que las barras "Mostrar Más X" no deben aparecer.
+function _hayBusquedaDeTextoActiva() {
+    if (document.body.classList.contains('busqueda-global-activa')) return true;
+    if (window._busquedaDrawerTextoActiva) return true;
+    var inputTodos = document.getElementById('inputBusquedaTodos');
+    if (inputTodos && inputTodos.value.trim()) return true;
+    return false;
+}
+
 function insertarBarrasCategoriaProductos() {
     var grid = document.getElementById('gridProductos');
     if (!grid) return;
@@ -967,6 +980,10 @@ function insertarBarrasCategoriaProductos() {
     var btnTodosProductos = document.getElementById('btnModoTodosProductos');
     var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
     if (!esModoMostrarTodo) return;
+
+    // No deben aparecer mientras el usuario esté usando algún buscador: el orden
+    // de resultados ya no corresponde a las 10 categorías acomodadas manualmente
+    if (_hayBusquedaDeTextoActiva()) return;
 
     // Mientras haya un filtro de barra activo, se muestra una única barra para
     // quitarlo en vez de las 10 (el listado ya no conserva la estructura de
@@ -2038,6 +2055,10 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
 
     // ===== CAMBIO DE MODO: ARREGLOS / TODOS LOS PRODUCTOS =====
     function cambiarModoVelas(modo) {
+        // Limpiar bandera de búsqueda del drawer (se reactiva justo después si el
+        // cambio de modo vino de una búsqueda; ver ejecutarBusquedaDrawer)
+        window._busquedaDrawerTextoActiva = false;
+
         // Botones
         const btnTodosProductos = document.getElementById('btnModoTodosProductos');
         const btnArreglos       = document.getElementById('btnModoArreglos');
@@ -2985,13 +3006,15 @@ function _coincideDrawer(nombre, query, card) {
 function ejecutarBusquedaDrawer() {
     var rawQuery = document.getElementById('drawerInputBusqueda').value.trim();
     var query    = rawQuery.toLowerCase();
-    if (!query) { mostrarSugerenciasDrawer(); return; }
+    if (!query) { window._busquedaDrawerTextoActiva = false; mostrarSugerenciasDrawer(); return; }
 
     // Mostrar TODOS los resultados en el catálogo principal:
     // 1. Cerrar drawer
     cerrarDrawer();
     // 2. Cambiar a modo "mostrar todo" para que no haya filtro de tipo
     if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas('mostrar_todo');
+    // Marcar que hay una búsqueda de texto activa (oculta las barras "Mostrar Más X")
+    window._busquedaDrawerTextoActiva = true;
     // 3. Filtrar todas las cards por query (con acento y sinónimos)
     var cards = document.querySelectorAll('#gridProductos .card-dinamica');
     var total = 0;
@@ -3610,16 +3633,18 @@ _ready(syncBotonesLike);
 //                                 fila de datos 1 = Plaza del Carmen
 //                                 fila de datos 2 = Bosque Cuauhtémoc
 //                                 fila de datos 3 = Villas del Pedregal
-//   B: imagen elegida          → (sin usar por ahora)
+//   B: imagen elegida          → solo se usa la 1ª fila de datos. Escribe "Plaza del
+//                                 Carmen", "Bosque Cuahutemoc" o "Villas del Pedregal"
+//                                 para elegir cuál de las 3 imágenes de la columna A
+//                                 se muestra en el submenú.
 //   C: descripcion              → solo se usa la 1ª fila de datos. Escribe "1" o "2"
 //                                 para elegir cuál plantilla de la columna I se muestra.
 //   D: dias                     → solo se usa la 1ª fila de datos. Texto libre con
 //                                 los días (ej. "7, 8 y 9 de Septiembre").
 //   E: lugar                    → solo se usa la 1ª fila de datos. Escribe una de las
 //                                 opciones de la columna G ("Plaza del Carmen",
-//                                 "Bosque Cuahutemoc" o "Villas del Pedregal") —
-//                                 además de usarse en el texto del aviso, decide
-//                                 cuál de las 3 imágenes de la columna A se muestra.
+//                                 "Bosque Cuahutemoc" o "Villas del Pedregal") — se usa
+//                                 únicamente en el texto del aviso (no decide la imagen).
 //   F: estado                   → solo se usa la 1ª fila de datos. Escribe "1" o "2"
 //                                 para elegir cuál opción de la columna H se muestra
 //                                 como etiqueta en la zona de "Aviso Actual"
@@ -3659,15 +3684,14 @@ function cargarDatosBazar() {
             var filaDatos2 = datos[1] || [];
             var filaDatos3 = datos[2] || [];
 
-            // ── Imagen a mostrar (columna E "lugar" decide, columna A trae la imagen) ──
-            var lugarTexto = filaDatos1[4] || '';
-            var lugarNormalizado = lugarTexto.toLowerCase();
+            // ── Imagen a mostrar (columna B "imagen elegida" decide, columna A trae la imagen) ──
+            var seleccionImagen = (filaDatos1[1] || '').toLowerCase();
             var urlImagen = '';
-            if (lugarNormalizado.indexOf('plaza') !== -1) {
+            if (seleccionImagen.indexOf('plaza') !== -1) {
                 urlImagen = filaDatos1[0];
-            } else if (lugarNormalizado.indexOf('bosque') !== -1) {
+            } else if (seleccionImagen.indexOf('bosque') !== -1) {
                 urlImagen = filaDatos2[0];
-            } else if (lugarNormalizado.indexOf('villas') !== -1) {
+            } else if (seleccionImagen.indexOf('villas') !== -1) {
                 urlImagen = filaDatos3[0];
             }
             var imgEl = document.getElementById('bazarImgDinamica');
@@ -3682,6 +3706,7 @@ function cargarDatosBazar() {
                 plantilla = filaDatos2[8];
             }
 
+            var lugarTexto  = filaDatos1[4] || '';
             var diasTexto   = filaDatos1[3] || '';
 
             var textoFinal = _resolverPlaceholdersBazar(plantilla, lugarTexto, diasTexto);
