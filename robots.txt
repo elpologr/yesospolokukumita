@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://elpologr.github.io/yesospolokukumita/sitemap.xml

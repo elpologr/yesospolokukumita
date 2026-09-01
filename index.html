@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yesos Polo Kukúmita</title>
+    <title>Yesos Polo Kukúmita | Figuras y Macetas de Yeso — Morelia</title>
+    <meta name="description" content="Figuras y macetas de yeso para pintar, hechas a mano en Morelia. Para bodas, bautizos, comuniones, aniversarios luctuosos, novenarios, baby showers y XV años.">
+    <link rel="canonical" href="https://elpologr.github.io/yesospolokukumita/">
+    <meta name="robots" content="index, follow">
 
     <!-- Open Graph / Facebook / WhatsApp — se actualizan dinámicamente por app.js,
          PERO los bots de redes sociales no ejecutan JavaScript, así que dejamos
@@ -14,16 +17,54 @@
     <meta property="og:type"        content="website" id="og-type">
     <meta property="og:site_name"   content="Yesos Polo Kukúmita" id="og-site-name">
     <meta property="og:url"         content="https://elpologr.github.io/yesospolokukumita/" id="og-url">
-    <meta property="og:title"       content="Yesos Polo Kukúmita — Arreglos y Productos Artesanales" id="og-title">
-    <meta property="og:description" content="Descubre nuestros hermosos arreglos y productos artesanales de Yesos Polo Kukúmita." id="og-description">
+    <meta property="og:title"       content="Yesos Polo Kukúmita — Figuras y Macetas de Yeso para Pintar" id="og-title">
+    <meta property="og:description" content="Figuras y macetas de yeso hechas a mano en Morelia. Ideales para bodas, bautizos, primeras comuniones, aniversarios luctuosos, fin de novenario, baby showers, XV años y más." id="og-description">
     <meta property="og:image"       content="https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp" id="og-image">
     <meta property="og:image:width" content="1200" id="og-image-width">
     <meta property="og:image:height"content="630"  id="og-image-height">
     <!-- Twitter Card -->
     <meta name="twitter:card"        content="summary_large_image" id="tw-card">
-    <meta name="twitter:title"       content="Yesos Polo Kukúmita" id="tw-title">
-    <meta name="twitter:description" content="Descubre nuestros hermosos arreglos y productos artesanales." id="tw-description">
+    <meta name="twitter:title"       content="Yesos Polo Kukúmita — Figuras y Macetas de Yeso para Pintar" id="tw-title">
+    <meta name="twitter:description" content="Figuras y macetas de yeso hechas a mano en Morelia. Ideales para bodas, bautizos, comuniones, XV años y más." id="tw-description">
     <meta name="twitter:image"       content="https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp" id="tw-image">
+
+    <!-- Datos estructurados (JSON-LD) — le dice a Google explícitamente qué es este negocio,
+         dónde está y qué tipo de productos maneja. No reemplaza al catálogo dinámico, es
+         información adicional "para máquinas" que complementa lo que ya está escrito en la página. -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Store",
+        "name": "Yesos Polo Kukúmita",
+        "alternateName": "Yesos Polo Kukumita",
+        "image": "https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp",
+        "url": "https://elpologr.github.io/yesospolokukumita/",
+        "description": "Taller artesanal de figuras y macetas de yeso para pintar, hechas a mano en Morelia, Michoacán. Piezas para bodas, bautizos, primeras comuniones, aniversarios luctuosos, fin de novenario, baby showers, XV años y toda ocasión especial.",
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Morelia",
+            "addressRegion": "Michoacán",
+            "addressCountry": "MX"
+        },
+        "areaServed": "Morelia, Michoacán, México",
+        "priceRange": "$$",
+        "sameAs": [
+            "https://www.instagram.com/yesospolokukumita/",
+            "https://www.facebook.com/yesospolokukumita"
+        ],
+        "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Catálogo de Yesos Polo Kukúmita",
+            "itemListElement": [
+                { "@type": "OfferCatalog", "name": "Figuras de yeso" },
+                { "@type": "OfferCatalog", "name": "Macetas de yeso para pintar" },
+                { "@type": "OfferCatalog", "name": "Arreglos de yeso para eventos" },
+                { "@type": "OfferCatalog", "name": "Bases y tazones de yeso" },
+                { "@type": "OfferCatalog", "name": "Porta velas e inciensos de yeso" }
+            ]
+        }
+    }
+    </script>
 
     <!-- Favicon -->
     <link rel="icon" type="image/webp" href="imagenes/perfil-yesoskukumita.webp">
@@ -325,7 +366,7 @@
         <div class="pantalla-perfil-body">
             <img class="pantalla-avatar-grande" id="pantallaAvatar" src=""
                  alt="Foto de perfil" onclick="elegirFotoGaleria()"
-                 onerror="this.src='data:image/svg+xml,' + encodeURIComponent('<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'110\' height=\'110\'><rect width=\'110\' height=\'110\' fill=\'%23f0eae4\' rx=\'55\'/><text x=\'50%\' y=\'55%\' text-anchor=\'middle\' dominant-baseline=\'middle\' font-size=\'48\' fill=\'%238c7565\'>👤</text></svg>')">
+                 onerror="_fallbackAvatar(this, 110)">
             <input type="file" id="inputFotoPerfil" accept="image/*" style="display:none" onchange="aplicarFotoPerfil(event)">
             <p class="pantalla-usuario-nombre" id="pantallaUsuarioNombre">Invitado</p>
 
@@ -396,7 +437,7 @@
         <!-- ZONA CON SESIÓN: perfil del usuario -->
         <div class="drawer-perfil" id="drawerPerfilBloque" onclick="abrirPantallaPerfil()" style="display:none;">
             <img class="drawer-avatar" id="drawerAvatar" src="" alt="Perfil"
-                 onerror="this.src='data:image/svg+xml,' + encodeURIComponent('<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'><rect width=\'48\' height=\'48\' fill=\'%23f0eae4\' rx=\'24\'/><text x=\'50%\' y=\'55%\' text-anchor=\'middle\' dominant-baseline=\'middle\' font-size=\'22\' fill=\'%238c7565\'>👤</text></svg>')">
+                 onerror="_fallbackAvatar(this, 48)">
             <div class="drawer-perfil-info">
                 <p class="drawer-perfil-nombre" id="drawerNombreUsuario">Mi cuenta</p>
                 <p class="drawer-perfil-sub">Toca para editar tu perfil</p>
@@ -548,6 +589,9 @@
                 style="font-size:4rem; font-weight:900; color:#f0e4cc; letter-spacing:3px; margin:0; font-family:'Playfair Display',Georgia,serif; font-style:italic; line-height:1.1; cursor:pointer; transition:color 0.2s; user-select:none; display:block;"
                 onmouseover="this.style.color='#e0b878'"
                 onmouseout="this.style.color='#f0e4cc'">Yesos Polo Kukúmita</h1>
+            <p style="font-family:'Cormorant Garamond', Georgia, serif; font-style:italic; font-size:1.05rem; color:rgba(240,228,204,0.82); letter-spacing:0.4px; margin:6px 0 0; max-width:520px; line-height:1.5;">
+                Figuras y macetas de yeso para pintar, hechas a mano en Morelia. Para bodas, bautizos, primeras comuniones, aniversarios luctuosos, fin de novenario, baby showers, XV años y más.
+            </p>
             <!-- Submenú del título — aparece debajo, centrado -->
             <div id="submenuTitulo" style="display:none; position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); border:1.5px solid #e8ddd5; min-width:280px; z-index:600; overflow:hidden; animation:submenuFadeIn 0.2s ease;">
                 <div style="padding:14px 18px 10px; border-bottom:1px solid #f0eae4;">
@@ -738,72 +782,26 @@
 
             <!-- Encabezado decorativo -->
             <div style="font-size:1.2rem; letter-spacing:10px; text-align:center; color:#c9a98a; margin-bottom:14px;">✦ &nbsp; ✦ &nbsp; ✦</div>
-            <h2 style="text-align:center; font-size:1.25rem; color:#5c4d43; margin-bottom:6px; font-style:italic; line-height:1.35;">La Luz que Nace del Corazón</h2>
-            <p style="text-align:center; font-size:0.85rem; color:#8c7565; margin-bottom:16px; font-weight:600; letter-spacing:0.5px;">La Historia de Claudia Guzmán</p>
-            <div style="width:48px; height:2px; background:linear-gradient(90deg,#c9a98a,#8c7565); margin:0 auto 20px; border-radius:2px;"></div>
-
-            <!-- Intro -->
-            <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:18px;">
-                Hay historias que se escriben con tinta, y otras, como la de Claudia Guzmán, que se moldean con cera, fuego y una profunda pasión por el detalle.
-            </p>
-            <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:22px;">
-                En el año 2000, en el corazón de la hermosa y colonial ciudad de Morelia, Michoacán, Claudia decidió encender un sueño: fundar una fábrica dedicada a la creación de velas artesanales. Lo que comenzó como un proyecto íntimo, guiado por la paciencia y el amor al oficio, pronto se transformó en un referente de calidez y tradición.
-            </p>
-
-            <!-- Sección 1 -->
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                <div style="width:28px; height:2px; background:#c9a98a; flex-shrink:0;"></div>
-                <h3 style="font-size:0.98rem; color:#8c7565; margin:0; font-weight:700; white-space:nowrap;">Un Camino Iluminado por la Constancia</h3>
-                <div style="flex:1; height:2px; background:#e8ddd5;"></div>
-            </div>
-            <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:16px;">
-                A lo largo de más de dos décadas, cada vela salida de sus manos y de su taller ha sido mucho más que un objeto decorativo; ha sido el centro de momentos inolvidables, celebraciones, momentos de paz y recuerdos compartidos en miles de hogares. La dedicación incansable de Claudia y su búsqueda constante por la excelencia han llevado a su fábrica a superar fronteras y alcanzar metas extraordinarias.
-            </p>
-            <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:22px;">
-                Hoy, con orgullo michoacano, podemos decir que se han fabricado y vendido cientos de miles de velas, cada una portando el mismo espíritu de luz y calidad con el que se encendió la primera en el año 2000.
-            </p>
-
-            <!-- Sección 2 -->
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                <div style="width:28px; height:2px; background:#c9a98a; flex-shrink:0;"></div>
-                <h3 style="font-size:0.98rem; color:#8c7565; margin:0; font-weight:700; white-space:nowrap;">El Legado Continúa</h3>
-                <div style="flex:1; height:2px; background:#e8ddd5;"></div>
-            </div>
-            <p style="color:#5c4d43; line-height:1.85; font-size:0.93rem; margin-bottom:24px;">
-                La trayectoria de Claudia Guzmán es el reflejo de que el verdadero éxito se construye con paciencia, transformando la materia prima en piezas únicas que conectan con las emociones de las personas. Más que un negocio, su fábrica es un testimonio de perseverancia y un faro de luz que sigue iluminando el camino de quienes buscan calidez y belleza en sus espacios.
-            </p>
-
-            <!-- Cita -->
-            <div style="background:linear-gradient(135deg,#fdf6f0,#f8ede4); border-left:3px solid #8c7565; border-radius:0 10px 10px 0; padding:16px 18px; margin-top:4px; margin-bottom:32px;">
-                <p style="color:#5c4d43; line-height:1.8; font-size:0.92rem; margin:0; font-style:italic;">
-                    "Encender una vela es crear un espacio para la memoria, la paz y la belleza. Gracias por permitirnos iluminar sus vidas durante todos estos años."
-                </p>
-                <p style="color:#8c7565; font-size:0.8rem; font-weight:700; margin:8px 0 0; text-align:right;">— Claudia Guzmán, Fundadora</p>
-            </div>
-
-            <!-- ══════════════════════════════════════════════════ -->
-            <!-- NUEVA SECCIÓN: EL INICIO DEL EMPRENDIMIENTO       -->
-            <!-- ══════════════════════════════════════════════════ -->
-
-            <div style="width:60px; height:1.5px; background:linear-gradient(90deg,transparent,#c9a98a,transparent); margin:0 auto 28px; border-radius:2px;"></div>
 
             <h2 style="text-align:center; font-size:2.6rem; font-weight:800; color:#362a22; letter-spacing:2px; margin:0 0 28px 0; font-family:'Playfair Display', Georgia, serif; font-style:italic; line-height:1.2;">El inicio del emprendimiento</h2>
 
             <!-- Subtítulo de sección -->
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
                 <div style="flex:1; height:1.5px; background:linear-gradient(to right,transparent,#e8ddd5);"></div>
-                <h3 style="font-size:1rem; color:#8c7565; margin:0; font-weight:700; white-space:nowrap; font-style:italic;">Nuestra Historia: Luz, Familia y Corazón</h3>
+                <h3 style="font-size:1rem; color:#8c7565; margin:0; font-weight:700; white-space:nowrap; font-style:italic;">Nuestra Historia: Familia, Yeso y Corazón</h3>
                 <div style="flex:1; height:1.5px; background:linear-gradient(to left,transparent,#e8ddd5);"></div>
             </div>
 
             <!-- Párrafo 1 -->
             <p style="color:#5c4d43; line-height:1.9; font-size:0.93rem; margin-bottom:18px;">
-                El camino de Yesos Polo Kukúmita comenzó con el motor más puro que existe: el amor de una madre. Con el gran reto de criar a sus dos hijos y el deseo inquebrantable de salir adelante, nuestra fundadora comenzó a moldear un sueño hecho de cera y luz. Lo que empezó en la calidez del hogar, poco a poco se transformó en un arte único; cada vela cobró un estilo propio, reflejando una dedicación que no pasó desapercibida.
+                El camino de Yesos Polo Kukúmita comenzó con el motor más puro que existe: el amor de una madre. Con el gran reto de criar a sus dos hijos y el deseo inquebrantable de salir adelante, nuestra fundadora comenzó a moldear un sueño con sus propias manos: figuras y macetas de yeso hechas con cariño y mucha paciencia. Lo que empezó en la calidez del hogar, poco a poco se transformó en un arte propio, reflejando una dedicación que no pasó desapercibida.
             </p>
 
             <!-- Párrafo 2 -->
+            <!-- ✏️ PENDIENTE: si hay algún hito real (ferias, clientes especiales, cuántos años llevan
+                 haciendo yeso, alguna anécdota), cuéntamelo y reemplazo este párrafo con eso. -->
             <p style="color:#5c4d43; line-height:1.9; font-size:0.93rem; margin-bottom:18px;">
-                Con el tiempo, ese esfuerzo constante la llevó a recorrer importantes bazares y exposiciones que marcaron un antes y un después, como la <strong style="color:#8c7565;">Expo FONAES en sus ediciones 2002, 2005 y 2007</strong>. La calidad y originalidad de sus creaciones abrieron puertas que nunca imaginó: desde ambientar íntimos restaurantes y prestigiosos hoteles, hasta llegar al mismísimo gabinete de diputados de la Ciudad de México. Sin duda, podemos decir con orgullo que nuestras velas han iluminado rincones de todo México.
+                Con el tiempo, ese esfuerzo constante la llevó a recorrer bazares y exposiciones en Morelia y otros puntos de Michoacán, donde la calidad y el detalle de cada pieza de yeso fueron abriendo puertas y ganando el cariño de quienes las conocían. Así nació la tradición de figuras y macetas de yeso para pintar que hoy sigue viva en cada pedido que sale de nuestro taller — perfectas para bodas, bautizos, primeras comuniones, aniversarios luctuosos, fin de novenario, baby showers, XV años y más.
             </p>
 
             <!-- Párrafo 3 + botón Yesos -->
@@ -841,26 +839,6 @@
                    style="display:inline-flex; align-items:center; gap:8px; background:#25D366; color:white; text-decoration:none; border-radius:999px; padding:11px 26px; font-size:0.92rem; font-weight:700; font-family:inherit; box-shadow:0 3px 10px rgba(37,211,102,0.3); transition:all 0.22s;">
                     💬 Pedir cita o cotización por WhatsApp
                 </a>
-            </div>
-
-            <!-- ══════════════════════════════════════════════════ -->
-            <!-- NUEVA SECCIÓN: NUESTROS INICIOS EN FACEBOOK       -->
-            <!-- ══════════════════════════════════════════════════ -->
-
-            <div style="width:60px; height:1.5px; background:linear-gradient(90deg,transparent,#c9a98a,transparent); margin:0 auto 28px; border-radius:2px;"></div>
-
-            <h2 style="text-align:center; font-size:2.6rem; font-weight:800; color:#362a22; letter-spacing:2px; margin:0 0 20px 0; font-family:'Playfair Display', Georgia, serif; font-style:italic; line-height:1.2;">Nuestros inicios en Facebook</h2>
-
-            <p style="color:#5c4d43; line-height:1.9; font-size:0.93rem; margin-bottom:24px;">
-                Aquí puedes ver las imágenes que tenemos publicadas en Facebook, pero iniciamos desde el fondo, con velas que probablemente llevamos años sin fabricar, y que pueden ser un poco caras pero con acabados y métodos de fabricación precisos y detallados, si te interesa alguno puedes preguntar por el en WhatsApp, aunque tal vez no lo encuentre en el catalogo, por que aun no publicamos estas velas hechas hace mas de 20 años.
-            </p>
-
-            <!-- Galería Facebook paginada -->
-            <div id="galeria-facebook-wrapper">
-                <!-- La galería de imágenes se renderiza aquí -->
-                <div id="galeria-facebook-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px;"></div>
-                <!-- Paginación -->
-                <div id="galeria-facebook-paginacion" style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:4px; padding-bottom:8px;"></div>
             </div>
 
             <!-- Cierre decorativo -->
@@ -948,7 +926,7 @@
                             <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                                 <img src="imagenes/logo-polo.webp" alt="Polo"
                                      style="width:100%; height:100%; object-fit:cover; display:block;"
-                                     onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🌐</div>'">
+                                     onerror="_fallbackIcono(this, '🌐')">
                             </div>
                             <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                                 🌐 Visitar página de Polo
@@ -986,7 +964,7 @@
                         <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                             <img src="imagenes/logo-elba-rodriguez.webp" alt="Elba Rodríguez Avalos"
                                  style="width:100%; height:100%; object-fit:cover; display:block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🎵</div>'">
+                                 onerror="_fallbackIcono(this, '🎵')">
                         </div>
                         <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                             🎶 Visitar página de Elba Rodríguez Avalos
@@ -1020,7 +998,7 @@
                         <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                             <img src="imagenes/logo-lady-monchis.webp" alt="Lady Monchis"
                                  style="width:100%; height:100%; object-fit:cover; display:block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🍽️</div>'">
+                                 onerror="_fallbackIcono(this, '🍽️')">
                         </div>
                         <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                             🍴 Visitar página de Lady Monchis
@@ -1054,7 +1032,7 @@
                         <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                             <img src="imagenes/logo-lady-orlando.webp" alt="Lady Orlando"
                                  style="width:100%; height:100%; object-fit:cover; display:block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🖋️</div>'">
+                                 onerror="_fallbackIcono(this, '🖋️')">
                         </div>
                         <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                             🖋️ Visitar página de Lady Orlando
@@ -1088,7 +1066,7 @@
                         <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                             <img src="imagenes/logo-equus-acuario.webp" alt="Equus Acuario"
                                  style="width:100%; height:100%; object-fit:cover; display:block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🐟</div>'">
+                                 onerror="_fallbackIcono(this, '🐟')">
                         </div>
                         <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                             🐟 Visitar Equus Acuario
@@ -1122,7 +1100,7 @@
                         <div style="width:80px; height:80px; flex-shrink:0; overflow:hidden; background:rgba(0,0,0,0.2);">
                             <img src="imagenes/logo-victor-moran.webp" alt="Víctor Morán"
                                  style="width:100%; height:100%; object-fit:cover; display:block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;\'>🎵</div>'">
+                                 onerror="_fallbackIcono(this, '🎵')">
                         </div>
                         <div style="flex:1; padding:16px 20px; font-size:1rem; font-weight:800; font-family:inherit; letter-spacing:0.5px;">
                             🎵 Visitar página de Víctor Morán
@@ -1752,7 +1730,7 @@
             <div style="width:100%; max-height:280px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
                 <img id="bazarImgDinamica" src="imagenes/bazar.webp" alt="Yesos Polo Kukúmita en Bazar"
                      style="width:100%; height:280px; object-fit:cover; display:block;"
-                     onerror="this.parentElement.innerHTML='<div style=\'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#3d2b1f,#6b4c37);\'><div style=\'font-size:5rem;\'>🏪</div><p style=\'color:rgba(255,255,255,0.7);font-size:1rem;font-style:italic;letter-spacing:2px;font-family:Cormorant Garamond,Georgia,serif;margin-top:12px;\'>Yesos Polo Kukúmita en Bazar</p></div>'">
+                     onerror="_fallbackImagenBazar(this)">
             </div>
         </div>
 
@@ -1764,41 +1742,42 @@
 
             <!-- ── Contador regresivo ── -->
             <div id="bazarCountdownZona" style="text-align:center; background:linear-gradient(135deg,#362a22,#5c4d43); border-radius:14px; padding:14px 18px;">
-                <p style="color:rgba(255,255,255,0.65); font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin:0 0 6px;">⏳ Cuenta regresiva</p>
+                <p style="color:rgba(255,255,255,0.75); font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin:0 0 6px;">⏳ Cuenta regresiva</p>
                 <p id="bazarCountdownTexto" style="color:#fff; font-size:1.5rem; font-weight:900; margin:0; letter-spacing:0.5px; font-family:'Playfair Display',Georgia,serif;"></p>
             </div>
 
             <!-- Aviso actual -->
             <div style="background:linear-gradient(135deg,#fdf6f0,#fdf0e8); border:1px solid #e8ddd5; border-radius:12px; padding:14px 16px;">
-                <p style="font-size:13px; color:#8a7a70; margin:0 0 10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">📣 Aviso Actual</p>
-                <p id="bazarAvisoTexto" style="font-size:0.93rem; color:#5c4d43; line-height:1.7; margin:0 0 12px;">
+                <p style="font-size:14px; color:#8a7a70; margin:0 0 10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">📣 Aviso Actual</p>
+                <span id="bazarEstadoBadge" style="display:inline-block; background:#8c7565; color:#fff; font-size:0.85rem; font-weight:800; letter-spacing:0.3px; padding:6px 14px; border-radius:20px; margin-bottom:12px;">Próximamente</span>
+                <p id="bazarAvisoTexto" style="font-size:1.05rem; font-weight:500; color:#5c4d43; line-height:1.75; margin:0 0 12px;">
                     En este momento <strong>no nos encontramos en ningún bazar</strong>, pero estaremos vendiendo <strong style="color:#8c7565;">Yesos en Plaza del Carmen</strong> los días <strong>11, 12 y 13 de Junio</strong>:
                 </p>
                 <!-- Recuadros de días en FILA HORIZONTAL -->
                 <div style="display:flex; gap:8px; margin-bottom:12px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px;">
                     <div style="flex:1; min-width:100px; display:flex; flex-direction:column; align-items:center; gap:4px; background:#fff; border-radius:10px; padding:10px 8px; border:1px solid #e8ddd5; text-align:center;">
                         <span style="font-size:1.5rem;">🗓️</span>
-                        <p style="margin:0; font-size:0.82rem; font-weight:800; color:#362a22; line-height:1.3;">Jueves<br>11 Jun</p>
-                        <p style="margin:0; font-size:0.75rem; color:#8c7565; line-height:1.4;">8:30 am<br>— 8:00 pm</p>
+                        <p style="margin:0; font-size:0.92rem; font-weight:800; color:#362a22; line-height:1.35;">Jueves<br>11 Jun</p>
+                        <p style="margin:0; font-size:0.85rem; font-weight:600; color:#8c7565; line-height:1.45;">8:30 am<br>— 8:00 pm</p>
                     </div>
                     <div style="flex:1; min-width:100px; display:flex; flex-direction:column; align-items:center; gap:4px; background:#fff; border-radius:10px; padding:10px 8px; border:1px solid #e8ddd5; text-align:center;">
                         <span style="font-size:1.5rem;">🗓️</span>
-                        <p style="margin:0; font-size:0.82rem; font-weight:800; color:#362a22; line-height:1.3;">Viernes<br>12 Jun</p>
-                        <p style="margin:0; font-size:0.75rem; color:#8c7565; line-height:1.4;">10:00 am<br>— 8:00 pm</p>
+                        <p style="margin:0; font-size:0.92rem; font-weight:800; color:#362a22; line-height:1.35;">Viernes<br>12 Jun</p>
+                        <p style="margin:0; font-size:0.85rem; font-weight:600; color:#8c7565; line-height:1.45;">10:00 am<br>— 8:00 pm</p>
                     </div>
                     <div style="flex:1; min-width:100px; display:flex; flex-direction:column; align-items:center; gap:4px; background:#fff; border-radius:10px; padding:10px 8px; border:1px solid #e8ddd5; text-align:center;">
                         <span style="font-size:1.5rem;">🗓️</span>
-                        <p style="margin:0; font-size:0.82rem; font-weight:800; color:#362a22; line-height:1.3;">Sábado<br>13 Jun</p>
-                        <p style="margin:0; font-size:0.75rem; color:#8c7565; line-height:1.4;">10:00 am<br>— 7:00 pm</p>
+                        <p style="margin:0; font-size:0.92rem; font-weight:800; color:#362a22; line-height:1.35;">Sábado<br>13 Jun</p>
+                        <p style="margin:0; font-size:0.85rem; font-weight:600; color:#8c7565; line-height:1.45;">10:00 am<br>— 7:00 pm</p>
                     </div>
                 </div>
-                <p style="font-size:0.88rem; color:#5c4d43; line-height:1.65; margin:0; background:#fdf3ec; border-left:3px solid #8c7565; padding:10px 12px; border-radius:0 8px 8px 0;">
+                <p style="font-size:0.98rem; font-weight:500; color:#5c4d43; line-height:1.7; margin:0; background:#fdf3ec; border-left:3px solid #8c7565; padding:10px 12px; border-radius:0 8px 8px 0;">
                     ¡Los esperamos allá! Y si tienes un pedido pendiente te lo podemos entregar ahí. También aprovecha los <strong>precios de mayoreo</strong> que podrás notar en los productos de la página, entre precio original y precio mayoreo.
                 </p>
             </div>
 
             <!-- Mensaje de despedida -->
-            <p style="text-align:center; font-size:1.05rem; color:#8c7565; font-weight:700; font-style:italic; margin:4px 0 0; font-family:'Cormorant Garamond', Georgia, serif; letter-spacing:0.5px;">✨ ¡Ten un excelente día! ✨</p>
+            <p style="text-align:center; font-size:1.1rem; color:#8c7565; font-weight:700; font-style:italic; margin:4px 0 0; font-family:'Cormorant Garamond', Georgia, serif; letter-spacing:0.5px;">✨ ¡Ten un excelente día! ✨</p>
 
             <!-- Botón cerrar inferior -->
             <button onclick="cerrarModalBazar()" style="width:100%; padding:16px; background:#8c7565; color:white; border:none; border-radius:12px; font-size:1rem; font-weight:700; cursor:pointer; margin-top:4px; transition:background 0.2s; font-family:inherit;">

@@ -21,6 +21,44 @@ function _ready(fn) {
     }
 }
 
+// ── Respaldos de imagen (usados en onerror="") ──
+// Antes este HTML iba escrito directo dentro del atributo onerror con comillas
+// escapadas; se movió aquí como funciones normales para que el HTML no lleve
+// marcado embebido (algunos antivirus heurísticos marcan como sospechoso el
+// patrón de HTML-dentro-de-atributo, aunque aquí es completamente inofensivo).
+function _fallbackAvatar(imgEl, tamano) {
+    var s = tamano || 110;
+    var radio = Math.round(s / 2);
+    var fuente = Math.round(s * 0.44);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + s + '" height="' + s + '">' +
+        '<rect width="' + s + '" height="' + s + '" fill="#f0eae4" rx="' + radio + '"/>' +
+        '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-size="' + fuente + '" fill="#8c7565">👤</text></svg>';
+    imgEl.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+function _fallbackIcono(imgEl, emoji) {
+    var contenedor = imgEl.parentElement;
+    if (!contenedor) return;
+    contenedor.textContent = '';
+    var div = document.createElement('div');
+    div.style.cssText = 'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;';
+    div.textContent = emoji;
+    contenedor.appendChild(div);
+}
+function _fallbackImagenBazar(imgEl) {
+    var contenedor = imgEl.parentElement;
+    if (!contenedor) return;
+    contenedor.textContent = '';
+    contenedor.style.cssText += 'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#3d2b1f,#6b4c37);';
+    var icono = document.createElement('div');
+    icono.style.fontSize = '5rem';
+    icono.textContent = '🏪';
+    var texto = document.createElement('p');
+    texto.style.cssText = 'color:rgba(255,255,255,0.7);font-size:1rem;font-style:italic;letter-spacing:2px;font-family:Cormorant Garamond,Georgia,serif;margin-top:12px;';
+    texto.textContent = 'Yesos Polo Kukúmita en Bazar';
+    contenedor.appendChild(icono);
+    contenedor.appendChild(texto);
+}
+
 // ── DATOS DE VIDEOS POR RED SOCIAL ──
 // Reemplaza los IDs de YouTube/URLs con los tuyos reales
 var _videosRedes = {
@@ -3572,30 +3610,37 @@ _ready(syncBotonesLike);
 //                                 fila de datos 1 = Plaza del Carmen
 //                                 fila de datos 2 = Bosque Cuauhtémoc
 //                                 fila de datos 3 = Villas del Pedregal
-//   B: imagen elegida          → solo se usa la 1ª fila de datos.
-//                                 Escribe "plaza"/"plaza del carmen",
-//                                 "bosque"/"bosque cuahutemoc" o
-//                                 "villas"/"villas del pedregal" para elegir
-//                                 cuál de las 3 imágenes de la columna A se muestra.
+//   B: imagen elegida          → (sin usar por ahora)
 //   C: descripcion              → solo se usa la 1ª fila de datos. Escribe "1" o "2"
-//                                 para elegir cuál texto de la columna H se muestra.
-//   D: dias                     → (aún sin usar)
-//   E: Estado                   → (aún sin usar)
-//   F: opciones de lugar        → (aún sin usar)
-//   G: opciones de estado       → (aún sin usar)
-//   H: opciones de descripcion  → fila de datos 1 = texto de la opción "1"
-//                                 fila de datos 2 = texto de la opción "2"
-//      Dentro de ese texto puedes usar "(etiqueta: contenido)" como marcador —
-//      por ejemplo "(lugar: Plaza del Carmen )" o "(dias: 7, 8 y 9 de Septiembre )" —
-//      y en la página solo se mostrará el "contenido" (sin la etiqueta ni paréntesis).
+//                                 para elegir cuál plantilla de la columna I se muestra.
+//   D: dias                     → solo se usa la 1ª fila de datos. Texto libre con
+//                                 los días (ej. "7, 8 y 9 de Septiembre").
+//   E: lugar                    → solo se usa la 1ª fila de datos. Escribe una de las
+//                                 opciones de la columna G ("Plaza del Carmen",
+//                                 "Bosque Cuahutemoc" o "Villas del Pedregal") —
+//                                 además de usarse en el texto del aviso, decide
+//                                 cuál de las 3 imágenes de la columna A se muestra.
+//   F: estado                   → solo se usa la 1ª fila de datos. Escribe una de las
+//                                 opciones de la columna H (ej. "Estamos en Bazar" o
+//                                 "Próximamente") — se muestra como etiqueta en la
+//                                 zona de "Aviso Actual".
+//   G: opciones de lugar        → lista de referencia para la columna E (no se lee por código).
+//   H: opciones de estado       → lista de referencia para la columna F (no se lee por código).
+//   I: opciones de descripcion  → fila de datos 1 = plantilla de la opción "1"
+//                                 fila de datos 2 = plantilla de la opción "2"
+//      Dentro de esas plantillas, dondequiera que escribas "(lugar: )" se reemplaza
+//      por el valor de la columna E (fila 1), y "(dias: )" se reemplaza por el valor
+//      de la columna D (fila 1) — lo que escribas dentro de esos paréntesis en la
+//      columna I ya no importa, solo actúan como marcador de posición.
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Reemplaza cualquier "(etiqueta: contenido)" por solo "contenido" (recortado).
-function _resolverPlaceholdersBazar(texto) {
+// Reemplaza "(lugar: ...)" por valorLugar y "(dias: ...)" por valorDias.
+function _resolverPlaceholdersBazar(texto, valorLugar, valorDias) {
     if (!texto) return '';
-    return texto.replace(/\(([^():]+):([^)]*)\)/g, function(_, _etiqueta, contenido) {
-        return contenido.trim();
-    }).trim();
+    return texto
+        .replace(/\(\s*lugar\s*:[^)]*\)/gi, function() { return (valorLugar || '').trim(); })
+        .replace(/\(\s*dias\s*:[^)]*\)/gi, function() { return (valorDias || '').trim(); })
+        .trim();
 }
 
 function cargarDatosBazar() {
@@ -3613,30 +3658,39 @@ function cargarDatosBazar() {
             var filaDatos2 = datos[1] || [];
             var filaDatos3 = datos[2] || [];
 
-            // ── Imagen a mostrar (columna B decide, columna A trae la imagen) ──
-            var imagenElegida = (filaDatos1[1] || '').toLowerCase();
+            // ── Imagen a mostrar (columna E "lugar" decide, columna A trae la imagen) ──
+            var lugarTexto = filaDatos1[4] || '';
+            var lugarNormalizado = lugarTexto.toLowerCase();
             var urlImagen = '';
-            if (imagenElegida.indexOf('plaza') !== -1) {
+            if (lugarNormalizado.indexOf('plaza') !== -1) {
                 urlImagen = filaDatos1[0];
-            } else if (imagenElegida.indexOf('bosque') !== -1) {
+            } else if (lugarNormalizado.indexOf('bosque') !== -1) {
                 urlImagen = filaDatos2[0];
-            } else if (imagenElegida.indexOf('villas') !== -1) {
+            } else if (lugarNormalizado.indexOf('villas') !== -1) {
                 urlImagen = filaDatos3[0];
             }
             var imgEl = document.getElementById('bazarImgDinamica');
             if (imgEl && urlImagen) imgEl.src = urlImagen;
 
-            // ── Texto del aviso (columna C decide, columna H trae el texto) ──
+            // ── Texto del aviso (columna C decide, columna I trae la plantilla) ──
             var opcionDescripcion = (filaDatos1[2] || '').trim();
-            var textoOpcion = '';
+            var plantilla = '';
             if (opcionDescripcion === '1') {
-                textoOpcion = filaDatos1[7];
+                plantilla = filaDatos1[8];
             } else if (opcionDescripcion === '2') {
-                textoOpcion = filaDatos2[7];
+                plantilla = filaDatos2[8];
             }
-            var textoFinal = _resolverPlaceholdersBazar(textoOpcion);
+
+            var diasTexto   = filaDatos1[3] || '';
+            var estadoTexto = filaDatos1[5] || '';
+
+            var textoFinal = _resolverPlaceholdersBazar(plantilla, lugarTexto, diasTexto);
             var avisoEl = document.getElementById('bazarAvisoTexto');
             if (avisoEl && textoFinal) avisoEl.textContent = textoFinal;
+
+            // ── Etiqueta de estado (columna F) ──
+            var estadoEl = document.getElementById('bazarEstadoBadge');
+            if (estadoEl && estadoTexto.trim()) estadoEl.textContent = estadoTexto.trim();
         })
         .catch(function(err) {
             console.error('[Kukumita] No se pudo cargar la info del bazar (¿la 2ª pestaña está publicada/compartida?):', err);
