@@ -247,6 +247,49 @@ var SHEET_NOMBRE_BAZAR = 'Hoja 2';
 //   Q(16): existencia         (número de piezas en stock)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── Caché en sessionStorage para las descargas de CSV de Google Sheets ──
+// Evita volver a descargar el mismo CSV si el usuario recarga la página o
+// navega de regreso dentro de la misma pestaña/sesión. TTL corto (por
+// defecto 3 minutos) para que los cambios que hagas en la hoja se reflejen
+// pronto sin tener que forzar recarga.
+var _CSV_CACHE_TTL_MS = 3 * 60 * 1000;
+function fetchCSVConCache(url, claveCache) {
+    try {
+        var guardado = sessionStorage.getItem(claveCache);
+        if (guardado) {
+            var datos = JSON.parse(guardado);
+            if (datos && (Date.now() - datos.t) < _CSV_CACHE_TTL_MS) {
+                return Promise.resolve(datos.texto);
+            }
+        }
+    } catch (e) { /* sessionStorage no disponible o dato corrupto: seguir sin caché */ }
+
+    return fetch(url)
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        })
+        .then(function(texto) {
+            try {
+                sessionStorage.setItem(claveCache, JSON.stringify({ t: Date.now(), texto: texto }));
+            } catch (e) { /* cuota de sessionStorage llena: no es crítico, seguir sin guardar */ }
+            return texto;
+        });
+}
+
+// ── Escapa texto proveniente de Google Sheets antes de insertarlo con innerHTML ──
+// Úsalo siempre que construyas HTML por concatenación con datos de producto
+// (nombre, descripción, subtags, etc.). Si solo insertas texto plano, usa
+// textContent en su lugar — no necesita esta función.
+function escapeHtml(texto) {
+    var s = (texto === undefined || texto === null) ? '' : String(texto);
+    return s.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+}
+
 var listaProductos = [];
 
 // ── Parser de CSV que maneja campos entre comillas con comas internas ──
@@ -299,11 +342,51 @@ function parsearCSV(texto) {
     return lineas;
 }
 
+// ── Encabezados esperados por posición (ver tabla de columnas arriba) ──
+// Se usa solo para VALIDAR que el orden de tu hoja no cambió; el mapeo de
+// datos sigue siendo por índice fijo (get(0), get(1), etc.) como antes.
+var _ENCABEZADOS_ESPERADOS = [
+    'nombre', 'precio', 'precio mayoreo', 'descripcion', 'video youtube',
+    'imagen polo', 'imagen fer', 'etiquetaprincipal', 'subetiqueta', 'etiquetaevento',
+    'en oferta', 'mas vendido', 'alto', 'ancho', 'subimagen', 'youtube img/vid', 'existencia'
+];
+
+function _normalizarEncabezado(s) {
+    return (s || '').toString().trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita acentos
+}
+
+// Compara la fila de encabezados real contra la esperada y avisa fuerte en
+// consola (una sola vez por carga) si alguna columna no coincide con su
+// posición esperada — para detectar de inmediato si moviste/insertaste una
+// columna en Google Sheets, en vez de que el catálogo se llene en silencio
+// con datos mal mapeados (ej. alto y ancho intercambiados).
+function _validarEncabezadosCSV(filaEncabezados) {
+    if (!filaEncabezados || filaEncabezados.length === 0) return;
+    var problemas = [];
+    _ENCABEZADOS_ESPERADOS.forEach(function(esperado, idx) {
+        var real = _normalizarEncabezado(filaEncabezados[idx]);
+        if (real.indexOf(esperado) === -1 && esperado.indexOf(real) === -1) {
+            problemas.push('Columna ' + String.fromCharCode(65 + idx) + ' (posición ' + idx +
+                '): se esperaba algo como "' + esperado + '" y se encontró "' + (filaEncabezados[idx] || '(vacío)') + '"');
+        }
+    });
+    if (problemas.length > 0) {
+        console.warn(
+            '⚠️ [Kukumita] El orden de columnas de tu Google Sheet no coincide con lo esperado.\n' +
+            'Si moviste, insertaste o borraste una columna, los datos pueden estar mal asignados ' +
+            '(por ejemplo, Alto y Ancho intercambiados, o precios en la columna equivocada).\n' +
+            problemas.join('\n')
+        );
+    }
+}
+
 // ── Convierte filas CSV en objetos de producto ──
 // Un producto solo se genera si la columna F (Imagen Polo) tiene contenido.
 // Si la fila solo tiene nombre/precio pero no imagen, se ignora (no aparece en la web).
 function csvAProductos(filas) {
     if (filas.length < 2) return [];
+    _validarEncabezadosCSV(filas[0]);
     // Omitir la fila de encabezados (fila 0)
     var productos = [];
     for (var i = 1; i < filas.length; i++) {
@@ -654,11 +737,7 @@ function cargarDesdeGoogleSheets() {
 
     mostrarEstadoCarga('Cargando catálogo desde Google Sheets…', false);
 
-    fetch(csvUrl)
-        .then(function(res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-        })
+    fetchCSVConCache(csvUrl, 'kukumita_csv_catalogo')
         .then(function(texto) {
             var filas = parsearCSV(texto);
 
@@ -759,11 +838,7 @@ function cargarProductosEtiquetas(forzar) {
     var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS +
         '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
 
-    fetch(csvUrl)
-        .then(function(res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-        })
+    fetchCSVConCache(csvUrl, 'kukumita_csv_etiquetas_' + SHEET_NOMBRE_ETIQUETAS)
         .then(function(texto) {
             var filas = parsearCSV(texto);
             var productos = csvAProductos(filas);
@@ -820,8 +895,8 @@ function cargarProductosEspecialesVelas() {
         '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
 
     Promise.all([
-        fetch(urlHoja1).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }),
-        fetch(urlHoja2).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        fetchCSVConCache(urlHoja1, 'kukumita_csv_velas'),
+        fetchCSVConCache(urlHoja2, 'kukumita_csv_etiquetas_' + SHEET_NOMBRE_ETIQUETAS)
     ]).then(function(textos) {
         var productosVelas     = csvAProductos(parsearCSV(textos[0])).slice(0, 3);
         var productosEtiquetas = csvAProductos(parsearCSV(textos[1])).slice(0, 3);
@@ -3050,9 +3125,10 @@ function renderizarResultadosDrawer(lista, titulo) {
     lista.slice(0, 4).forEach(function(p) {
         var item = document.createElement('div');
         item.className = 'drawer-rec-item';
-        item.innerHTML = '<img class="drawer-rec-img" src="' + p.img + '" alt="' + p.nombre + '" onerror="this.style.background=\'#eee\'">'
-            + '<div class="drawer-rec-info"><p class="drawer-rec-nombre">' + p.nombre + '</p>'
-            + '<p class="drawer-rec-precio">$' + p.precio + ' MXN</p></div>'
+        var nombreSeguroDrawer = escapeHtml(p.nombre);
+        item.innerHTML = '<img class="drawer-rec-img" src="' + escapeHtml(p.img) + '" alt="' + nombreSeguroDrawer + '" onerror="this.style.background=\'#eee\'">'
+            + '<div class="drawer-rec-info"><p class="drawer-rec-nombre">' + nombreSeguroDrawer + '</p>'
+            + '<p class="drawer-rec-precio">$' + escapeHtml(p.precio) + ' MXN</p></div>'
             + '<span style="color:#bbb;">›</span>';
         item.onclick = function() {
             cerrarDrawer();
@@ -3581,13 +3657,14 @@ function renderizarFavoritos() {
 
         var div = document.createElement('div');
         div.className = 'fav-card';
+        var nombreSeguro = escapeHtml(nombre || 'Producto');
         div.innerHTML =
             '<button class="btn-quitar-fav" onclick="quitarFavorito(' + idxProd + ')">✕</button>' +
-            (imgSrc ? '<img class="fav-card-img" src="' + imgSrc + '" alt="' + (nombre||'') + '">' :
+            (imgSrc ? '<img class="fav-card-img" src="' + escapeHtml(imgSrc) + '" alt="' + nombreSeguro + '">' :
                       '<div class="fav-card-img" style="background:#f0eae4;display:flex;align-items:center;justify-content:center;font-size:2rem;">🕯️</div>') +
             '<div class="fav-card-info">' +
-            '<div class="fav-card-nombre">' + (nombre || 'Producto') + '</div>' +
-            '<div class="fav-card-precio">' + precio + '</div>' +
+            '<div class="fav-card-nombre">' + nombreSeguro + '</div>' +
+            '<div class="fav-card-precio">' + escapeHtml(precio) + '</div>' +
             '</div>';
         div.onclick = function(e) {
             if (e.target.classList.contains('btn-quitar-fav')) return;
@@ -3673,8 +3750,7 @@ function cargarDatosBazar() {
     var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
         '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_BAZAR);
 
-    fetch(csvUrl)
-        .then(function(res) { return res.text(); })
+    fetchCSVConCache(csvUrl, 'kukumita_csv_bazar')
         .then(function(texto) {
             var filas = parsearCSV(texto);
             var datos = filas.slice(1); // quita la fila de encabezados
@@ -4162,12 +4238,13 @@ function construirCarrusel(tipo) {
 
         var cardEl = document.createElement('div');
         cardEl.className = 'carrusel-card';
+        var nombreSeguroCarrusel = escapeHtml(nombre);
         cardEl.innerHTML =
-            '<img class="carrusel-card-img" src="' + imgSrc + '" alt="' + nombre + '" loading="lazy" onerror="this.style.background=\'#f5f0eb\'; this.style.height=\'120px\';">' +
+            '<img class="carrusel-card-img" src="' + escapeHtml(imgSrc) + '" alt="' + nombreSeguroCarrusel + '" loading="lazy" onerror="this.style.background=\'#f5f0eb\'; this.style.height=\'120px\';">' +
             '<div class="carrusel-card-info">' +
                 '<div class="carrusel-card-badge' + (esOferta ? '' : ' mv') + '">' + (esOferta ? '🏷️ Oferta' : '🏆 Top') + '</div>' +
-                '<div class="carrusel-card-nombre" title="' + nombre + '">' + nombre + '</div>' +
-                '<div class="carrusel-card-precio">' + (precioMostrar ? '$' + precioMostrar + ' MXN' : '') + '</div>' +
+                '<div class="carrusel-card-nombre" title="' + nombreSeguroCarrusel + '">' + nombreSeguroCarrusel + '</div>' +
+                '<div class="carrusel-card-precio">' + (precioMostrar ? '$' + escapeHtml(precioMostrar) + ' MXN' : '') + '</div>' +
             '</div>';
 
         // Al hacer click abre el modal de producto
@@ -4445,8 +4522,9 @@ function renderizarCarrito() {
         var div = document.createElement('div');
         div.className = 'cart-card';
 
+        var nombreSeguroCarrito = escapeHtml(item.nombre);
         var imgHtml = item.img
-            ? '<img class="cart-card-img" src="' + item.img + '" alt="' + item.nombre + '" onerror="this.style.background=\'#f0eae4\'; this.src=\'\';">'
+            ? '<img class="cart-card-img" src="' + escapeHtml(item.img) + '" alt="' + nombreSeguroCarrito + '" onerror="this.style.background=\'#f0eae4\'; this.src=\'\';">'
             : '<div class="cart-card-img" style="background:#f0eae4; display:flex; align-items:center; justify-content:center; font-size:2rem;">🕯️</div>';
 
         var subtotal = item.precio ? '$' + (item.precio * item.cantidad).toFixed(0) + ' MXN' : '';
@@ -4455,8 +4533,8 @@ function renderizarCarrito() {
             '<button class="btn-quitar-cart" onclick="quitarDelCarrito(' + idx + ')">✕</button>' +
             imgHtml +
             '<div class="cart-card-info">' +
-            '<div class="cart-card-nombre">' + item.nombre + '</div>' +
-            (item.precio ? '<div class="cart-card-precio">$' + item.precio + ' MXN c/u</div>' : '') +
+            '<div class="cart-card-nombre">' + nombreSeguroCarrito + '</div>' +
+            (item.precio ? '<div class="cart-card-precio">$' + escapeHtml(item.precio) + ' MXN c/u</div>' : '') +
             // Controles de cantidad editables
             '<div style="display:flex; align-items:center; gap:6px; margin-top:6px;">' +
             '<button onclick="cambiarCantidadCarrito(' + idx + ',-1)" style="width:26px;height:26px;border-radius:50%;background:#8c7565;color:white;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;" ' + (item.cantidad <= 1 ? 'disabled style="width:26px;height:26px;border-radius:50%;background:#d9cfc8;color:white;border:none;font-size:16px;cursor:default;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;"' : '') + '>−</button>' +
