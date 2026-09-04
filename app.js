@@ -201,7 +201,7 @@ function _resetBotonesRed() {
 // Para editar productos: abre el link de Google Sheets y modifica las filas.
 //
 // 🔧 CONFIGURACIÓN — cambia solo esta línea si mueves la hoja:
-var SHEET_ID = '1GoIVWBIyl9s0wYo2qyv0GQwco_xBl3sajDwF0qcnf5o';
+var SHEET_ID = '1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA';
 
 // 🔧 URL del Cloudflare Worker para compartir en redes sociales (Facebook, etc.)
 // Cuando instales el worker, reemplaza esta URL con la que te asigne Cloudflare.
@@ -228,23 +228,24 @@ var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
 var SHEET_NOMBRE_BAZAR = 'Hoja 2';
 // ──────────────────────────────────────────────────────────────────────────────
 // COLUMNAS ESPERADAS EN LA HOJA (fila 1 = encabezados, datos desde fila 2):
-//   A(0):  Nombre
-//   B(1):  precio
-//   C(2):  precio mayoreo
+// Hoja exclusiva de Yesos Polo Kukúmita (separada de la de Yesos Fer) — A a L:
+//   A(0):  Producto              (nombre)
+//   B(1):  Precio Original
+//   C(2):  Precio Bazar
 //   D(3):  Descripcion
-//   E(4):  video youtube
-//   F(5):  Imagen Polo       (galería imgbb de Yesos Polo Kukúmita — usada en este sitio)
-//   G(6):  Imagen Fer        (galería imgbb de Yesos Fer Kukúmita — IGNORADA en este sitio)
-//   H(7):  EtiquetaPrincipal
-//   I(8):  SubEtiqueta
-//   J(9):  EtiquetaEvento
-//   K(10): en oferta          (escribe "si" para activar)
-//   L(11): mas vendido        (escribe "si" para activar)
-//   M(12): Alto
-//   N(13): Ancho
-//   O(14): SubImagen          (URLs separadas por coma)
-//   P(15): youtube img/vid
-//   Q(16): existencia         (número de piezas en stock)
+//   E(4):  Imagenes imgbb        (URLs separadas por coma; la primera es la principal)
+//   F(5):  Video                 (video principal del producto)
+//   G(6):  Etiqueta Principal
+//   H(7):  Sub Etiquetas
+//   I(8):  Medidas alto/ancho    (texto libre, se muestra tal cual en el modal)
+//   J(9):  Existencia            (número de piezas en stock)
+//   K(10): En Oferta             (escribe "si" para activar)
+//   L(11): Mas Vendido           (escribe "si" para activar)
+//
+// NOTA: esta hoja ya NO tiene columnas para "Etiqueta Evento" (filtro por
+// evento), "SubImagen"/aditamentos, ni video de redes sociales por producto.
+// Esas funciones quedan con lista vacía — no rompen nada, pero tampoco
+// mostrarán datos hasta que se agregue una fuente para ellas.
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Caché en sessionStorage para las descargas de CSV de Google Sheets ──
@@ -346,9 +347,9 @@ function parsearCSV(texto) {
 // Se usa solo para VALIDAR que el orden de tu hoja no cambió; el mapeo de
 // datos sigue siendo por índice fijo (get(0), get(1), etc.) como antes.
 var _ENCABEZADOS_ESPERADOS = [
-    'nombre', 'precio', 'precio mayoreo', 'descripcion', 'video youtube',
-    'imagen polo', 'imagen fer', 'etiquetaprincipal', 'subetiqueta', 'etiquetaevento',
-    'en oferta', 'mas vendido', 'alto', 'ancho', 'subimagen', 'youtube img/vid', 'existencia'
+    'producto', 'precio original', 'precio bazar', 'descripcion', 'imagenes imgbb',
+    'video', 'etiqueta principal', 'sub etiquetas', 'medidas alto/ancho',
+    'existencia', 'en oferta', 'mas vendido'
 ];
 
 function _normalizarEncabezado(s) {
@@ -382,7 +383,7 @@ function _validarEncabezadosCSV(filaEncabezados) {
 }
 
 // ── Convierte filas CSV en objetos de producto ──
-// Un producto solo se genera si la columna F (Imagen Polo) tiene contenido.
+// Un producto solo se genera si la columna E (Imagenes imgbb) tiene contenido.
 // Si la fila solo tiene nombre/precio pero no imagen, se ignora (no aparece en la web).
 function csvAProductos(filas) {
     if (filas.length < 2) return [];
@@ -393,39 +394,34 @@ function csvAProductos(filas) {
         var f = filas[i];
         var get = function(idx) { return (f[idx] || '').trim(); };
 
-        // Saltar filas sin imagen en la columna F (aunque tengan nombre o precio)
-        if (!get(5)) continue;
+        // Saltar filas sin imagen en la columna E (aunque tengan nombre o precio)
+        if (!get(4)) continue;
 
-        // Nuevo orden de columnas (Google Sheets) — recorrido 1 lugar a la derecha desde G:
-        // A=0  nombre
-        // B=1  precio
-        // C=2  precioMayoreo (antes precioBazar)
-        // D=3  descripcion
-        // E=4  video youtube
-        // F=5  Imagen Polo (URL principal + extras separadas por coma) — usada en este sitio
-        // G=6  Imagen Fer (galería imgbb de Yesos Fer Kukúmita — IGNORADA aquí)
-        // H=7  EtiquetaPrincipal
-        // I=8  SubEtiqueta
-        // J=9  EtiquetaEvento
-        // K=10 en oferta  (si / vacío)
-        // L=11 mas vendido (si / vacío)
-        // M=12 Alto
-        // N=13 Ancho
-        // O=14 SubImagen (URLs o nombres separados por coma)
-        // P=15 youtube img/vid
-        // Q=16 existencia (número de piezas en stock)
+        // Orden de columnas de la hoja exclusiva de Yesos Polo Kukúmita (A a L):
+        // A=0  Producto (nombre)
+        // B=1  Precio Original
+        // C=2  Precio Bazar
+        // D=3  Descripcion
+        // E=4  Imagenes imgbb (URL principal + extras separadas por coma)
+        // F=5  Video (principal del producto)
+        // G=6  Etiqueta Principal
+        // H=7  Sub Etiquetas
+        // I=8  Medidas alto/ancho (texto libre)
+        // J=9  Existencia
+        // K=10 En Oferta   (si / vacío)
+        // L=11 Mas Vendido (si / vacío)
 
-        // Video principal (E=4)
-        var videoPrincipal = get(4).replace(/^"+|"+$/g, '').trim();
+        // Video principal (F=5)
+        var videoPrincipal = get(5).replace(/^"+|"+$/g, '').trim();
 
-        // Imágenes: columna F=5 (Imagen Polo) — la columna G=6 (Imagen Fer) se ignora en este sitio
-        var _rawImg = get(5).replace(/^"+|"+$/g, '').trim();
+        // Imágenes: columna E=4 (Imagenes imgbb)
+        var _rawImg = get(4).replace(/^"+|"+$/g, '').trim();
         var imagenesExtra = _rawImg
             ? _rawImg.split(',').map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
             : [];
 
-        // EtiquetaPrincipal H=7
-        var _rawTipos = get(7).replace(/^"+|"+$/g, '').trim();
+        // Etiqueta Principal G=6
+        var _rawTipos = get(6).replace(/^"+|"+$/g, '').trim();
         var tiposArray = _rawTipos
             ? _rawTipos.split(/[|,]/).map(function(s) { return s.trim().replace(/^"+|"+$/g, '').toLowerCase(); }).filter(Boolean)
             : ['arreglo'];
@@ -435,15 +431,11 @@ function csvAProductos(filas) {
         var enOferta   = get(10).toLowerCase() === 'si' ? 1 : 0;
         var masVendido = get(11).toLowerCase() === 'si' ? 1 : 0;
 
-        // Existencia (Q=16)
-        var existencia = parseInt(get(16).replace(/[^0-9]/g, '')) || 0;
+        // Existencia (J=9)
+        var existencia = parseInt(get(9).replace(/[^0-9]/g, '')) || 0;
 
-        // YouTube img/vid (P=15)
-        function parsearRed(idx) {
-            var raw = get(idx).replace(/^"+|"+$/g, '').trim();
-            return raw ? raw.split(',').map(function(s){ return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean) : [];
-        }
-        var redYoutube = parsearRed(15);
+        // Medidas alto/ancho (I=8) — texto libre, ya no se separa en Alto/Ancho
+        var medidas = get(8).replace(/^"+|"+$/g, '').trim();
 
         productos.push({
             id:           i,
@@ -457,28 +449,28 @@ function csvAProductos(filas) {
             forma:        '',
             tipo:         tipoPrincipal,
             tipos:        tiposArray,
-            subtags:      get(8) ? get(8).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
-            eventos:      get(9)
-                            ? get(9).split(',').map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean).join(' ')
-                            : '',
+            subtags:      get(7) ? get(7).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
+            // Ya no hay columna de "Etiqueta Evento" en esta hoja — el filtro por
+            // evento queda inactivo (mostrará todos los productos con "todos").
+            eventos:      '',
             etiquetas:    tiposArray,
             aditivos:     [],
             oferta:       enOferta,
             masVendido:   masVendido,
-            alto:         get(12),
-            ancho:        get(13),
+            // "Medidas alto/ancho" viene en una sola columna: se guarda completa en
+            // `alto` (que el modal ya muestra en su propio recuadro) y se deja
+            // `ancho` vacío para que su recuadro no se muestre duplicado.
+            alto:         medidas,
+            ancho:        '',
             existencia:   existencia,
-            redYoutube:   redYoutube,
+            // Sin columna dedicada a videos de redes sociales por producto en esta hoja.
+            redYoutube:   [],
             redFacebook:  [],
             redInstagram: [],
             redTiktok:    [],
-            subImagenes:  (function() {
-                // Columna O (índice 14): SubImagen — valores separados por coma
-                var rawSub = (f[14] || '').trim().replace(/^"+|"+$/g, '').trim();
-                return rawSub
-                    ? rawSub.split(',').map(function(s){ return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
-                    : [];
-            })()
+            // Sin columna "SubImagen" en esta hoja — el bloque de aditamentos
+            // relacionados en el modal queda vacío (no se muestra, no rompe nada).
+            subImagenes:  []
         });
     }
     return productos;
