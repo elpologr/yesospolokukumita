@@ -1,5722 +1,5267 @@
-// ============================================================
-// YESOS KUKÚMITA — app.js
-// JavaScript extraído y organizado desde index.html.
-// Incluye:
-//   - cargarCatalogo()  : fetch dinámico desde Google Sheets CSV
-//   - Drawer lateral
-//   - Modales (Producto, QR, Bazar, Uber, Tienda)
-//   - Sistema de Favoritos y Carrito
-//   - Filtros de productos
-//   - Paginación
-//   - Compartir (WhatsApp, Facebook, Instagram)
-//   - Modo Oscuro, Píldoras, Carruseles, etc.
-// ============================================================
+// ---------- Control de versión ----------
+// index.html, styles.css y app.js deben ser de la MISMA versión. Si no lo son,
+// se muestra un aviso arriba de la página diciendo cuál archivo hay que volver a subir.
+const VERSION = "38";
 
-// ── Helper: ejecuta fn cuando el DOM esté listo (funciona aunque DOMContentLoaded ya disparó) ──
-function _ready(fn) {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fn);
-    } else {
-        fn();
-    }
+(function revisarArchivos() {
+  const IDS_NECESARIOS = [
+    "calendario", "cal-mes", "cal-anio", "cal-anterior", "cal-siguiente",
+    "cal-hoy", "cal-actualizar", "cal-cuadricula", "cal-estado",
+    "dia-popover", "pop-titulo", "pop-cerrar", "pop-secciones",
+    "btn-menu-lateral", "barra-lateral", "google-boton", "btn-notas", "panel-notas",
+    "notas-nueva-btn", "notas-fecha", "notas-cancelar", "notas-estado-lista",
+    "notas-submenu", "notas-sub-lista", "notas-mas-colores", "notas-color-personal",
+    "notas-identificador", "notas-form-titulo", "btn-proyectos", "panel-proyectos", "proy-form",
+    "btn-yeso", "btn-galeria", "panel-galeria", "gal-form",
+    "zona-actividades", "zona-trabajo", "btn-menu-notas", "seccion-notas", "btn-menu-ejercicio",
+    "panel-ejercicio", "ej-cuadricula", "ej-dia", "ej-form",
+    "btn-menu-diario", "panel-diario", "di-cuadricula", "di-dia", "di-form",
+    "seccion-ejercicio", "seccion-diario", "di-ejercicios", "di-ej-detalle", "pedidos-yeso", "zona-pedidos-yeso",
+    "pop-color", "pop-colores", "pop-mas-colores", "pop-paleta", "pop-color-personal",
+    "btn-menu-deudas", "seccion-deudas", "panel-deudas", "de-chips", "de-form",
+    "btn-menu-informacion", "seccion-informacion", "panel-informacion", "ip-chips", "ip-form", "ip-fecha",
+    "btn-menu-comandos", "seccion-comandos", "panel-comandos", "cm-chips", "cm-form", "cm-fecha",
+    "btn-menu-bazar", "seccion-bazar", "panel-bazar", "bz-chips", "bz-form", "bz-informacion",
+    "btn-menu-hoy", "seccion-hoy", "panel-hoy", "hy-grupos", "hy-detalle", "hy-detalle-fin", "hy-detalle-estado",
+  ];
+  const problemas = [];
+
+  const faltan = IDS_NECESARIOS.filter((id) => !document.getElementById(id));
+  const meta = document.querySelector('meta[name="app-version"]');
+  if (faltan.length || !meta || meta.content !== VERSION) problemas.push("index.html");
+
+  const cssVersion = getComputedStyle(document.documentElement)
+    .getPropertyValue("--app-version")
+    .replace(/["'\s]/g, "");
+  if (cssVersion !== VERSION) problemas.push("styles.css");
+
+  if (!problemas.length) return;
+
+  const aviso = document.createElement("div");
+  aviso.style.cssText =
+    "background:#fff3bf;color:#5c3d00;border-bottom:3px solid #f08c00;" +
+    "padding:12px 16px;font:15px/1.4 system-ui,sans-serif;text-align:center;";
+  aviso.textContent =
+    "⚠️ Archivos desactualizados: " + problemas.join(" y ") +
+    ". Sube de nuevo TODOS los archivos de la última versión (index.html, styles.css, " +
+    "app.js y config.js) y recarga la página con Ctrl+F5 (en Mac: Cmd+Shift+R).";
+  document.body.prepend(aviso);
+
+  // Si falta algo del HTML, el resto del código no puede funcionar: se detiene aquí.
+  if (faltan.length) throw new Error("index.html desactualizado. Faltan: " + faltan.join(", "));
+})();
+
+// ---------- Menú principal ----------
+const botonesMenu = document.querySelectorAll(".btn-menu");
+const secciones = document.querySelectorAll(".seccion");
+const mensajeInicio = document.getElementById("inicio");
+
+function mostrarSeccion(id) {
+  // Si hay una nota a medias (en Notas o en una zona), se pregunta antes de salir
+  if (!confirmarAbandonoEdicion()) return;
+  mensajeInicio.hidden = true;
+  secciones.forEach((s) => (s.hidden = s.id !== id));
+  botonesMenu.forEach((b) =>
+    b.classList.toggle("activo", b.dataset.seccion === id)
+  );
+  if (id === "calendario") irAHoy(); // siempre abre en la fecha actual
+  else cerrarPopover();
+  // La página de Notas se prepara al entrar (lista primero, sin formularios abiertos)
+  panelNotas.hidden = id !== "seccion-notas";
+  if (id === "seccion-notas") entrarNotas();
+  // Ejercicio y Diario también son páginas: se preparan al entrar y se limpian al salir
+  if (id === "seccion-ejercicio") entrarEjercicio();
+  else cerrarEjercicio();
+  if (id === "seccion-diario") entrarDiario();
+  else cerrarDiario();
+  // Deudas también es una página
+  if (id === "seccion-deudas") entrarDeudas();
+  else cerrarDeudas();
+  // Información Primordial también es una página
+  if (id === "seccion-informacion") entrarInformacion();
+  else cerrarInformacion();
+  // Comandos también es una página
+  if (id === "seccion-comandos") entrarComandos();
+  else cerrarComandos();
+  // Bazar también es una página
+  if (id === "seccion-bazar") entrarBazar();
+  else cerrarBazar();
+  // Día de Hoy también es una página
+  if (id === "seccion-hoy") entrarHoy();
+  else cerrarHoy();
+  // Los Notarios se leen la primera vez que se ve una zona que los tiene
+  if (typeof actualizarNotarios === "function") actualizarNotarios();
 }
 
-// ── Respaldos de imagen (usados en onerror="") ──
-// Antes este HTML iba escrito directo dentro del atributo onerror con comillas
-// escapadas; se movió aquí como funciones normales para que el HTML no lleve
-// marcado embebido (algunos antivirus heurísticos marcan como sospechoso el
-// patrón de HTML-dentro-de-atributo, aunque aquí es completamente inofensivo).
-function _fallbackAvatar(imgEl, tamano) {
-    var s = tamano || 110;
-    var radio = Math.round(s / 2);
-    var fuente = Math.round(s * 0.44);
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + s + '" height="' + s + '">' +
-        '<rect width="' + s + '" height="' + s + '" fill="#f0eae4" rx="' + radio + '"/>' +
-        '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-size="' + fuente + '" fill="#8c7565">👤</text></svg>';
-    imgEl.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
-}
-function _fallbackIcono(imgEl, emoji) {
-    var contenedor = imgEl.parentElement;
-    if (!contenedor) return;
-    contenedor.textContent = '';
-    var div = document.createElement('div');
-    div.style.cssText = 'width:80px;height:80px;display:flex;align-items:center;justify-content:center;font-size:2rem;';
-    div.textContent = emoji;
-    contenedor.appendChild(div);
-}
-function _fallbackImagenBazar(imgEl) {
-    var contenedor = imgEl.parentElement;
-    if (!contenedor) return;
-    contenedor.textContent = '';
-    contenedor.style.cssText += 'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#3d2b1f,#6b4c37);';
-    var icono = document.createElement('div');
-    icono.style.fontSize = '5rem';
-    icono.textContent = '🏪';
-    var texto = document.createElement('p');
-    texto.style.cssText = 'color:rgba(255,255,255,0.7);font-size:1rem;font-style:italic;letter-spacing:2px;font-family:Cormorant Garamond,Georgia,serif;margin-top:12px;';
-    texto.textContent = 'Yesos Polo Kukúmita en Bazar';
-    contenedor.appendChild(icono);
-    contenedor.appendChild(texto);
-}
+// Todos los botones del menú cambian de sección (Ejercicio y Diario también son páginas)
+botonesMenu.forEach((b) => {
+  if (b.dataset.seccion) b.addEventListener("click", () => mostrarSeccion(b.dataset.seccion));
+});
 
-// ── DATOS DE VIDEOS POR RED SOCIAL ──
-// Reemplaza los IDs de YouTube/URLs con los tuyos reales
-var _videosRedes = {
-    youtube: [
-        // Formato: { tipo: 'youtube', id: 'VIDEO_ID', titulo: 'Título' }
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 1' },
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 2' },
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 3' },
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 4' },
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 5' },
-        { tipo: 'youtube', id: 'dQw4w9WgXcQ', titulo: 'Video de YouTube 6' }
-    ],
-    facebook: [
-        // Formato: { tipo: 'facebook', url: 'URL_DEL_VIDEO', titulo: 'Título' }
-        // Para videos de Facebook usa la URL completa del video público
-        // Ejemplo: { tipo: 'facebook', url: 'https://www.facebook.com/velaskukumita/videos/123456789', titulo: 'Video FB 1' }
-    ],
-    instagram: [
-        // Formato: { tipo: 'instagram', url: 'URL_DEL_REEL', titulo: 'Título' }
-        // Ejemplo: { tipo: 'instagram', url: 'https://www.instagram.com/p/CODIGO/', titulo: 'Reel 1' }
-    ],
-    tiktok: [
-        // Formato: { tipo: 'tiktok', url: 'URL_DEL_VIDEO', titulo: 'Título' }
-        // Ejemplo: { tipo: 'tiktok', url: 'https://www.tiktok.com/@velaskukumita/video/123456', titulo: 'TikTok 1' }
-    ]
-};
-
-var _redActiva = null;
-
-function filtrarVideosRed(red) {
-    // Si ya está activa la misma red, colapsar
-    if (_redActiva === red) {
-        _redActiva = null;
-        document.getElementById('panelVideosRedes').style.display = 'none';
-        _resetBotonesRed();
-        detenerTodosLosVideos();
-        return;
-    }
-    _redActiva = red;
-    detenerTodosLosVideos();
-    _resetBotonesRed();
-
-    // Marcar botón activo con borde más fuerte
-    var ids = { youtube:'btnRedYT', facebook:'btnRedFB', instagram:'btnRedIG', tiktok:'btnRedTT' };
-    var btn = document.getElementById(ids[red]);
-    if (btn) btn.style.boxShadow = '0 0 0 3px rgba(0,0,0,0.18)';
-
-    var videos = (_videosRedes[red] || []).slice(0, 6);
-    var grid = document.getElementById('gridVideosRedes');
-    grid.innerHTML = '';
-
-    if (videos.length === 0) {
-        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:28px; color:#aaa; font-size:0.9rem;">Próximamente agregaremos videos de esta red social. 🎬</div>';
-    } else {
-        videos.forEach(function(v, i) {
-            var celda = document.createElement('div');
-            celda.style.cssText = 'border-radius:10px; overflow:hidden; background:#111; position:relative; aspect-ratio:16/9;';
-
-            if (v.tipo === 'youtube') {
-                // Thumbnail clicable → carga iframe solo al hacer clic
-                celda.innerHTML =
-                    '<div class="video-thumb-wrap" data-videoidx="' + i + '" style="width:100%;height:100%;cursor:pointer;position:relative;" onclick="cargarVideoInline(this,' + JSON.stringify(v).replace(/"/g,'&quot;') + ')">' +
-                    '<img src="https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">' +
-                    '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);">' +
-                    '<div style="width:52px;height:52px;background:rgba(255,0,0,0.88);border-radius:50%;display:flex;align-items:center;justify-content:center;">' +
-                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>' +
-                    (v.titulo ? '<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.7));color:white;font-size:0.7rem;padding:14px 8px 6px;font-weight:600;">' + v.titulo + '</div>' : '') +
-                    '</div>';
-            } else {
-                // Facebook / Instagram / TikTok — placeholder con botón abrir en nueva pestaña
-                celda.style.cssText += 'display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1a1a2e;';
-                var iconos = { facebook:'🎬', instagram:'🎞️', tiktok:'🎵' };
-                celda.innerHTML =
-                    '<div style="font-size:2rem;margin-bottom:8px;">' + (iconos[v.tipo]||'▶️') + '</div>' +
-                    '<div style="color:#ccc;font-size:0.75rem;text-align:center;padding:0 8px;margin-bottom:10px;">' + (v.titulo || 'Ver video') + '</div>' +
-                    '<a href="' + v.url + '" target="_blank" style="background:rgba(255,255,255,0.15);color:white;border:1.5px solid rgba(255,255,255,0.3);border-radius:20px;padding:7px 16px;font-size:0.78rem;font-weight:700;text-decoration:none;font-family:inherit;">Ver video ↗</a>';
-            }
-            grid.appendChild(celda);
-        });
-    }
-
-    document.getElementById('panelVideosRedes').style.display = 'block';
-}
-
-function cargarVideoInline(wrap, v) {
-    // Detener todos los otros iframes activos
-    detenerTodosLosVideos();
-    var iframe = document.createElement('iframe');
-    iframe.src = 'https://www.youtube.com/embed/' + v.id + '?autoplay=1&rel=0';
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
-    iframe.allowFullscreen = true;
-    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;';
-    iframe.setAttribute('allowfullscreen','');
-    wrap.parentElement.innerHTML = '';
-    wrap.parentElement.appendChild(iframe);
-}
-
-function detenerTodosLosVideos() {
-    document.querySelectorAll('#gridVideosRedes iframe').forEach(function(f) {
-        var src = f.src;
-        f.src = '';
-        f.src = src.replace('?autoplay=1', '?autoplay=0').replace('&autoplay=1','');
-    });
-    // Reemplazar iframes activos con el thumbnail otra vez si el panel está visible
-    var grid = document.getElementById('gridVideosRedes');
-    if (grid && _redActiva) {
-        var videos = (_videosRedes[_redActiva] || []).slice(0, 6);
-        var iframes = grid.querySelectorAll('iframe');
-        iframes.forEach(function(f) {
-            var celda = f.parentElement;
-            var idx = Array.from(grid.children).indexOf(celda);
-            if (idx >= 0 && videos[idx] && videos[idx].tipo === 'youtube') {
-                var v = videos[idx];
-                celda.innerHTML =
-                    '<div class="video-thumb-wrap" style="width:100%;height:100%;cursor:pointer;position:relative;" onclick="cargarVideoInline(this,' + JSON.stringify(v).replace(/"/g,'&quot;') + ')">' +
-                    '<img src="https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg" style="width:100%;height:100%;object-fit:cover;display:block;">' +
-                    '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);">' +
-                    '<div style="width:52px;height:52px;background:rgba(255,0,0,0.88);border-radius:50%;display:flex;align-items:center;justify-content:center;">' +
-                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>' +
-                    (v.titulo ? '<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.7));color:white;font-size:0.7rem;padding:14px 8px 6px;font-weight:600;">' + v.titulo + '</div>' : '') +
-                    '</div>';
-            }
-        });
-    }
-}
-
-function _resetBotonesRed() {
-    ['btnRedYT','btnRedFB','btnRedIG','btnRedTT'].forEach(function(id){
-        var b = document.getElementById(id);
-        if (b) b.style.boxShadow = 'none';
-    });
-}
-
-
-
-// ══════════════════════════════════════════════════════════════════════════════
-// CATÁLOGO DESDE GOOGLE SHEETS
-// ──────────────────────────────────────────────────────────────────────────────
-// Los productos se cargan automáticamente desde tu hoja de cálculo pública.
-// Para editar productos: abre el link de Google Sheets y modifica las filas.
-//
-// 🔧 CONFIGURACIÓN — cambia solo esta línea si mueves la hoja:
-var SHEET_ID = '1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA';
-
-// 🔧 URL del Cloudflare Worker para compartir en redes sociales (Facebook, etc.)
-// Cuando instales el worker, reemplaza esta URL con la que te asigne Cloudflare.
-// Ejemplo: 'https://kukumita-og.TU-USUARIO.workers.dev'
-// Mientras no lo tengas configurado, deja el valor vacío ('') y funcionará
-// como antes (sin imagen en Facebook).
-var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers.dev';
-
-// 🔧 Hoja de cálculo de Velas Kukúmita — se reutiliza en TRES lugares:
-//   1) Botón "Etiquetas" (grid propio)                → Hoja 2 completa
-//   2) Zona "Mostrar Más Velas" en la 1ª hoja de Yesos → primeros 3 de la Hoja 1
-//   3) Zona "Mostrar Más Etiquetas" en la 1ª hoja      → primeros 3 de la Hoja 2
-// Columnas en el mismo formato que la hoja de arriba (A Nombre, B precio,
-// C precio mayoreo, D descripción, ... H EtiquetaPrincipal, etc.)
-// NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
-// tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
-// La Hoja 1 no necesita nombre: se lee automáticamente como pestaña por defecto.
-var SHEET_ID_ETIQUETAS   = '1jin2wMYingvbPD2csGxIbm5AhulfRvCRvIzAKJTUNMw';
-var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
-
-// 🔧 Segunda pestaña de ESTA MISMA hoja (SHEET_ID) con la info del modal "Búscanos en Bazar".
-// NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
-// tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
-var SHEET_NOMBRE_BAZAR = 'Hoja 2';
-// ──────────────────────────────────────────────────────────────────────────────
-// COLUMNAS ESPERADAS EN LA HOJA (fila 1 = encabezados, datos desde fila 2):
-// Hoja exclusiva de Yesos Polo Kukúmita (separada de la de Yesos Fer) — A a L:
-//   A(0):  Producto              (nombre)
-//   B(1):  Precio Original
-//   C(2):  Precio Bazar
-//   D(3):  Descripcion
-//   E(4):  Imagenes imgbb        (URLs separadas por coma; la primera es la principal)
-//   F(5):  Video                 (video principal del producto)
-//   G(6):  Etiqueta Principal
-//   H(7):  Sub Etiquetas
-//   I(8):  Medidas alto/ancho    (texto libre, se muestra tal cual en el modal)
-//   J(9):  Existencia            (número de piezas en stock)
-//   K(10): En Oferta             (escribe "si" para activar)
-//   L(11): Mas Vendido           (escribe "si" para activar)
-//
-// NOTA: esta hoja ya NO tiene columnas para "Etiqueta Evento" (filtro por
-// evento), "SubImagen"/aditamentos, ni video de redes sociales por producto.
-// Esas funciones quedan con lista vacía — no rompen nada, pero tampoco
-// mostrarán datos hasta que se agregue una fuente para ellas.
-// ══════════════════════════════════════════════════════════════════════════════
-
-// ── Caché en sessionStorage para las descargas de CSV de Google Sheets ──
-// Evita volver a descargar el mismo CSV si el usuario recarga la página o
-// navega de regreso dentro de la misma pestaña/sesión. TTL corto (por
-// defecto 3 minutos) para que los cambios que hagas en la hoja se reflejen
-// pronto sin tener que forzar recarga.
-var _CSV_CACHE_TTL_MS = 3 * 60 * 1000;
-function fetchCSVConCache(url, claveCache) {
-    try {
-        var guardado = sessionStorage.getItem(claveCache);
-        if (guardado) {
-            var datos = JSON.parse(guardado);
-            if (datos && (Date.now() - datos.t) < _CSV_CACHE_TTL_MS) {
-                return Promise.resolve(datos.texto);
-            }
-        }
-    } catch (e) { /* sessionStorage no disponible o dato corrupto: seguir sin caché */ }
-
-    return fetch(url)
-        .then(function(res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-        })
-        .then(function(texto) {
-            try {
-                sessionStorage.setItem(claveCache, JSON.stringify({ t: Date.now(), texto: texto }));
-            } catch (e) { /* cuota de sessionStorage llena: no es crítico, seguir sin guardar */ }
-            return texto;
-        });
-}
-
-// ── Escapa texto proveniente de Google Sheets antes de insertarlo con innerHTML ──
-// Úsalo siempre que construyas HTML por concatenación con datos de producto
-// (nombre, descripción, subtags, etc.). Si solo insertas texto plano, usa
-// textContent en su lugar — no necesita esta función.
-function escapeHtml(texto) {
-    var s = (texto === undefined || texto === null) ? '' : String(texto);
-    return s.replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-}
-
-var listaProductos = [];
-
-// ── Parser de CSV que maneja campos entre comillas con comas internas ──
-// IMPORTANTE: conserva TODAS las líneas, incluidas las completamente vacías.
-// Esto es necesario para que el número de fila de cada producto (usado en el
-// badge "# fila" del modal) siga coincidiendo con la fila real de Google Sheets
-// aunque haya huecos/filas vacías en medio de la hoja.
-function parsearCSV(texto) {
-    var lineas = [];
-    var filaActual = [];
-    var campoActual = '';
-    var dentroDeComillas = false;
-
-    for (var i = 0; i < texto.length; i++) {
-        var c = texto[i];
-        if (c === '"') {
-            if (dentroDeComillas && texto[i + 1] === '"') {
-                campoActual += '"';
-                i++;
-            } else {
-                dentroDeComillas = !dentroDeComillas;
-            }
-        } else if (c === ',' && !dentroDeComillas) {
-            filaActual.push(campoActual.trim());
-            campoActual = '';
-        } else if ((c === '\n' || c === '\r') && !dentroDeComillas) {
-            if (c === '\r' && texto[i + 1] === '\n') i++;
-            filaActual.push(campoActual.trim());
-            lineas.push(filaActual);
-            filaActual = [];
-            campoActual = '';
-        } else {
-            campoActual += c;
-        }
-    }
-    // Última celda — solo se agrega si el texto no terminaba ya en salto de línea
-    if (filaActual.length > 0 || campoActual !== '') {
-        filaActual.push(campoActual.trim());
-        lineas.push(filaActual);
-    }
-    // Quita únicamente líneas colgantes al final del archivo (por el último \n)
-    while (lineas.length > 0) {
-        var ultima = lineas[lineas.length - 1];
-        if (ultima.every(function(f) { return f === ''; })) {
-            lineas.pop();
-        } else {
-            break;
-        }
-    }
-    return lineas;
-}
-
-// ── Encabezados esperados por posición (ver tabla de columnas arriba) ──
-// Se usa solo para VALIDAR que el orden de tu hoja no cambió; el mapeo de
-// datos sigue siendo por índice fijo (get(0), get(1), etc.) como antes.
-var _ENCABEZADOS_ESPERADOS = [
-    'producto', 'precio original', 'precio bazar', 'descripcion', 'imagenes imgbb',
-    'video', 'etiqueta principal', 'sub etiquetas', 'medidas alto/ancho',
-    'existencia', 'en oferta', 'mas vendido'
+// ---------- Datos (Google Sheets mediante Apps Script) ----------
+// Columnas de la hoja: A Fecha | B Actividades | C Descripcion | D Anotaciones
+const CAMPOS = [
+  { clave: "actividades", etiqueta: "Actividades" },
+  { clave: "descripcion", etiqueta: "Descripción" },
+  { clave: "anotaciones", etiqueta: "Anotaciones" },
 ];
 
-function _normalizarEncabezado(s) {
-    return (s || '').toString().trim().toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita acentos
+const datos = {}; // { "2026-10-13": { actividades, descripcion, anotaciones } }
+const estadoCal = document.getElementById("cal-estado");
+
+function configurado() {
+  return typeof CONFIG !== "undefined" && CONFIG.APPS_SCRIPT_URL && CONFIG.TOKEN;
 }
 
-// Compara la fila de encabezados real contra la esperada y avisa fuerte en
-// consola (una sola vez por carga) si alguna columna no coincide con su
-// posición esperada — para detectar de inmediato si moviste/insertaste una
-// columna en Google Sheets, en vez de que el catálogo se llene en silencio
-// con datos mal mapeados (ej. alto y ancho intercambiados).
-function _validarEncabezadosCSV(filaEncabezados) {
-    if (!filaEncabezados || filaEncabezados.length === 0) return;
-    var problemas = [];
-    _ENCABEZADOS_ESPERADOS.forEach(function(esperado, idx) {
-        var real = _normalizarEncabezado(filaEncabezados[idx]);
-        if (real.indexOf(esperado) === -1 && esperado.indexOf(real) === -1) {
-            problemas.push('Columna ' + String.fromCharCode(65 + idx) + ' (posición ' + idx +
-                '): se esperaba algo como "' + esperado + '" y se encontró "' + (filaEncabezados[idx] || '(vacío)') + '"');
-        }
+function mostrarEstadoCal(texto, tipo) {
+  estadoCal.textContent = texto;
+  estadoCal.className = "cal-estado" + (tipo ? " " + tipo : "");
+  estadoCal.hidden = !texto;
+}
+
+let calendarioCargado = false; // ya se leyeron los datos del calendario con la sesión actual
+
+// Quita los datos del calendario de la pantalla (sin sesión nadie los ve)
+function vaciarCalendario(aviso) {
+  Object.keys(datos).forEach((k) => delete datos[k]);
+  calendarioCargado = false;
+  cerrarPopover();
+  dibujarCalendario();
+  mostrarEstadoCal(aviso || "");
+}
+
+// Leer el calendario también exige iniciar sesión con la cuenta autorizada
+async function cargarDatos() {
+  if (!configurado()) {
+    mostrarEstadoCal(
+      "Falta conectar Google Sheets: revisa config.js y el README.",
+      "error"
+    );
+    return;
+  }
+  const idToken = credencialVigente();
+  if (!idToken) {
+    vaciarCalendario("Inicia sesión con Google (menú ☰) para ver tu calendario.");
+    return;
+  }
+  mostrarEstadoCal("Cargando datos…");
+  try {
+    // text/plain evita el "preflight" de CORS con Apps Script
+    const r = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CONFIG.TOKEN, idToken, accion: "calendario_listar" }),
     });
-    if (problemas.length > 0) {
-        console.warn(
-            '⚠️ [Kukumita] El orden de columnas de tu Google Sheet no coincide con lo esperado.\n' +
-            'Si moviste, insertaste o borraste una columna, los datos pueden estar mal asignados ' +
-            '(por ejemplo, Alto y Ancho intercambiados, o precios en la columna equivocada).\n' +
-            problemas.join('\n')
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "Error desconocido");
+    Object.keys(datos).forEach((k) => delete datos[k]);
+    Object.assign(datos, j.datos);
+    calendarioCargado = true;
+    mostrarEstadoCal("");
+    dibujarCalendario();
+  } catch (e) {
+    mostrarEstadoCal("No se pudieron cargar los datos: " + e.message, "error");
+  }
+}
+
+// Se llama cuando cambia la sesión: al entrar se leen los datos y al salir se quitan de pantalla
+function actualizarCalendarioSesion() {
+  if (sesionVigente()) {
+    if (!calendarioCargado) cargarDatos();
+  } else {
+    vaciarCalendario("Inicia sesión con Google (menú ☰) para ver tu calendario.");
+  }
+}
+
+async function guardarCampo(fecha, campo, valor) {
+  if (!configurado()) throw new Error("Falta configurar config.js");
+  // Para modificar la hoja hace falta haber iniciado sesión con Google
+  const idToken = credencialVigente();
+  if (!idToken) {
+    abrirLateral();
+    throw new Error("Inicia sesión con Google para guardar");
+  }
+  // text/plain evita el "preflight" de CORS con Apps Script
+  const r = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CONFIG.TOKEN, idToken, fecha, campo, valor }),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "Error al guardar");
+  datos[fecha] = datos[fecha] || {};
+  datos[fecha][campo] = valor;
+}
+
+function tieneDatos(fecha) {
+  const d = datos[fecha];
+  return !!d && CAMPOS.some((c) => (d[c.clave] || "").trim() !== "");
+}
+
+// ---------- Varios elementos en una sola celda, entre paréntesis ----------
+// Descripción, Actividades y Anotaciones funcionan igual. Ejemplo en la hoja:
+//   (primer elemento) (segundo elemento) (tercer elemento)
+
+function parentesisBalanceados(s) {
+  let n = 0;
+  for (const ch of s) {
+    if (ch === "(") n++;
+    else if (ch === ")") {
+      n--;
+      if (n < 0) return false;
+    }
+  }
+  return n === 0;
+}
+
+// Si el texto trae paréntesis sueltos, se cambian por corchetes para no romper el formato
+function limpiarElemento(s) {
+  s = s.trim();
+  return parentesisBalanceados(s) ? s : s.replace(/\(/g, "[").replace(/\)/g, "]");
+}
+
+// Convierte el contenido de una celda en una lista de elementos.
+// Si la celda tiene texto antiguo sin el formato de paréntesis, se muestra como un solo elemento.
+function parsearElementos(texto) {
+  const t = (texto || "").trim();
+  if (!t) return [];
+  const elementos = [];
+  let profundidad = 0;
+  let actual = "";
+  for (const ch of t) {
+    if (profundidad === 0) {
+      if (ch === "(") {
+        profundidad = 1;
+        actual = "";
+      } else if (/\s/.test(ch)) {
+        continue;
+      } else {
+        return [t]; // hay texto fuera de los paréntesis: es contenido antiguo
+      }
+    } else if (ch === "(") {
+      profundidad++;
+      actual += ch;
+    } else if (ch === ")") {
+      profundidad--;
+      if (profundidad === 0) elementos.push(actual.trim());
+      else actual += ch;
+    } else {
+      actual += ch;
+    }
+  }
+  if (profundidad !== 0) return [t]; // paréntesis sin cerrar: contenido antiguo
+  return elementos.filter((e) => e !== "");
+}
+
+function serializarElementos(elementos) {
+  return elementos.map((e) => "(" + limpiarElemento(e) + ")").join(" ");
+}
+
+// ---------- Calendario (1930 - 2100) ----------
+const ANIO_MIN = 1930;
+const ANIO_MAX = 2100;
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]; // semana inicia en lunes
+
+const selMes = document.getElementById("cal-mes");
+const selAnio = document.getElementById("cal-anio");
+const btnAnterior = document.getElementById("cal-anterior");
+const btnSiguiente = document.getElementById("cal-siguiente");
+const btnHoy = document.getElementById("cal-hoy");
+const btnActualizar = document.getElementById("cal-actualizar");
+const cuadricula = document.getElementById("cal-cuadricula");
+
+let hoy = new Date();
+let mesActual = hoy.getMonth();
+let anioActual = hoy.getFullYear();
+let seleccion = null; // fecha seleccionada "YYYY-MM-DD"
+
+const dos = (n) => String(n).padStart(2, "0");
+const claveFecha = (a, m, d) => `${a}-${dos(m + 1)}-${dos(d)}`;
+
+MESES.forEach((nombre, i) => selMes.add(new Option(nombre, i)));
+for (let a = ANIO_MIN; a <= ANIO_MAX; a++) selAnio.add(new Option(a, a));
+
+// Color de un día (vacío = sin color): un pastel con nombre o un código #rrggbb
+function colorDeDia(fecha) {
+  const c = String((datos[fecha] || {}).color || "").trim();
+  return c ? hexDeColor(c) : "";
+}
+
+function dibujarCalendario() {
+  selMes.value = mesActual;
+  selAnio.value = anioActual;
+  btnAnterior.disabled = anioActual === ANIO_MIN && mesActual === 0;
+  btnSiguiente.disabled = anioActual === ANIO_MAX && mesActual === 11;
+
+  cuadricula.innerHTML = "";
+
+  DIAS.forEach((d) => {
+    const el = document.createElement("div");
+    el.className = "cal-dia-semana";
+    el.textContent = d;
+    cuadricula.appendChild(el);
+  });
+
+  // getDay(): 0=domingo ... 6=sábado. Convertimos a lunes=0.
+  const primerDia = (new Date(anioActual, mesActual, 1).getDay() + 6) % 7;
+  const diasEnMes = new Date(anioActual, mesActual + 1, 0).getDate();
+
+  for (let i = 0; i < primerDia; i++) {
+    const vacio = document.createElement("div");
+    vacio.className = "cal-dia vacio";
+    cuadricula.appendChild(vacio);
+  }
+
+  for (let d = 1; d <= diasEnMes; d++) {
+    const fecha = claveFecha(anioActual, mesActual, d);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "cal-dia";
+    el.textContent = d;
+    el.dataset.fecha = fecha;
+
+    const diaSemana = (primerDia + d - 1) % 7;
+    if (diaSemana >= 5) el.classList.add("finde");
+
+    if (d === hoy.getDate() && mesActual === hoy.getMonth() && anioActual === hoy.getFullYear()) {
+      el.classList.add("hoy");
+    }
+    if (fecha === seleccion) el.classList.add("seleccionado");
+    if (tieneDatos(fecha)) el.classList.add("con-datos");
+    const colorDia = colorDeDia(fecha);
+    if (colorDia) {
+      el.classList.add("con-color");
+      el.style.background = colorDia;
+      el.style.color = esColorOscuro(colorDia) ? "#fff" : "#2b2140";
+    }
+
+    el.addEventListener("click", () => abrirDia(fecha));
+    cuadricula.appendChild(el);
+  }
+}
+
+function cambiarMes(delta) {
+  cerrarPopover();
+  mesActual += delta;
+  if (mesActual < 0) { mesActual = 11; anioActual--; }
+  if (mesActual > 11) { mesActual = 0; anioActual++; }
+  if (anioActual < ANIO_MIN) { anioActual = ANIO_MIN; mesActual = 0; }
+  if (anioActual > ANIO_MAX) { anioActual = ANIO_MAX; mesActual = 11; }
+  dibujarCalendario();
+}
+
+btnAnterior.addEventListener("click", () => cambiarMes(-1));
+btnSiguiente.addEventListener("click", () => cambiarMes(1));
+selMes.addEventListener("change", () => {
+  cerrarPopover();
+  mesActual = Number(selMes.value);
+  dibujarCalendario();
+});
+selAnio.addEventListener("change", () => {
+  cerrarPopover();
+  anioActual = Number(selAnio.value);
+  dibujarCalendario();
+});
+// Vuelve al mes y año de hoy (vuelve a leer la fecha por si la página lleva días abierta)
+function irAHoy() {
+  hoy = new Date();
+  mesActual = hoy.getMonth();
+  anioActual = hoy.getFullYear();
+  cerrarPopover();
+  dibujarCalendario();
+}
+
+btnHoy.addEventListener("click", irAHoy);
+btnActualizar.addEventListener("click", () => {
+  cerrarPopover();
+  cargarDatos();
+});
+
+// ---------- Panel del día ----------
+const seccionCal = document.getElementById("calendario");
+const popover = document.getElementById("dia-popover");
+const popTitulo = document.getElementById("pop-titulo");
+const popCerrar = document.getElementById("pop-cerrar");
+
+// Textos de cada sección (el orden en pantalla lo define index.html)
+const TEXTOS = {
+  descripcion: {
+    vacio: "Aún no hay descripción para este día.",
+    confirmar: "¿Eliminar esta descripción?",
+  },
+  actividades: {
+    vacio: "Aún no hay actividades para este día.",
+    confirmar: "¿Eliminar esta actividad?",
+  },
+  anotaciones: {
+    vacio: "Aún no hay anotaciones para este día.",
+    confirmar: "¿Eliminar esta anotación?",
+  },
+};
+
+function setEstado(el, texto, tipo) {
+  el.textContent = texto;
+  el.classList.remove("ok", "error");
+  if (tipo) el.classList.add(tipo);
+}
+
+function actualizarMarca(fecha) {
+  const celda = cuadricula.querySelector(`[data-fecha="${fecha}"]`);
+  if (celda) celda.classList.toggle("con-datos", tieneDatos(fecha));
+}
+
+// Cada sección: botón del título (abre la zona de texto) + botón "Desplegar" (abre los recuadros)
+const bloquesDia = Array.from(
+  document.querySelectorAll("#pop-secciones .pop-seccion[data-campo]")
+).map((el) => ({
+  campo: el.dataset.campo,
+  btnTexto: el.querySelector('[data-accion="texto"]'),
+  panelTexto: el.querySelector(".pop-panel-texto"),
+  txt: el.querySelector("textarea"),
+  btnGuardar: el.querySelector(".btn-guardar"),
+  btnCancelar: el.querySelector(".btn-cancelar"),
+  textoGuardar: el.querySelector(".btn-guardar").textContent,
+  unico: el.dataset.campo === "descripcion", // la descripción es una sola por día
+  editando: null, // posición del texto que se está modificando (null = texto nuevo)
+  est: el.querySelector(".pop-panel-texto .pop-estado"),
+  btnLista: el.querySelector('[data-accion="lista"]'),
+  panelLista: el.querySelector(".pop-panel-lista"),
+  fija: el.querySelector(".lista-fija"),
+  lista: el.querySelector(".lista-extra"),
+  etiquetaLista: el.querySelector(".pop-lista-etiqueta"),
+  estLista: el.querySelector(".pop-estado-lista"),
+}));
+
+function plegar(boton, panel) {
+  panel.hidden = true;
+  boton.setAttribute("aria-expanded", "false");
+}
+
+// Muestra u oculta un panel. Sin "abrir", cambia al estado contrario.
+function alternar(boton, panel, abrir) {
+  const mostrar = abrir === undefined ? panel.hidden : abrir;
+  panel.hidden = !mostrar;
+  boton.setAttribute("aria-expanded", String(mostrar));
+  if (mostrar) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function elementosDe(fecha, campo) {
+  return parsearElementos((datos[fecha] || {})[campo]);
+}
+
+const MAX_VISIBLES = 4; // los primeros 4 recuadros siempre se ven
+
+function crearNota(texto, indice, b, completa) {
+  const caja = document.createElement("div");
+  caja.className = "nota" + (completa ? " nota-completa" : "");
+  const t = document.createElement("p");
+  t.className = "nota-texto";
+  t.textContent = texto;
+  const e = document.createElement("button");
+  e.type = "button";
+  e.className = "nota-editar";
+  e.title = "Modificar";
+  e.setAttribute("aria-label", "Modificar");
+  e.textContent = "✎";
+  e.addEventListener("click", () => abrirEditor(b, indice));
+  const x = document.createElement("button");
+  x.type = "button";
+  x.className = "nota-borrar";
+  x.setAttribute("aria-label", "Eliminar");
+  x.textContent = "×";
+  x.addEventListener("click", () => borrarElemento(b, indice));
+  caja.append(t, e, x);
+
+  // Tocar el recuadro en cualquier zona lo abre para modificarlo (✎ y × siguen con su función)
+  caja.tabIndex = 0;
+  caja.setAttribute("role", "button");
+  caja.setAttribute("aria-label", "Modificar este texto");
+  caja.addEventListener("click", (ev) => {
+    if (ev.target.closest("button")) return;
+    if (String(window.getSelection()).length) return; // si estaba seleccionando texto, no se abre
+    abrirEditor(b, indice);
+  });
+  caja.addEventListener("keydown", (ev) => {
+    if (ev.target === caja && (ev.key === "Enter" || ev.key === " ")) {
+      ev.preventDefault();
+      abrirEditor(b, indice);
+    }
+  });
+  return caja;
+}
+
+function dibujarLista(fecha, b) {
+  b.fija.innerHTML = "";
+  b.lista.innerHTML = "";
+  const elementos = elementosDe(fecha, b.campo);
+
+  if (!elementos.length) {
+    const p = document.createElement("p");
+    p.className = "sin-notas";
+    p.textContent = TEXTOS[b.campo].vacio;
+    b.fija.appendChild(p);
+  }
+
+  // La descripción es una sola: se muestra como un solo texto a lo largo del panel
+  // (si en la hoja había varias, se unen aquí en un solo texto)
+  if (b.unico) {
+    if (elementos.length) b.fija.appendChild(crearNota(elementos.join("\n\n"), 0, b, true));
+    b.btnLista.hidden = true;
+    plegar(b.btnLista, b.panelLista);
+    return;
+  }
+
+  elementos.forEach((texto, i) => {
+    const caja = crearNota(texto, i, b);
+    (i < MAX_VISIBLES ? b.fija : b.lista).appendChild(caja);
+  });
+
+  // El botón "Desplegar" solo aparece si hay más de 4 recuadros
+  const extras = Math.max(0, elementos.length - MAX_VISIBLES);
+  b.btnLista.hidden = extras === 0;
+  b.etiquetaLista.textContent = extras ? `Desplegar (${extras} más)` : "Desplegar";
+  if (extras === 0) plegar(b.btnLista, b.panelLista);
+}
+
+// Fecha y hora del momento de guardar, con el formato: 14/10/2026 21:35
+function selloFechaHora() {
+  const n = new Date();
+  return `${dos(n.getDate())}/${dos(n.getMonth() + 1)}/${n.getFullYear()} ` +
+    `${dos(n.getHours())}:${dos(n.getMinutes())}`;
+}
+
+// Texto que se carga en la zona de escritura: vacío (texto nuevo) o el texto guardado
+// (la descripción, al ser una sola, se carga completa)
+function textoEditable(fecha, b, indice) {
+  if (indice === null) return "";
+  const elementos = elementosDe(fecha, b.campo);
+  return b.unico ? elementos.join("\n\n") : elementos[indice] || "";
+}
+
+// Deja la zona de escritura en modo «texto nuevo»
+function reiniciarEditor(b) {
+  b.editando = null;
+  b.txt.value = "";
+  b.btnGuardar.textContent = b.textoGuardar;
+  b.btnCancelar.hidden = true;
+}
+
+// Abre la zona de escritura: para un texto nuevo (indice = null) o para modificar uno guardado.
+// La descripción es una sola: si ya existe, siempre se abre para modificarla.
+function abrirEditor(b, indice) {
+  const fecha = seleccion;
+  if (!fecha) return;
+  if (b.unico && elementosDe(fecha, b.campo).length) indice = 0;
+
+  if (indice === null) {
+    // Texto nuevo: se conserva lo que ya se hubiera escrito
+    if (b.editando !== null) reiniciarEditor(b);
+    alternar(b.btnTexto, b.panelTexto, true);
+    b.txt.focus();
+    return;
+  }
+  if (b.editando === indice && !b.panelTexto.hidden) {
+    b.txt.focus();
+    return;
+  }
+  const original = b.editando === null ? "" : textoEditable(fecha, b, b.editando);
+  if (b.txt.value.trim() && b.txt.value !== original &&
+      !window.confirm("Tienes texto sin guardar en esta sección. ¿Descartarlo?")) return;
+
+  b.editando = indice;
+  b.txt.value = textoEditable(fecha, b, indice);
+  b.btnGuardar.textContent = "Guardar cambios";
+  b.btnCancelar.hidden = false;
+  setEstado(b.est, "");
+  alternar(b.btnTexto, b.panelTexto, true);
+  b.txt.focus();
+}
+
+// Guarda un texto nuevo o los cambios de uno que se estaba modificando
+async function guardarElemento(b) {
+  const fecha = seleccion;
+  const texto = b.txt.value.trim();
+  if (!fecha) return;
+  if (!texto) {
+    setEstado(b.est, "Escribe algo primero", "error");
+    return;
+  }
+  const editando = b.editando;
+  let elementos = elementosDe(fecha, b.campo);
+  if (editando !== null && b.unico) {
+    elementos = [limpiarElemento(texto)]; // la descripción es una sola
+  } else if (editando !== null) {
+    if (editando >= elementos.length) {
+      setEstado(b.est, "Ese texto ya no existe. Cierra y vuelve a abrir el día.", "error");
+      return;
+    }
+    elementos[editando] = limpiarElemento(texto);
+  } else if (b.unico && elementos.length) {
+    setEstado(b.est, "Ya hay una descripción: modifícala con el lápiz ✎.", "error");
+    return;
+  } else {
+    // La fecha y hora van al inicio del recuadro, en su propia línea, antes del texto
+    const conSello = selloFechaHora() + "\n" + texto;
+    elementos = elementos.concat(limpiarElemento(conSello));
+  }
+  b.btnGuardar.disabled = true;
+  setEstado(b.est, "Guardando…");
+  try {
+    await guardarCampo(fecha, b.campo, serializarElementos(elementos));
+    if (seleccion === fecha) {
+      dibujarLista(fecha, b);
+      if (editando !== null || b.unico) {
+        // Al terminar de modificar (o de escribir la descripción) se cierra la zona de texto
+        reiniciarEditor(b);
+        plegar(b.btnTexto, b.panelTexto);
+        setEstado(b.est, "");
+        setEstado(b.estLista, editando !== null ? "Cambios guardados ✓" : "Guardada ✓", "ok");
+      } else {
+        b.txt.value = "";
+        // Si el recuadro nuevo quedó después del 4.º, abre la lista para que se vea
+        if (elementos.length > MAX_VISIBLES) alternar(b.btnLista, b.panelLista, true);
+        setEstado(b.est, "Guardado ✓", "ok");
+      }
+    }
+    actualizarMarca(fecha);
+  } catch (e) {
+    setEstado(b.est, "Error: " + e.message, "error");
+  } finally {
+    b.btnGuardar.disabled = false;
+  }
+}
+
+async function borrarElemento(b, indice) {
+  const fecha = seleccion;
+  if (!fecha) return;
+  if (!window.confirm(TEXTOS[b.campo].confirmar)) return;
+  const elementos = b.unico ? [] : elementosDe(fecha, b.campo); // la descripción se borra completa
+  if (!b.unico) elementos.splice(indice, 1);
+  setEstado(b.estLista, "Guardando…");
+  try {
+    await guardarCampo(fecha, b.campo, serializarElementos(elementos));
+    if (seleccion === fecha) {
+      if (b.editando !== null) {
+        reiniciarEditor(b);
+        plegar(b.btnTexto, b.panelTexto);
+      }
+      dibujarLista(fecha, b);
+      setEstado(b.estLista, "Eliminado", "ok");
+    }
+    actualizarMarca(fecha);
+  } catch (e) {
+    setEstado(b.estLista, "Error: " + e.message, "error");
+  }
+}
+
+bloquesDia.forEach((b) => {
+  b.btnTexto.addEventListener("click", () => {
+    if (!b.panelTexto.hidden) {
+      // Se cierra la zona de texto (si se estaba modificando algo, se deja sin cambios)
+      if (b.editando !== null) reiniciarEditor(b);
+      plegar(b.btnTexto, b.panelTexto);
+      return;
+    }
+    abrirEditor(b, null);
+  });
+  b.btnLista.addEventListener("click", () => alternar(b.btnLista, b.panelLista));
+  b.btnGuardar.addEventListener("click", () => guardarElemento(b));
+  b.btnCancelar.addEventListener("click", () => {
+    reiniciarEditor(b);
+    plegar(b.btnTexto, b.panelTexto);
+    setEstado(b.est, "");
+  });
+});
+
+function textoFecha(fecha) {
+  const [a, m, d] = fecha.split("-").map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString("es-MX", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+function posicionarPopover(celda) {
+  const rs = seccionCal.getBoundingClientRect();
+  const rc = celda.getBoundingClientRect();
+  const ancho = popover.offsetWidth;
+  const centro = rc.left - rs.left + rc.width / 2;
+  // Centrado en el día, pero sin salirse de la pantalla (el panel puede ser más ancho que la sección)
+  const minIzq = 12 - rs.left;
+  const maxIzq = document.documentElement.clientWidth - 12 - rs.left - ancho;
+  const izq = Math.max(minIzq, Math.min(centro - ancho / 2, maxIzq));
+  popover.style.left = izq + "px";
+  popover.style.top = rc.bottom - rs.top + 10 + "px";
+  const flecha = Math.max(24, Math.min(centro - izq, Math.max(ancho - 24, 24)));
+  popover.style.setProperty("--flecha", flecha + "px");
+}
+
+function abrirDia(fecha) {
+  seleccion = fecha;
+  dibujarCalendario();
+
+  popTitulo.textContent = textoFecha(fecha);
+  // Al abrir un día se ven los 3 títulos y sus primeros 4 recuadros; lo demás empieza plegado
+  bloquesDia.forEach((b) => {
+    b.txt.value = "";
+    reiniciarEditor(b);
+    setEstado(b.est, "");
+    setEstado(b.estLista, "");
+    plegar(b.btnTexto, b.panelTexto);
+    plegar(b.btnLista, b.panelLista);
+    dibujarLista(fecha, b);
+  });
+
+  pintarPanelDia((datos[fecha] || {}).color);
+  setEstado(popColorEstado, "");
+  plegarPaletaDia();
+
+  popover.hidden = false;
+  posicionarPopover(cuadricula.querySelector(`[data-fecha="${fecha}"]`));
+  popover.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function cerrarPopover() {
+  if (popover.hidden && !seleccion) return;
+  popover.hidden = true;
+  seleccion = null;
+  cuadricula
+    .querySelectorAll(".seleccionado")
+    .forEach((e) => e.classList.remove("seleccionado"));
+}
+
+popCerrar.addEventListener("click", cerrarPopover);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") cerrarPopover();
+});
+document.addEventListener("click", (e) => {
+  if (popover.hidden) return;
+  const ruta = e.composedPath();
+  if (ruta.includes(popover)) return;
+  if (ruta.some((n) => n.classList && n.classList.contains("cal-dia"))) return;
+  cerrarPopover();
+});
+window.addEventListener("resize", () => {
+  if (!popover.hidden && seleccion) {
+    const celda = cuadricula.querySelector(`[data-fecha="${seleccion}"]`);
+    if (celda) posicionarPopover(celda);
+  }
+});
+
+// ---------- Barra lateral e inicio de sesión con Google ----------
+const btnLateral = document.getElementById("btn-menu-lateral");
+const barraLateral = document.getElementById("barra-lateral");
+const fondoLateral = document.getElementById("fondo-lateral");
+const btnCerrarLateral = document.getElementById("lateral-cerrar");
+
+function abrirLateral() {
+  barraLateral.classList.add("abierta");
+  barraLateral.setAttribute("aria-hidden", "false");
+  fondoLateral.hidden = false;
+  btnLateral.setAttribute("aria-expanded", "true");
+}
+
+function cerrarLateral() {
+  barraLateral.classList.remove("abierta");
+  barraLateral.setAttribute("aria-hidden", "true");
+  fondoLateral.hidden = true;
+  btnLateral.setAttribute("aria-expanded", "false");
+}
+
+btnLateral.addEventListener("click", () =>
+  barraLateral.classList.contains("abierta") ? cerrarLateral() : abrirLateral()
+);
+btnCerrarLateral.addEventListener("click", cerrarLateral);
+fondoLateral.addEventListener("click", cerrarLateral);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") cerrarLateral();
+});
+
+const CLAVE_SESION = "polo-ai-sesion";
+const cuentaSin = document.getElementById("cuenta-sin-sesion");
+const cuentaCon = document.getElementById("cuenta-con-sesion");
+const googleBoton = document.getElementById("google-boton");
+const googleAviso = document.getElementById("google-aviso");
+const cuentaFoto = document.getElementById("cuenta-foto");
+const cuentaNombre = document.getElementById("cuenta-nombre");
+const cuentaCorreo = document.getElementById("cuenta-correo");
+const btnSalir = document.getElementById("cuenta-salir");
+
+let usuario = null; // { nombre, correo, foto, credencial, exp }
+try {
+  usuario = JSON.parse(localStorage.getItem(CLAVE_SESION));
+} catch (e) {
+  usuario = null;
+}
+
+// La credencial de Google dura cerca de 1 hora. Pasado ese tiempo hay que volver a entrar
+// (si ya habías aceptado antes, Google suele volver a iniciar sesión solo).
+function sesionVigente() {
+  return !!(usuario && usuario.credencial && usuario.exp * 1000 > Date.now() + 15000);
+}
+
+function credencialVigente() {
+  return sesionVigente() ? usuario.credencial : null;
+}
+
+let sesionCaducada = false; // había una sesión guardada pero ya venció
+if (usuario && !sesionVigente()) {
+  usuario = null;
+  sesionCaducada = true;
+  try {
+    localStorage.removeItem(CLAVE_SESION);
+  } catch (e) {}
+}
+
+let temporizadorSesion = null;
+function programarCaducidad() {
+  clearTimeout(temporizadorSesion);
+  if (!usuario) return;
+  const ms = Math.max(usuario.exp * 1000 - Date.now() - 15000, 0);
+  temporizadorSesion = setTimeout(expirarSesion, ms);
+}
+
+// Vence la credencial: se cierra la sesión en pantalla y se intenta volver a entrar sola
+function expirarSesion() {
+  usuario = null;
+  try {
+    localStorage.removeItem(CLAVE_SESION);
+  } catch (e) {}
+  dibujarCuenta();
+  actualizarPanelNotas();
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt();
+}
+
+// El token de Google (JWT) trae los datos de la cuenta en su parte central, en base64
+function decodificarJWT(token) {
+  const base = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+  const json = decodeURIComponent(
+    atob(base)
+      .split("")
+      .map((ch) => "%" + ("00" + ch.charCodeAt(0).toString(16)).slice(-2))
+      .join("")
+  );
+  return JSON.parse(json);
+}
+
+function dibujarCuenta() {
+  cuentaSin.hidden = !!usuario;
+  cuentaCon.hidden = !usuario;
+  if (!usuario) return;
+  cuentaNombre.textContent = usuario.nombre || "";
+  cuentaCorreo.textContent = usuario.correo || "";
+  const fotoValida = typeof usuario.foto === "string" && usuario.foto.startsWith("https://");
+  cuentaFoto.hidden = !fotoValida;
+  if (fotoValida) cuentaFoto.src = usuario.foto;
+}
+
+function respuestaGoogle(resp) {
+  try {
+    const p = decodificarJWT(resp.credential);
+    usuario = {
+      nombre: p.name || "",
+      correo: p.email || "",
+      foto: p.picture || "",
+      credencial: resp.credential,
+      exp: p.exp,
+    };
+    try {
+      localStorage.setItem(CLAVE_SESION, JSON.stringify(usuario));
+    } catch (e) {}
+    googleAviso.hidden = true;
+    dibujarCuenta();
+    programarCaducidad();
+    actualizarPanelNotas();
+  } catch (e) {
+    googleAviso.textContent = "No se pudo iniciar sesión: " + e.message;
+    googleAviso.hidden = false;
+  }
+}
+
+function cerrarSesion() {
+  clearTimeout(temporizadorSesion);
+  usuario = null;
+  try {
+    localStorage.removeItem(CLAVE_SESION);
+  } catch (e) {}
+  if (window.google && google.accounts && google.accounts.id) {
+    google.accounts.id.disableAutoSelect();
+  }
+  dibujarCuenta();
+  actualizarPanelNotas();
+}
+btnSalir.addEventListener("click", cerrarSesion);
+
+function iniciarGoogle() {
+  if (typeof CONFIG === "undefined" || !CONFIG.GOOGLE_CLIENT_ID) {
+    googleAviso.textContent =
+      "Falta configurar GOOGLE_CLIENT_ID en config.js (revisa el README).";
+    googleAviso.hidden = false;
+    return;
+  }
+  const s = document.createElement("script");
+  s.src = "https://accounts.google.com/gsi/client";
+  s.async = true;
+  s.defer = true;
+  s.onload = () => {
+    google.accounts.id.initialize({
+      client_id: CONFIG.GOOGLE_CLIENT_ID,
+      callback: respuestaGoogle,
+      auto_select: true,
+    });
+    google.accounts.id.renderButton(googleBoton, {
+      theme: "filled_black",
+      size: "large",
+      text: "signin_with",
+      locale: "es",
+    });
+    // Si había una sesión que ya venció, intenta entrar de nuevo sin pedirte nada
+    if (sesionCaducada) google.accounts.id.prompt();
+  };
+  s.onerror = () => {
+    googleAviso.textContent = "No se pudo cargar el servicio de Google. Revisa tu conexión.";
+    googleAviso.hidden = false;
+  };
+  document.head.appendChild(s);
+}
+
+// ---------- Notas (hoja «Notas» de Google Sheets) ----------
+const btnNotas = document.getElementById("btn-notas");
+const panelNotas = document.getElementById("panel-notas");
+const notasSinSesion = document.getElementById("notas-sin-sesion");
+const notasContenido = document.getElementById("notas-contenido");
+const notasTexto = document.getElementById("notas-texto");
+const notasForm = document.getElementById("notas-form");
+const notasNombre = document.getElementById("notas-nombre");
+const notasEtiqueta = document.getElementById("notas-etiqueta");
+const notasColores = document.getElementById("notas-colores");
+const notasGuardar = document.getElementById("notas-guardar");
+const notasEstado = document.getElementById("notas-estado");
+const notasEstadoLista = document.getElementById("notas-estado-lista");
+const notasNuevaBtn = document.getElementById("notas-nueva-btn");
+const notasCancelar = document.getElementById("notas-cancelar");
+const notasFecha = document.getElementById("notas-fecha");
+const notasSubmenu = document.getElementById("notas-submenu");
+const notasSubTitulo = document.getElementById("notas-sub-titulo");
+const notasSubLista = document.getElementById("notas-sub-lista");
+const notasSubVolver = document.getElementById("notas-sub-volver");
+const notasMasColores = document.getElementById("notas-mas-colores");
+const notasPaleta = document.getElementById("notas-paleta");
+const notasPaletaFamilias = document.getElementById("notas-paleta-familias");
+const notasColorPersonal = document.getElementById("notas-color-personal");
+const notasPersonal = document.getElementById("notas-personal");
+const notasLista = document.getElementById("notas-lista");
+const notasIdent = document.getElementById("notas-identificador");
+const notasFormTitulo = document.getElementById("notas-form-titulo");
+const notasCaja = document.querySelector("#panel-notas .notas-caja");
+
+let notaEditando = null; // nota que se está editando en el formulario (null = nota nueva)
+
+let notas = []; // [{ id, nombre, fecha, etiqueta, texto, color, identificador }]
+let notasCargadas = false;
+let etiquetaAbierta = null; // etiqueta cuyo submenú está abierto (null = ninguno)
+let etiquetaPendiente = null; // etiqueta a abrir en cuanto terminen de cargar las notas (acceso directo)
+const MAX_FILA_NOTAS = 4; // notas visibles por fila; el resto va en el submenú
+
+// Etiquetas y colores (los nombres se guardan tal cual en la hoja; deben coincidir con el Apps Script)
+const ETIQUETAS_NOTA = [
+  "General",
+  "Tarea/Actividad",
+  "Conjunto de Datos",
+  "Sueños",
+  "Pendiente Importante",
+  "Pedidos de Yeso",
+  "Actividades",
+  "Trabajo",
+];
+const COLORES_NOTA = [
+  { nombre: "Blanco", hex: "#ffffff" },
+  { nombre: "Azul", hex: "#c4e1fb" },
+  { nombre: "Rosa", hex: "#fbd3e3" },
+  { nombre: "Menta", hex: "#cdf1de" },
+  { nombre: "Lila", hex: "#e3d7f8" },
+  { nombre: "Durazno", hex: "#fddcc6" },
+  { nombre: "Amarillo", hex: "#fff4bd" },
+  { nombre: "Turquesa", hex: "#c8f0f0" },
+];
+let colorElegido = "Blanco";
+
+// Más colores (además de los pasteles de arriba): familias de claro a oscuro.
+// Estos se guardan en la hoja como código "#rrggbb"; los pasteles, por su nombre.
+const PALETA_COLORES = [
+  { titulo: "Más pasteles", colores: ["#e6e6fa", "#ffd6cc", "#e6f7b8", "#d6ecff", "#f3d1f4", "#f5e6cc"] },
+  { titulo: "Rojos", colores: ["#fecaca", "#fca5a5", "#f87171", "#ef4444", "#dc2626", "#991b1b"] },
+  { titulo: "Naranjas", colores: ["#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#9a3412"] },
+  { titulo: "Amarillos", colores: ["#fef08a", "#fde047", "#facc15", "#eab308", "#ca8a04", "#854d0e"] },
+  { titulo: "Verdes", colores: ["#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a", "#166534"] },
+  { titulo: "Turquesas", colores: ["#a5f3fc", "#67e8f9", "#22d3ee", "#06b6d4", "#0891b2", "#155e75"] },
+  { titulo: "Azules", colores: ["#bfdbfe", "#93c5fd", "#60a5fa", "#3b82f6", "#2563eb", "#1e40af"] },
+  { titulo: "Morados", colores: ["#ddd6fe", "#c4b5fd", "#a78bfa", "#8b5cf6", "#7c3aed", "#5b21b6"] },
+  { titulo: "Rosas", colores: ["#fbcfe8", "#f9a8d4", "#f472b6", "#ec4899", "#db2777", "#9d174d"] },
+  { titulo: "Cafés", colores: ["#e7cfb4", "#d2a679", "#b07a4a", "#8b5a2b", "#6b4423", "#3f2a14"] },
+  { titulo: "Grises", colores: ["#f1f5f9", "#cbd5e1", "#94a3b8", "#64748b", "#334155", "#111827"] },
+];
+
+// Acepta el nombre de un pastel ("Rosa") o un código "#rrggbb"
+function hexDeColor(valor) {
+  const v = String(valor || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+  const c = COLORES_NOTA.find((x) => x.nombre === v);
+  return c ? c.hex : "#ffffff";
+}
+
+// Si el color es oscuro, el texto pasa a blanco para que se pueda leer
+function esColorOscuro(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return false;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16));
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.55;
+}
+function aplicarContraste(el, hex) {
+  if (esColorOscuro(hex)) {
+    el.style.setProperty("color", "#fff");
+    el.style.setProperty("--nb-suave", "rgba(255, 255, 255, 0.8)");
+  } else {
+    el.style.removeProperty("color");
+    el.style.removeProperty("--nb-suave");
+  }
+}
+
+// El color elegido se ve de fondo en el formulario mientras escribes la nota
+function elegirColor(valor) {
+  colorElegido = valor;
+  const hex = hexDeColor(valor);
+  notasForm.style.setProperty("--fondo-nota", hex);
+  aplicarContraste(notasForm, hex);
+  let enMuestra = false;
+  notasForm.querySelectorAll(".color-op").forEach((b) => {
+    const activo = b.dataset.color.toLowerCase() === String(valor).toLowerCase();
+    if (activo) enMuestra = true;
+    b.classList.toggle("elegido", activo);
+    b.setAttribute("aria-checked", activo ? "true" : "false");
+  });
+  notasColorPersonal.value = hex;
+  notasPersonal.classList.toggle("elegido", !enMuestra);
+}
+
+function crearMuestraColor(valor, hex, titulo) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "color-op";
+  b.dataset.color = valor;
+  b.title = titulo;
+  b.setAttribute("role", "radio");
+  b.setAttribute("aria-label", titulo);
+  b.style.background = hex;
+  b.addEventListener("click", () => elegirColor(valor));
+  return b;
+}
+
+ETIQUETAS_NOTA.forEach((e) => {
+  const op = document.createElement("option");
+  op.value = e;
+  op.textContent = e;
+  notasEtiqueta.appendChild(op);
+});
+COLORES_NOTA.forEach((c) => notasColores.appendChild(crearMuestraColor(c.nombre, c.hex, c.nombre)));
+PALETA_COLORES.forEach((f) => {
+  const fila = document.createElement("div");
+  fila.className = "paleta-fila";
+  const nombre = document.createElement("span");
+  nombre.className = "paleta-nombre";
+  nombre.textContent = f.titulo;
+  const cont = document.createElement("div");
+  cont.className = "notas-colores";
+  cont.setAttribute("role", "radiogroup");
+  cont.setAttribute("aria-label", f.titulo);
+  f.colores.forEach((hex) => cont.appendChild(crearMuestraColor(hex, hex, f.titulo + " " + hex)));
+  fila.append(nombre, cont);
+  notasPaletaFamilias.appendChild(fila);
+});
+// Selector libre: cualquier color del espectro
+notasColorPersonal.addEventListener("input", () => elegirColor(notasColorPersonal.value.toLowerCase()));
+notasMasColores.addEventListener("click", () => {
+  const abrir = notasPaleta.hidden;
+  notasPaleta.hidden = !abrir;
+  notasMasColores.setAttribute("aria-expanded", abrir ? "true" : "false");
+  notasMasColores.textContent = abrir ? "Menos colores ▴" : "Más colores ▾";
+});
+elegirColor("Blanco");
+
+// Llama al Apps Script para las notas (siempre con la sesión de Google)
+async function llamarNotas(accion, extra) {
+  if (!configurado()) throw new Error("Falta configurar config.js");
+  const idToken = credencialVigente();
+  if (!idToken) throw new Error("Inicia sesión con Google");
+  // text/plain evita el "preflight" de CORS con Apps Script
+  const r = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ token: CONFIG.TOKEN, idToken, accion }, extra || {})),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "Error");
+  return j;
+}
+
+// ----- Fechas de las notas: se guardan como "dd/mm/aaaa hh:mm" -----
+// "dd/mm/aaaa hh:mm" -> "aaaa-mm-ddThh:mm" (formato del campo de fecha y hora); "" si no se entiende
+function fechaAInput(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})[ T](\d{1,2}):(\d{2})/.exec(String(s || "").trim());
+  if (!m) return "";
+  return `${m[3]}-${dos(m[2])}-${dos(m[1])}T${dos(m[4])}:${m[5]}`;
+}
+// "aaaa-mm-ddThh:mm" -> "dd/mm/aaaa hh:mm"; "" si el campo está vacío
+function inputAFecha(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : "";
+}
+function fechaActualInput() {
+  const n = new Date();
+  return `${n.getFullYear()}-${dos(n.getMonth() + 1)}-${dos(n.getDate())}` +
+    `T${dos(n.getHours())}:${dos(n.getMinutes())}`;
+}
+function marcaTiempo(s) {
+  const v = fechaAInput(s);
+  return v ? Date.parse(v) : NaN;
+}
+
+// Muestra u oculta las opciones para crear una nota (el botón "Nueva nota" hace lo contrario)
+function mostrarFormNota(mostrar) {
+  salirModoEdicion();
+  notasForm.hidden = !mostrar;
+  notasNuevaBtn.hidden = mostrar;
+  if (mostrar) {
+    notasFecha.value = fechaActualInput();
+    setEstado(notasEstado, "");
+    notasNombre.focus();
+    notasSnap = notasValores();
+  }
+}
+
+// Vacía el formulario (deja los valores de una nota nueva)
+function limpiarFormNota() {
+  notasTexto.value = "";
+  notasNombre.value = "";
+  notasIdent.value = "";
+  notasEtiqueta.selectedIndex = 0;
+  elegirColor("Blanco");
+  notasFecha.value = fechaActualInput();
+}
+
+// Vuelve el formulario a su lugar normal (arriba de la lista) y a modo "Nueva nota"
+function salirModoEdicion() {
+  if (!notaEditando) return;
+  notaEditando = null;
+  notasForm.classList.remove("modo-editar");
+  notasContenido.insertBefore(notasForm, notasLista);
+  notasFormTitulo.textContent = "Nueva nota";
+  notasGuardar.textContent = "Guardar nota";
+}
+
+// Abre la edición de una nota: el mismo formulario, con sus datos, como ventana encima del panel
+function abrirEdicionNota(n) {
+  if (notaFormSucio() && !window.confirm("Tienes una nota sin guardar. ¿Descartarla para editar esta?")) return;
+
+  salirModoEdicion();
+  notaEditando = n;
+  notasNombre.value = n.nombre === "Sin nombre" ? "" : n.nombre || "";
+  notasEtiqueta.value = ETIQUETAS_NOTA.includes(n.etiqueta) ? n.etiqueta : "General";
+  const c = String(n.color || "").trim();
+  const colorValido = /^#[0-9a-fA-F]{6}$/.test(c) || COLORES_NOTA.some((x) => x.nombre === c);
+  elegirColor(colorValido ? (c.startsWith("#") ? c.toLowerCase() : c) : "Blanco");
+  notasFecha.value = fechaAInput(n.fecha) || fechaActualInput();
+  notasIdent.value = n.identificador || "";
+  notasTexto.value = n.texto || "";
+  notasFormTitulo.textContent = "Editar nota";
+  notasGuardar.textContent = "Guardar cambios";
+  setEstado(notasEstado, "");
+
+  notasForm.hidden = false;
+  notasForm.classList.add("modo-editar");
+  notasCaja.appendChild(notasForm); // al final de la caja: queda por encima de la lista y del submenú
+  notasForm.scrollTop = 0;
+  notasSnap = notasValores();
+  notasNombre.focus();
+}
+
+// Cierra la edición sin guardar
+function cancelarEdicionNota() {
+  limpiarFormNota();
+  mostrarFormNota(false);
+}
+
+// ----- Cambios sin guardar: se pregunta antes de abandonar la edición de una nota -----
+const MENSAJE_ABANDONAR = "Tienes cambios sin guardar. ¿Seguro que quieres abandonar la edición actual?";
+let notasSnap = ""; // valores del formulario de Notas al abrirlo (para saber si se cambió algo)
+
+function notasValores() {
+  return JSON.stringify([
+    notasNombre.value, notasEtiqueta.value, colorElegido, notasFecha.value, notasIdent.value, notasTexto.value,
+  ]);
+}
+// El formulario de Notas está abierto y se cambió algo desde que se abrió
+function notaFormSucio() {
+  return !notasForm.hidden && notasValores() !== notasSnap;
+}
+function confirmarAbandonoNota() {
+  return !notaFormSucio() || window.confirm(MENSAJE_ABANDONAR);
+}
+function hayEdicionSinGuardar() {
+  return notaFormSucio() || zonas.some((z) => z.sucio());
+}
+// Pregunta si hay algo sin guardar; si se acepta, el borrador se descarta
+function confirmarAbandonoEdicion() {
+  if (!hayEdicionSinGuardar()) return true;
+  if (!window.confirm(MENSAJE_ABANDONAR)) return false;
+  if (notaFormSucio()) {
+    limpiarFormNota();
+    mostrarFormNota(false);
+  }
+  zonas.forEach((z) => {
+    if (z.sucio()) z.cancelar();
+  });
+  return true;
+}
+// Cerrar o recargar la página con una nota a medias también avisa
+window.addEventListener("beforeunload", (e) => {
+  if (hayEdicionSinGuardar()) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
+// Fecha de una tarjeta: texto + lápiz para cambiarla
+function dibujarFechaNota(cont, n) {
+  cont.innerHTML = "";
+  const txt = document.createElement("span");
+  txt.textContent = n.fecha;
+  const editar = document.createElement("button");
+  editar.type = "button";
+  editar.className = "tarjeta-editar-fecha";
+  editar.title = "Cambiar fecha y hora";
+  editar.setAttribute("aria-label", "Cambiar fecha y hora de la nota");
+  editar.textContent = "✎";
+  editar.addEventListener("click", () => editarFechaNota(cont, n));
+  cont.append(txt, editar);
+}
+
+function editarFechaNota(cont, n) {
+  cont.innerHTML = "";
+  const inp = document.createElement("input");
+  inp.type = "datetime-local";
+  inp.className = "tarjeta-fecha-input";
+  inp.value = fechaAInput(n.fecha) || fechaActualInput();
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.className = "tarjeta-fecha-ok";
+  ok.textContent = "Guardar";
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "tarjeta-fecha-no";
+  no.textContent = "Cancelar";
+  ok.addEventListener("click", () => guardarFechaNota(n, inp.value, ok));
+  no.addEventListener("click", () => dibujarFechaNota(cont, n));
+  cont.append(inp, ok, no);
+  inp.focus();
+}
+
+async function guardarFechaNota(n, valor, boton) {
+  const fecha = inputAFecha(valor);
+  if (!fecha) {
+    setEstado(notasEstadoLista, "Elige una fecha y hora", "error");
+    return;
+  }
+  boton.disabled = true;
+  setEstado(notasEstadoLista, "Guardando fecha…");
+  try {
+    await llamarNotas("nota_fecha", { id: n.id, fecha });
+    n.fecha = fecha;
+    dibujarNotas();
+    setEstado(notasEstadoLista, "Fecha actualizada ✓", "ok");
+  } catch (e) {
+    boton.disabled = false;
+    setEstado(notasEstadoLista, "Error: " + e.message, "error");
+  }
+}
+
+// Clave de orden del identificador: 0 = número, 1 = palabra, 2 = sin identificador
+function claveIdent(s) {
+  const v = String(s || "").trim();
+  if (!v) return { tipo: 2 };
+  if (/^-?\d+([.,]\d+)?$/.test(v)) return { tipo: 0, num: parseFloat(v.replace(",", ".")) };
+  return { tipo: 1, txt: v };
+}
+
+// Orden de las notas: primero las que tienen identificador numérico (1, 2, 3…), luego las de
+// palabra (A a Z) y al final las que no tienen. Con el mismo identificador (o sin él),
+// la más reciente según su fecha va primero (si la fecha es igual, la última guardada).
+function notasOrdenadas() {
+  const orden = notas.map((n, i) => ({ n, i, t: marcaTiempo(n.fecha), k: claveIdent(n.identificador) }));
+  orden.sort((x, y) => {
+    if (x.k.tipo !== y.k.tipo) return x.k.tipo - y.k.tipo;
+    if (x.k.tipo === 0 && x.k.num !== y.k.num) return x.k.num - y.k.num;
+    if (x.k.tipo === 1) {
+      const c = x.k.txt.localeCompare(y.k.txt, "es", { sensitivity: "base", numeric: true });
+      if (c) return c;
+    }
+    const tx = isNaN(x.t) ? -Infinity : x.t;
+    const ty = isNaN(y.t) ? -Infinity : y.t;
+    return tx === ty ? y.i - x.i : ty - tx;
+  });
+  return orden.map((o) => o.n);
+}
+
+// Agrupa por etiqueta: primero las etiquetas conocidas (en su orden) y luego cualquier otra.
+// Las etiquetas sin notas no se muestran.
+function notasPorEtiqueta(lista) {
+  const mapa = new Map();
+  ETIQUETAS_NOTA.forEach((e) => mapa.set(e, []));
+  lista.forEach((n) => {
+    const e = n.etiqueta || "General";
+    if (!mapa.has(e)) mapa.set(e, []);
+    mapa.get(e).push(n);
+  });
+  return [...mapa].filter(([, l]) => l.length);
+}
+
+function crearTarjetaNota(n) {
+  const hex = hexDeColor(n.color);
+  const tarjeta = document.createElement("div");
+  tarjeta.className = "tarjeta-nota";
+  tarjeta.style.setProperty("--fondo", hex);
+  aplicarContraste(tarjeta, hex);
+  const nombre = document.createElement("div");
+  nombre.className = "tarjeta-nombre";
+  nombre.textContent = n.nombre || "Sin nombre";
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "tarjeta-etiqueta";
+  etiqueta.textContent = n.etiqueta || "General";
+  const meta = document.createElement("div");
+  meta.className = "tarjeta-meta";
+  meta.appendChild(etiqueta);
+  if (n.identificador) {
+    const ident = document.createElement("span");
+    ident.className = "tarjeta-ident";
+    ident.title = "Identificador";
+    ident.textContent = "#" + n.identificador;
+    meta.appendChild(ident);
+  }
+  const fecha = document.createElement("div");
+  fecha.className = "tarjeta-fecha";
+  dibujarFechaNota(fecha, n);
+  const texto = document.createElement("p");
+  texto.className = "tarjeta-texto";
+  texto.textContent = n.texto;
+  const borrar = document.createElement("button");
+  borrar.type = "button";
+  borrar.className = "tarjeta-borrar";
+  borrar.setAttribute("aria-label", "Eliminar nota");
+  borrar.textContent = "×";
+  borrar.addEventListener("click", (e) => {
+    e.stopPropagation();
+    borrarNota(n.id);
+  });
+  tarjeta.append(nombre, meta, fecha, texto, borrar);
+
+  // Tocar la tarjeta en cualquier zona abre su edición (los botones ✎ y × siguen con su función)
+  tarjeta.tabIndex = 0;
+  tarjeta.setAttribute("role", "button");
+  tarjeta.setAttribute("aria-label", "Editar la nota " + (n.nombre || "Sin nombre"));
+  tarjeta.addEventListener("click", (e) => {
+    if (e.target.closest("button, input")) return;
+    if (String(window.getSelection()).length) return; // si estaba seleccionando texto, no se abre
+    abrirEdicionNota(n);
+  });
+  tarjeta.addEventListener("keydown", (e) => {
+    if (e.target === tarjeta && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      abrirEdicionNota(n);
+    }
+  });
+  return tarjeta;
+}
+
+function dibujarNotas() {
+  notasLista.innerHTML = "";
+  if (!notas.length) {
+    const p = document.createElement("p");
+    p.className = "notas-vacio";
+    p.textContent = "Aún no hay notas. ¡Escribe la primera! ✨";
+    notasLista.appendChild(p);
+    cerrarSubmenu();
+    dibujarZonasEtiqueta(); // Actividades y Trabajo usan las mismas notas
+    return;
+  }
+  notasPorEtiqueta(notasOrdenadas()).forEach(([etiqueta, lista]) => {
+    const seccion = document.createElement("section");
+    seccion.className = "notas-grupo";
+
+    const titulo = document.createElement("h3");
+    titulo.className = "notas-grupo-titulo";
+    const nombreEt = document.createElement("span");
+    nombreEt.textContent = etiqueta;
+    const cuenta = document.createElement("span");
+    cuenta.className = "notas-grupo-cuenta";
+    cuenta.textContent = String(lista.length);
+    titulo.append(nombreEt, cuenta);
+
+    // Fila: las primeras 4 notas una al lado de la otra y, si hay más, el botón a la derecha
+    const fila = document.createElement("div");
+    fila.className = "notas-grupo-fila";
+    const tarjetas = document.createElement("div");
+    tarjetas.className = "notas-grupo-cards";
+    lista.slice(0, MAX_FILA_NOTAS).forEach((n) => tarjetas.appendChild(crearTarjetaNota(n)));
+    fila.appendChild(tarjetas);
+    if (lista.length > MAX_FILA_NOTAS) {
+      const mas = document.createElement("button");
+      mas.type = "button";
+      mas.className = "notas-grupo-mas";
+      mas.setAttribute("aria-label", "Ver las " + lista.length + " notas de " + etiqueta);
+      mas.innerHTML =
+        '<span>Ver todas</span><span class="notas-grupo-num"></span>' +
+        '<span class="flecha-mas" aria-hidden="true">›</span>';
+      mas.querySelector(".notas-grupo-num").textContent = "(" + lista.length + ")";
+      mas.addEventListener("click", () => abrirSubmenu(etiqueta));
+      fila.appendChild(mas);
+    }
+
+    seccion.append(titulo, fila);
+    notasLista.appendChild(seccion);
+  });
+  dibujarSubmenu(); // si hay un submenú abierto, se actualiza también
+  dibujarZonasEtiqueta(); // Actividades y Trabajo usan las mismas notas
+}
+
+// Submenú: todas las notas de una etiqueta
+function abrirSubmenu(etiqueta) {
+  etiquetaAbierta = etiqueta;
+  notasSubmenu.hidden = false;
+  dibujarSubmenu();
+  notasSubVolver.focus();
+}
+function cerrarSubmenu() {
+  etiquetaAbierta = null;
+  notasSubmenu.hidden = true;
+  notasSubLista.innerHTML = "";
+}
+function dibujarSubmenu() {
+  if (etiquetaAbierta === null) return;
+  const lista = notasOrdenadas().filter((n) => (n.etiqueta || "General") === etiquetaAbierta);
+  if (!lista.length) {
+    cerrarSubmenu();
+    return;
+  }
+  notasSubTitulo.textContent = etiquetaAbierta + " (" + lista.length + ")";
+  notasSubLista.innerHTML = "";
+  lista.forEach((n) => notasSubLista.appendChild(crearTarjetaNota(n)));
+}
+
+async function cargarNotas() {
+  setEstado(notasEstadoLista, "Cargando…");
+  try {
+    const j = await llamarNotas("nota_listar");
+    notas = Array.isArray(j.notas) ? j.notas : [];
+    notasCargadas = true;
+    dibujarNotas();
+    setEstado(notasEstadoLista, "");
+    if (etiquetaPendiente) irAEtiquetaNotas(etiquetaPendiente);
+  } catch (e) {
+    etiquetaPendiente = null;
+    setEstado(notasEstadoLista, "Error: " + e.message, "error");
+  }
+}
+
+async function agregarNota() {
+  const texto = notasTexto.value.trim();
+  if (!texto) {
+    setEstado(notasEstado, "Escribe algo primero", "error");
+    return;
+  }
+  const nota = {
+    id: String(Date.now()),
+    nombre: notasNombre.value.trim() || "Sin nombre",
+    // La fecha se puede cambiar en el formulario; si queda vacía se usa la actual
+    fecha: inputAFecha(notasFecha.value) || selloFechaHora(),
+    etiqueta: notasEtiqueta.value,
+    texto,
+    color: colorElegido,
+    identificador: notasIdent.value.trim(),
+  };
+  notasGuardar.disabled = true;
+  setEstado(notasEstado, "Guardando…");
+  try {
+    await llamarNotas("nota_agregar", nota);
+    notas.push(nota);
+    limpiarFormNota();
+    dibujarNotas();
+    setEstado(notasEstado, "");
+    mostrarFormNota(false);
+    setEstado(notasEstadoLista, "Guardada ✓", "ok");
+  } catch (e) {
+    setEstado(notasEstado, "Error: " + e.message, "error");
+  } finally {
+    notasGuardar.disabled = false;
+  }
+}
+
+async function editarNota() {
+  const n = notaEditando;
+  if (!n) return;
+  const texto = notasTexto.value.trim();
+  if (!texto) {
+    setEstado(notasEstado, "Escribe algo primero", "error");
+    return;
+  }
+  const cambios = {
+    nombre: notasNombre.value.trim() || "Sin nombre",
+    fecha: inputAFecha(notasFecha.value) || n.fecha || selloFechaHora(),
+    etiqueta: notasEtiqueta.value,
+    texto,
+    color: colorElegido,
+    identificador: notasIdent.value.trim(),
+  };
+  notasGuardar.disabled = true;
+  setEstado(notasEstado, "Guardando…");
+  try {
+    await llamarNotas("nota_editar", Object.assign({ id: n.id }, cambios));
+    Object.assign(n, cambios);
+    limpiarFormNota();
+    mostrarFormNota(false);
+    dibujarNotas();
+    setEstado(notasEstadoLista, "Cambios guardados ✓", "ok");
+  } catch (e) {
+    setEstado(notasEstado, "Error: " + e.message, "error");
+  } finally {
+    notasGuardar.disabled = false;
+  }
+}
+
+async function borrarNota(id) {
+  if (!window.confirm("¿Eliminar esta nota?")) return;
+  setEstado(notasEstadoLista, "Eliminando…");
+  try {
+    await llamarNotas("nota_borrar", { id });
+    notas = notas.filter((n) => n.id !== id);
+    dibujarNotas();
+    setEstado(notasEstadoLista, "Eliminada", "ok");
+  } catch (e) {
+    setEstado(notasEstadoLista, "Error: " + e.message, "error");
+  }
+}
+
+// Muestra el aviso de inicio de sesión o el contenido, según la sesión
+function actualizarPanelNotas() {
+  actualizarPanelProyectos(); // la sesión también afecta a los paneles de Proyectos y Galería
+  actualizarPanelGaleria();
+  actualizarPanelEjercicio(); // y al de Ejercicio
+  actualizarPanelDiario(); // y al de Diario
+  actualizarPanelDeudas(); // y al de Deudas
+  actualizarPanelInformacion(); // y al de Información Primordial
+  actualizarPanelComandos(); // y al de Comandos
+  actualizarPanelBazar(); // y al de Bazar
+  actualizarPanelHoy(); // y al de Día de Hoy
+  actualizarZonasEtiqueta(); // y a las zonas de Actividades y Trabajo
+  if (typeof actualizarNotarios === "function") actualizarNotarios(); // y a los Notarios de todas las zonas
+  actualizarCalendarioSesion(); // y a los datos del calendario
+  if (panelNotas.hidden) return;
+  const dentro = sesionVigente();
+  notasSinSesion.hidden = dentro;
+  notasContenido.hidden = !dentro;
+  if (dentro) {
+    if (!notasCargadas) cargarNotas();
+  } else {
+    notasCargadas = false;
+    notas = [];
+  }
+}
+
+// Se llama al entrar a la página de Notas (desde mostrarSeccion)
+function entrarNotas() {
+  panelNotas.hidden = false;
+  mostrarFormNota(false); // al abrir, primero se ve la lista de notas
+  cerrarSubmenu();
+  actualizarPanelNotas();
+}
+
+// Desde la barra lateral o el acceso directo: cierra la barra y cambia a la página de Notas
+function abrirNotas() {
+  etiquetaPendiente = null;
+  cerrarLateral();
+  mostrarSeccion("seccion-notas");
+}
+
+// Notas ya es una página: aquí solo se sale de la edición o del submenú (se cambia de página con el menú)
+function cerrarNotas() {
+  if (notaEditando) cancelarEdicionNota();
+  cerrarSubmenu();
+}
+
+btnNotas.addEventListener("click", abrirNotas);
+// El botón «Notas» del menú principal (data-seccion="seccion-notas") cambia de página como los demás botones
+// El botón «Ejercicio» del menú principal (btn-menu-ejercicio) abre su propio calendario (más abajo)
+document.getElementById("notas-cerrar").addEventListener("click", cerrarNotas);
+document.getElementById("notas-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarNotas();
+  else actualizarPanelNotas();
+});
+document.getElementById("notas-ir-login").addEventListener("click", () => {
+  cerrarNotas();
+  abrirLateral();
+});
+notasGuardar.addEventListener("click", () => (notaEditando ? editarNota() : agregarNota()));
+notasNuevaBtn.addEventListener("click", () => mostrarFormNota(true));
+notasCancelar.addEventListener("click", () => {
+  if (!confirmarAbandonoNota()) return;
+  if (notaEditando) cancelarEdicionNota();
+  else {
+    limpiarFormNota(); // si había algo escrito y se aceptó abandonarlo, se descarta
+    mostrarFormNota(false);
+  }
+});
+notasSubVolver.addEventListener("click", cerrarSubmenu);
+// Tocar el fondo oscuro (fuera de la caja) cierra el panel; Esc también
+panelNotas.addEventListener("click", (e) => {
+  if (e.target === panelNotas) cerrarNotas();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !panelNotas.hidden) {
+    // Esc cierra primero la edición, luego el submenú y, si no hay, el panel de notas
+    if (notaEditando) {
+      if (confirmarAbandonoNota()) cancelarEdicionNota();
+    } else if (etiquetaAbierta !== null) cerrarSubmenu();
+    else cerrarNotas();
+  }
+});
+
+// ---------- Proyectos (hoja «Proyectos» de Google Sheets; imágenes en imgbb) ----------
+const btnProyectos = document.getElementById("btn-proyectos");
+const panelProyectos = document.getElementById("panel-proyectos");
+const proySinSesion = document.getElementById("proy-sin-sesion");
+const proyContenido = document.getElementById("proy-contenido");
+const proyGrid = document.getElementById("proy-grid");
+const proyEstadoLista = document.getElementById("proy-estado-lista");
+const proyForm = document.getElementById("proy-form");
+const proyFormTitulo = document.getElementById("proy-form-titulo");
+const proyVista = document.getElementById("proy-vista");
+const proyElegirImg = document.getElementById("proy-elegir-img");
+const proyQuitarImg = document.getElementById("proy-quitar-img");
+const proyArchivo = document.getElementById("proy-archivo");
+const proyNombre = document.getElementById("proy-nombre");
+const proyFecha = document.getElementById("proy-fecha");
+const proyDescripcion = document.getElementById("proy-descripcion");
+const proyLinks = document.getElementById("proy-links");
+const proyLinksVista = document.getElementById("proy-links-vista");
+const proyGuardar = document.getElementById("proy-guardar");
+const proyCancelar = document.getElementById("proy-cancelar");
+const proyBorrar = document.getElementById("proy-borrar");
+const proyEstado = document.getElementById("proy-estado");
+
+let proyectos = []; // [{ id, nombre, fecha, descripcion, imagen, links }]
+let proyectosCargados = false;
+let proyectoEditando = null; // proyecto abierto en el formulario (null = proyecto nuevo)
+let proyImagenUrl = ""; // imagen actual del proyecto (URL de imgbb)
+let proyImagenNueva = null; // { base64, vista } cuando se eligió una imagen que aún no se sube
+const MAX_LADO_IMAGEN = 1600; // las fotos se reducen a este tamaño antes de subirlas
+
+// Más recientes primero (según su fecha)
+function proyectosOrdenados() {
+  const orden = proyectos.map((p, i) => ({ p, i, t: marcaTiempo(p.fecha) }));
+  orden.sort((x, y) => {
+    const tx = isNaN(x.t) ? -Infinity : x.t;
+    const ty = isNaN(y.t) ? -Infinity : y.t;
+    return tx === ty ? y.i - x.i : ty - tx;
+  });
+  return orden.map((o) => o.p);
+}
+
+// ----- Links: uno por línea en la hoja y en el formulario -----
+function enlacesDeTexto(t) {
+  return String(t || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+// Solo se enlazan direcciones http(s) (o dominios sin "https://"); lo demás se muestra como texto
+function hrefSeguro(s) {
+  if (/^https?:\/\/\S+$/i.test(s)) return s;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s) && /^[^\s\/]+\.[^\s\/]{2,}(\/\S*)?$/.test(s)) return "https://" + s;
+  return "";
+}
+function dibujarLinksProyecto() {
+  proyLinksVista.innerHTML = "";
+  enlacesDeTexto(proyLinks.value).forEach((l) => {
+    const href = hrefSeguro(l);
+    const el = document.createElement(href ? "a" : "span");
+    if (href) {
+      el.href = href;
+      el.target = "_blank";
+      el.rel = "noopener noreferrer";
+    }
+    el.textContent = l;
+    proyLinksVista.appendChild(el);
+  });
+}
+proyLinks.addEventListener("input", dibujarLinksProyecto);
+
+// ----- Imagen: se reduce en el navegador y el Apps Script la sube a imgbb -----
+function leerImagenReducida(archivo) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(archivo);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, MAX_LADO_IMAGEN / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * k));
+      const h = Math.max(1, Math.round(img.naturalHeight * k));
+      const lienzo = document.createElement("canvas");
+      lienzo.width = w;
+      lienzo.height = h;
+      const ctx = lienzo.getContext("2d");
+      ctx.fillStyle = "#fff"; // las transparencias quedan en blanco al guardar como JPG
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const vista = lienzo.toDataURL("image/jpeg", 0.85);
+      resolve({ vista, base64: vista.split(",")[1] });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer la imagen"));
+    };
+    img.src = url;
+  });
+}
+
+function imagenValida(u) {
+  return /^https?:\/\/\S+$/i.test(String(u || ""));
+}
+
+function dibujarVistaImagen() {
+  proyVista.innerHTML = "";
+  const src = proyImagenNueva ? proyImagenNueva.vista : proyImagenUrl;
+  if (src && (proyImagenNueva || imagenValida(src))) {
+    const img = document.createElement("img");
+    img.alt = "Imagen del proyecto";
+    img.referrerPolicy = "no-referrer";
+    img.src = src;
+    proyVista.appendChild(img);
+  } else {
+    proyVista.textContent = "Sin imagen";
+  }
+  proyQuitarImg.hidden = !(proyImagenNueva || proyImagenUrl);
+  proyElegirImg.textContent = proyImagenNueva || proyImagenUrl ? "Cambiar imagen" : "Elegir imagen";
+}
+
+proyElegirImg.addEventListener("click", () => proyArchivo.click());
+proyQuitarImg.addEventListener("click", () => {
+  proyImagenNueva = null;
+  proyImagenUrl = "";
+  proyArchivo.value = "";
+  dibujarVistaImagen();
+});
+proyArchivo.addEventListener("change", async () => {
+  const archivo = proyArchivo.files && proyArchivo.files[0];
+  if (!archivo) return;
+  setEstado(proyEstado, "Preparando imagen…");
+  try {
+    proyImagenNueva = await leerImagenReducida(archivo);
+    dibujarVistaImagen();
+    setEstado(proyEstado, "");
+  } catch (e) {
+    setEstado(proyEstado, "Error: " + e.message, "error");
+  }
+  proyArchivo.value = "";
+});
+
+// ----- Cuadrícula -----
+function crearTileProyecto(p) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "proy-tile";
+  b.setAttribute("aria-label", "Editar el proyecto " + (p.nombre || "Sin nombre"));
+  const vacio = () => {
+    const v = document.createElement("span");
+    v.className = "proy-tile-vacio";
+    v.setAttribute("aria-hidden", "true");
+    v.textContent = "🖼️";
+    return v;
+  };
+  if (imagenValida(p.imagen)) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.src = p.imagen;
+    img.addEventListener("error", () => img.replaceWith(vacio()));
+    b.appendChild(img);
+  } else {
+    b.appendChild(vacio());
+  }
+  const nombre = document.createElement("span");
+  nombre.className = "proy-tile-nombre";
+  nombre.textContent = p.nombre || "Sin nombre";
+  b.appendChild(nombre);
+  b.addEventListener("click", () => abrirFormProyecto(p));
+  return b;
+}
+
+function dibujarProyectos() {
+  proyGrid.innerHTML = "";
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "proy-tile proy-tile-nuevo";
+  nuevo.setAttribute("aria-label", "Agregar un proyecto nuevo");
+  nuevo.innerHTML = '<span class="proy-mas" aria-hidden="true">+</span><span>Nuevo proyecto</span>';
+  nuevo.addEventListener("click", () => abrirFormProyecto(null));
+  proyGrid.appendChild(nuevo);
+  proyectosOrdenados().forEach((p) => proyGrid.appendChild(crearTileProyecto(p)));
+}
+
+// ----- Ventana de edición -----
+function abrirFormProyecto(p) {
+  proyectoEditando = p;
+  proyImagenUrl = p ? p.imagen || "" : "";
+  proyImagenNueva = null;
+  proyFormTitulo.textContent = p ? "Editar proyecto" : "Nuevo proyecto";
+  proyNombre.value = p ? (p.nombre === "Sin nombre" ? "" : p.nombre || "") : "";
+  proyFecha.value = (p && fechaAInput(p.fecha)) || fechaActualInput();
+  proyDescripcion.value = p ? p.descripcion || "" : "";
+  proyLinks.value = p ? enlacesDeTexto(p.links).join("\n") : "";
+  proyGuardar.textContent = p ? "Guardar cambios" : "Guardar proyecto";
+  proyBorrar.hidden = !p;
+  setEstado(proyEstado, "");
+  dibujarVistaImagen();
+  dibujarLinksProyecto();
+  proyForm.hidden = false;
+  proyForm.scrollTop = 0;
+  proyNombre.focus();
+}
+
+function cerrarFormProyecto() {
+  proyForm.hidden = true;
+  proyectoEditando = null;
+  proyImagenNueva = null;
+  proyImagenUrl = "";
+  proyArchivo.value = "";
+}
+
+async function guardarProyecto() {
+  const nombre = proyNombre.value.trim();
+  if (!nombre) {
+    setEstado(proyEstado, "Escribe un nombre", "error");
+    return;
+  }
+  proyGuardar.disabled = true;
+  try {
+    // 1) Si se eligió una imagen nueva, se sube a imgbb a través del Apps Script
+    if (proyImagenNueva) {
+      setEstado(proyEstado, "Subiendo imagen…");
+      const j = await llamarNotas("proyecto_imagen", { imagen: proyImagenNueva.base64 });
+      proyImagenUrl = j.url;
+      proyImagenNueva = null; // si el guardado falla, no se vuelve a subir
+    }
+    // 2) Se guarda el proyecto en la hoja
+    setEstado(proyEstado, "Guardando…");
+    const datos = {
+      nombre,
+      fecha: inputAFecha(proyFecha.value) || (proyectoEditando && proyectoEditando.fecha) || selloFechaHora(),
+      descripcion: proyDescripcion.value.trim(),
+      imagen: proyImagenUrl,
+      links: enlacesDeTexto(proyLinks.value).join("\n"),
+    };
+    if (proyectoEditando) {
+      await llamarNotas("proyecto_editar", Object.assign({ id: proyectoEditando.id }, datos));
+      Object.assign(proyectoEditando, datos);
+    } else {
+      const nuevo = Object.assign({ id: String(Date.now()) }, datos);
+      await llamarNotas("proyecto_agregar", nuevo);
+      proyectos.push(nuevo);
+    }
+    cerrarFormProyecto();
+    dibujarProyectos();
+    setEstado(proyEstadoLista, "Guardado ✓", "ok");
+  } catch (e) {
+    setEstado(proyEstado, "Error: " + e.message, "error");
+  } finally {
+    proyGuardar.disabled = false;
+  }
+}
+
+async function borrarProyecto() {
+  const p = proyectoEditando;
+  if (!p || !window.confirm("¿Eliminar este proyecto? (la imagen seguirá en imgbb)")) return;
+  proyBorrar.disabled = true;
+  setEstado(proyEstado, "Eliminando…");
+  try {
+    await llamarNotas("proyecto_borrar", { id: p.id });
+    proyectos = proyectos.filter((x) => x.id !== p.id);
+    cerrarFormProyecto();
+    dibujarProyectos();
+    setEstado(proyEstadoLista, "Eliminado", "ok");
+  } catch (e) {
+    setEstado(proyEstado, "Error: " + e.message, "error");
+  } finally {
+    proyBorrar.disabled = false;
+  }
+}
+
+async function cargarProyectos() {
+  setEstado(proyEstadoLista, "Cargando…");
+  try {
+    const j = await llamarNotas("proyecto_listar");
+    proyectos = Array.isArray(j.proyectos) ? j.proyectos : [];
+    proyectosCargados = true;
+    dibujarProyectos();
+    setEstado(proyEstadoLista, "");
+  } catch (e) {
+    setEstado(proyEstadoLista, "Error: " + e.message, "error");
+  }
+}
+
+function actualizarPanelProyectos() {
+  if (panelProyectos.hidden) return;
+  const dentro = sesionVigente();
+  proySinSesion.hidden = dentro;
+  proyContenido.hidden = !dentro;
+  if (dentro) {
+    if (!proyectosCargados) cargarProyectos();
+  } else {
+    proyectosCargados = false;
+    proyectos = [];
+    cerrarFormProyecto();
+  }
+}
+
+function abrirProyectos() {
+  cerrarLateral();
+  panelProyectos.hidden = false;
+  cerrarFormProyecto();
+  actualizarPanelProyectos();
+}
+function cerrarProyectos() {
+  cerrarFormProyecto();
+  panelProyectos.hidden = true;
+}
+
+btnProyectos.addEventListener("click", abrirProyectos);
+document.getElementById("proy-cerrar").addEventListener("click", cerrarProyectos);
+document.getElementById("proy-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarProyectos();
+  else actualizarPanelProyectos();
+});
+document.getElementById("proy-ir-login").addEventListener("click", () => {
+  cerrarProyectos();
+  abrirLateral();
+});
+proyGuardar.addEventListener("click", guardarProyecto);
+proyCancelar.addEventListener("click", cerrarFormProyecto);
+proyBorrar.addEventListener("click", borrarProyecto);
+// Tocar el fondo oscuro (fuera de la caja) cierra el panel; Esc cierra primero la ventana de edición
+panelProyectos.addEventListener("click", (e) => {
+  if (e.target === panelProyectos) cerrarProyectos();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !panelProyectos.hidden) {
+    if (!proyForm.hidden) cerrarFormProyecto();
+    else cerrarProyectos();
+  }
+});
+
+// ---------- Notas: abrir el submenú de una etiqueta ----------
+// Muestra el submenú con todas las notas de una etiqueta (o avisa si todavía no hay ninguna)
+function irAEtiquetaNotas(etiqueta) {
+  etiquetaPendiente = null;
+  if (notas.some((n) => (n.etiqueta || "General") === etiqueta)) abrirSubmenu(etiqueta);
+  else setEstado(notasEstadoLista, "Aún no hay notas con la etiqueta «" + etiqueta + "»");
+}
+
+
+// ---------- Galería (hoja «Galeria» de Google Sheets; imágenes en imgbb) ----------
+const ETIQUETAS_GALERIA = ["General", "Programacion", "Contenido Digital", "Perfiles"];
+
+const panelGaleria = document.getElementById("panel-galeria");
+const galSinSesion = document.getElementById("gal-sin-sesion");
+const galContenido = document.getElementById("gal-contenido");
+const galFiltros = document.getElementById("gal-filtros");
+const galGrid = document.getElementById("gal-grid");
+const galEstadoLista = document.getElementById("gal-estado-lista");
+const galForm = document.getElementById("gal-form");
+const galFormTitulo = document.getElementById("gal-form-titulo");
+const galVista = document.getElementById("gal-vista");
+const galElegirImg = document.getElementById("gal-elegir-img");
+const galArchivo = document.getElementById("gal-archivo");
+const galEtiqueta = document.getElementById("gal-etiqueta");
+const galDescripcion = document.getElementById("gal-descripcion");
+const galGuardar = document.getElementById("gal-guardar");
+const galBorrar = document.getElementById("gal-borrar");
+const galEstado = document.getElementById("gal-estado");
+
+let galeria = []; // [{ id, imagen, descripcion, etiqueta }]
+let galeriaCargada = false;
+let galeriaEditando = null; // imagen abierta en el formulario (null = imagen nueva)
+let galImagenUrl = ""; // imagen actual (URL de imgbb)
+let galImagenNueva = null; // { base64, vista } cuando se eligió una imagen que aún no se sube
+let galFiltro = "Todas";
+
+ETIQUETAS_GALERIA.forEach((e) => {
+  const op = document.createElement("option");
+  op.value = e;
+  op.textContent = e;
+  galEtiqueta.appendChild(op);
+});
+
+// Las más recientes (las últimas de la hoja) primero, y solo las de la etiqueta elegida
+function galeriaVisible() {
+  const lista = galeria.slice().reverse();
+  return galFiltro === "Todas" ? lista : lista.filter((g) => (g.etiqueta || "General") === galFiltro);
+}
+
+function dibujarFiltrosGaleria() {
+  galFiltros.innerHTML = "";
+  ["Todas"].concat(ETIQUETAS_GALERIA).forEach((e) => {
+    const n = e === "Todas" ? galeria.length : galeria.filter((g) => (g.etiqueta || "General") === e).length;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "gal-chip" + (e === galFiltro ? " activo" : "");
+    b.setAttribute("aria-pressed", e === galFiltro ? "true" : "false");
+    b.textContent = e + " (" + n + ")";
+    b.addEventListener("click", () => {
+      galFiltro = e;
+      dibujarGaleria();
+    });
+    galFiltros.appendChild(b);
+  });
+}
+
+function crearTileGaleria(g) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "proy-tile";
+  b.setAttribute("aria-label", "Editar la imagen " + (g.descripcion || g.etiqueta || ""));
+  const vacio = () => {
+    const v = document.createElement("span");
+    v.className = "proy-tile-vacio";
+    v.setAttribute("aria-hidden", "true");
+    v.textContent = "🖼️";
+    return v;
+  };
+  if (imagenValida(g.imagen)) {
+    const img = document.createElement("img");
+    img.alt = g.descripcion || "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.src = g.imagen;
+    img.addEventListener("error", () => img.replaceWith(vacio()));
+    b.appendChild(img);
+  } else {
+    b.appendChild(vacio());
+  }
+  const pildora = document.createElement("span");
+  pildora.className = "gal-pildora";
+  pildora.textContent = g.etiqueta || "General";
+  b.appendChild(pildora);
+  if (g.descripcion) {
+    const d = document.createElement("span");
+    d.className = "proy-tile-nombre";
+    d.textContent = g.descripcion;
+    b.appendChild(d);
+  }
+  b.addEventListener("click", () => abrirFormGaleria(g));
+  return b;
+}
+
+function dibujarGaleria() {
+  dibujarFiltrosGaleria();
+  galGrid.innerHTML = "";
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "proy-tile proy-tile-nuevo";
+  nuevo.setAttribute("aria-label", "Agregar una imagen nueva");
+  nuevo.innerHTML = '<span class="proy-mas" aria-hidden="true">+</span><span>Nueva imagen</span>';
+  nuevo.addEventListener("click", () => abrirFormGaleria(null));
+  galGrid.appendChild(nuevo);
+  galeriaVisible().forEach((g) => galGrid.appendChild(crearTileGaleria(g)));
+}
+
+// ----- Ventana de edición -----
+function dibujarVistaGaleria() {
+  galVista.innerHTML = "";
+  const src = galImagenNueva ? galImagenNueva.vista : galImagenUrl;
+  if (src && (galImagenNueva || imagenValida(src))) {
+    const img = document.createElement("img");
+    img.alt = "Imagen de la galería";
+    img.referrerPolicy = "no-referrer";
+    img.src = src;
+    galVista.appendChild(img);
+  } else {
+    galVista.textContent = "Sin imagen";
+  }
+  galElegirImg.textContent = galImagenNueva || galImagenUrl ? "Cambiar imagen" : "Elegir imagen";
+}
+
+galElegirImg.addEventListener("click", () => galArchivo.click());
+galArchivo.addEventListener("change", async () => {
+  const archivo = galArchivo.files && galArchivo.files[0];
+  if (!archivo) return;
+  setEstado(galEstado, "Preparando imagen…");
+  try {
+    galImagenNueva = await leerImagenReducida(archivo);
+    dibujarVistaGaleria();
+    setEstado(galEstado, "");
+  } catch (e) {
+    setEstado(galEstado, "Error: " + e.message, "error");
+  }
+  galArchivo.value = "";
+});
+
+function abrirFormGaleria(g) {
+  galeriaEditando = g;
+  galImagenUrl = g ? g.imagen || "" : "";
+  galImagenNueva = null;
+  galFormTitulo.textContent = g ? "Editar imagen" : "Nueva imagen";
+  // Al agregar, se preselecciona la etiqueta del filtro activo
+  const sugerida = g ? g.etiqueta : galFiltro;
+  galEtiqueta.value = ETIQUETAS_GALERIA.includes(sugerida) ? sugerida : "General";
+  galDescripcion.value = g ? g.descripcion || "" : "";
+  galGuardar.textContent = g ? "Guardar cambios" : "Guardar imagen";
+  galBorrar.hidden = !g;
+  setEstado(galEstado, "");
+  dibujarVistaGaleria();
+  galForm.hidden = false;
+  galForm.scrollTop = 0;
+  galElegirImg.focus();
+}
+
+function cerrarFormGaleria() {
+  galForm.hidden = true;
+  galeriaEditando = null;
+  galImagenNueva = null;
+  galImagenUrl = "";
+  galArchivo.value = "";
+}
+
+async function guardarGaleria() {
+  if (!galImagenNueva && !galImagenUrl) {
+    setEstado(galEstado, "Elige una imagen", "error");
+    return;
+  }
+  galGuardar.disabled = true;
+  try {
+    if (galImagenNueva) {
+      setEstado(galEstado, "Subiendo imagen…");
+      const j = await llamarNotas("proyecto_imagen", { imagen: galImagenNueva.base64 });
+      galImagenUrl = j.url;
+      galImagenNueva = null; // si el guardado falla, no se vuelve a subir
+    }
+    setEstado(galEstado, "Guardando…");
+    const datos = {
+      imagen: galImagenUrl,
+      descripcion: galDescripcion.value.trim(),
+      etiqueta: galEtiqueta.value,
+    };
+    if (galeriaEditando) {
+      await llamarNotas("galeria_editar", Object.assign({ id: galeriaEditando.id }, datos));
+      Object.assign(galeriaEditando, datos);
+    } else {
+      const nueva = Object.assign({ id: String(Date.now()) }, datos);
+      await llamarNotas("galeria_agregar", nueva);
+      galeria.push(nueva);
+    }
+    cerrarFormGaleria();
+    dibujarGaleria();
+    setEstado(galEstadoLista, "Guardado ✓", "ok");
+  } catch (e) {
+    setEstado(galEstado, "Error: " + e.message, "error");
+  } finally {
+    galGuardar.disabled = false;
+  }
+}
+
+async function borrarGaleria() {
+  const g = galeriaEditando;
+  if (!g || !window.confirm("¿Eliminar esta imagen de la galería? (seguirá en imgbb)")) return;
+  galBorrar.disabled = true;
+  setEstado(galEstado, "Eliminando…");
+  try {
+    await llamarNotas("galeria_borrar", { id: g.id });
+    galeria = galeria.filter((x) => x.id !== g.id);
+    cerrarFormGaleria();
+    dibujarGaleria();
+    setEstado(galEstadoLista, "Eliminada", "ok");
+  } catch (e) {
+    setEstado(galEstado, "Error: " + e.message, "error");
+  } finally {
+    galBorrar.disabled = false;
+  }
+}
+
+async function cargarGaleria() {
+  setEstado(galEstadoLista, "Cargando…");
+  try {
+    const j = await llamarNotas("galeria_listar");
+    galeria = Array.isArray(j.galeria) ? j.galeria : [];
+    galeriaCargada = true;
+    dibujarGaleria();
+    setEstado(galEstadoLista, "");
+  } catch (e) {
+    setEstado(galEstadoLista, "Error: " + e.message, "error");
+  }
+}
+
+function actualizarPanelGaleria() {
+  if (panelGaleria.hidden) return;
+  const dentro = sesionVigente();
+  galSinSesion.hidden = dentro;
+  galContenido.hidden = !dentro;
+  if (dentro) {
+    if (!galeriaCargada) cargarGaleria();
+  } else {
+    galeriaCargada = false;
+    galeria = [];
+    cerrarFormGaleria();
+  }
+}
+
+function abrirGaleria() {
+  cerrarLateral();
+  panelGaleria.hidden = false;
+  cerrarFormGaleria();
+  actualizarPanelGaleria();
+}
+function cerrarGaleria() {
+  cerrarFormGaleria();
+  panelGaleria.hidden = true;
+}
+
+document.getElementById("btn-galeria").addEventListener("click", abrirGaleria);
+document.getElementById("gal-cerrar").addEventListener("click", cerrarGaleria);
+document.getElementById("gal-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarGaleria();
+  else actualizarPanelGaleria();
+});
+document.getElementById("gal-ir-login").addEventListener("click", () => {
+  cerrarGaleria();
+  abrirLateral();
+});
+galGuardar.addEventListener("click", guardarGaleria);
+document.getElementById("gal-cancelar").addEventListener("click", cerrarFormGaleria);
+galBorrar.addEventListener("click", borrarGaleria);
+// Tocar el fondo oscuro cierra el panel; Esc cierra primero la ventana de edición
+panelGaleria.addEventListener("click", (e) => {
+  if (e.target === panelGaleria) cerrarGaleria();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !panelGaleria.hidden) {
+    if (!galForm.hidden) cerrarFormGaleria();
+    else cerrarGaleria();
+  }
+});
+
+// ---------- Actividades y Trabajo (hoja «Notas» con una etiqueta fija) ----------
+// Cada zona vive dentro de su sección del menú superior y tiene su propio botón de crear, con el
+// mismo formulario de las notas, pero la etiqueta ya viene fija (Actividades o Trabajo).
+// Usan la misma lista `notas` y la misma hoja que el panel de Notas: lo que se crea aquí también
+// aparece allí, en su fila de etiqueta, y lo que se cambia en un lado se ve en el otro.
+// Las etiquetas deben estar también en ETIQUETAS_NOTA (arriba) y en el Apps Script.
+const ZONAS_ETIQUETA = [
+  {
+    seccion: "actividades", etiqueta: "Actividades", datos: "tus actividades",
+    crear: "+ Crear actividad", nuevo: "Nueva actividad", editar: "Editar actividad",
+    guardar: "Guardar actividad", marcador: "Escribe una actividad nueva…",
+    vacio: "Aún no hay actividades. ¡Crea la primera! ✨", borrar: "¿Eliminar esta actividad?",
+  },
+  {
+    seccion: "trabajo", etiqueta: "Trabajo", datos: "tus trabajos",
+    crear: "+ Crear trabajo", nuevo: "Nuevo trabajo", editar: "Editar trabajo",
+    guardar: "Guardar trabajo", marcador: "Escribe un trabajo nuevo…",
+    vacio: "Aún no hay trabajos. ¡Crea el primero! ✨", borrar: "¿Eliminar este trabajo?",
+    vista: true, // al tocar una tarjeta se abre primero una nota sencilla (la tuerca abre la edición)
+    finalizar: true, // cada tarjeta lleva el botón «Marcar tarea como finalizada» (pasa al Diario)
+  },
+  {
+    // Sección propia (se abre desde el botón «Pedidos de Yeso» de la barra lateral, no desde el menú superior)
+    seccion: "pedidos-yeso", etiqueta: "Pedidos de Yeso", datos: "tus pedidos de yeso",
+    crear: "+ Crear pedido", nuevo: "Nuevo pedido", editar: "Editar pedido",
+    guardar: "Guardar pedido", marcador: "Escribe un pedido nuevo…",
+    vacio: "Aún no hay pedidos de yeso. ¡Crea el primero! ✨", borrar: "¿Eliminar este pedido?",
+  },
+];
+
+// Arma una zona: formulario (igual al de Notas), botón de crear y lista de tarjetas de su etiqueta
+function crearZonaEtiqueta(cfg) {
+  const cont = document.getElementById("zona-" + cfg.seccion);
+  cont.innerHTML = `
+    <div class="zona-sin-sesion notas-aviso-sesion" hidden>
+      <p>Inicia sesión con tu cuenta de Google para ver y guardar ${cfg.datos}.</p>
+      <button type="button" class="notas-btn zona-ir-login">Iniciar sesión</button>
+    </div>
+    <div class="zona-contenido" hidden>
+      <div class="notas-barra">
+        <button type="button" class="notas-btn zona-nueva-btn">${cfg.crear}</button>
+        <button type="button" class="notas-btn-icono zona-actualizar"
+                title="Volver a leer ${cfg.datos} de Google Sheets" aria-label="Actualizar ${cfg.datos}">&#8635;</button>
+        <span class="notas-estado zona-estado-lista"></span>
+      </div>
+      <div class="notas-nueva zona-form" hidden>
+        <h3 class="notas-form-titulo zona-form-titulo">${cfg.nuevo}</h3>
+        <div class="notas-superior">
+          <label class="notas-campo notas-campo-etiqueta">
+            <span>Etiqueta</span>
+            <input class="zona-etiqueta-fija" type="text" value="${cfg.etiqueta}" readonly tabindex="-1" />
+          </label>
+          <div class="notas-campo notas-campo-color">
+            <span>Color</span>
+            <div class="notas-colores zona-colores" role="radiogroup" aria-label="Color"></div>
+            <button type="button" class="notas-enlace zona-mas-colores" aria-expanded="false">Más colores ▾</button>
+            <div class="notas-paleta zona-paleta" hidden>
+              <div class="zona-paleta-familias"></div>
+              <label class="notas-personal zona-personal">
+                <input class="zona-color-personal" type="color" value="#ffffff" aria-label="Elegir cualquier color" />
+                <span>Elegir cualquier otro color</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="notas-campos notas-campos-par">
+          <label class="notas-campo">
+            <span>Fecha y hora</span>
+            <input class="zona-fecha" type="datetime-local" />
+          </label>
+          <label class="notas-campo">
+            <span>Identificador (1, 2, 3… o una palabra)</span>
+            <input class="zona-ident" type="text" maxlength="40" placeholder="Opcional" autocomplete="off" />
+          </label>
+        </div>
+        <label class="notas-campo notas-campo-nombre">
+          <span>Nombre</span>
+          <input class="zona-nombre" type="text" maxlength="80" placeholder="Nombre" autocomplete="off" />
+        </label>
+        <textarea class="zona-texto" rows="4" maxlength="5000"
+                  placeholder="${cfg.marcador}" aria-label="${cfg.nuevo}"></textarea>
+        <div class="notas-fila">
+          <button type="button" class="notas-btn zona-guardar">${cfg.guardar}</button>
+          <button type="button" class="notas-btn notas-btn-sec zona-cancelar">Cancelar</button>
+          <span class="notas-estado zona-estado"></span>
+        </div>
+      </div>
+      <div class="notas-grid zona-lista"></div>
+    </div>`;
+
+  const q = (s) => cont.querySelector(s);
+  const z = {
+    cfg,
+    seccion: document.getElementById(cfg.seccion),
+    sinSesion: q(".zona-sin-sesion"),
+    contenido: q(".zona-contenido"),
+    nuevoBtn: q(".zona-nueva-btn"),
+    estadoLista: q(".zona-estado-lista"),
+    form: q(".zona-form"),
+    titulo: q(".zona-form-titulo"),
+    nombre: q(".zona-nombre"),
+    colores: q(".zona-colores"),
+    masColores: q(".zona-mas-colores"),
+    paleta: q(".zona-paleta"),
+    familias: q(".zona-paleta-familias"),
+    personal: q(".zona-personal"),
+    colorPersonal: q(".zona-color-personal"),
+    fecha: q(".zona-fecha"),
+    ident: q(".zona-ident"),
+    texto: q(".zona-texto"),
+    guardarBtn: q(".zona-guardar"),
+    estado: q(".zona-estado"),
+    lista: q(".zona-lista"),
+    editando: null, // nota que se está editando (null = nueva)
+    color: "Blanco",
+    snap: "", // valores del formulario al abrirlo (para saber si se cambió algo)
+  };
+
+  // ----- Color (igual que en Notas: pasteles, paleta completa y selector libre) -----
+  function elegirColorZona(valor) {
+    z.color = valor;
+    const hex = hexDeColor(valor);
+    z.form.style.setProperty("--fondo-nota", hex);
+    aplicarContraste(z.form, hex);
+    let enMuestra = false;
+    z.form.querySelectorAll(".color-op").forEach((b) => {
+      const activo = b.dataset.color.toLowerCase() === String(valor).toLowerCase();
+      if (activo) enMuestra = true;
+      b.classList.toggle("elegido", activo);
+      b.setAttribute("aria-checked", activo ? "true" : "false");
+    });
+    z.colorPersonal.value = hex;
+    z.personal.classList.toggle("elegido", !enMuestra);
+  }
+  function muestraColorZona(valor, hex, titulo) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "color-op";
+    b.dataset.color = valor;
+    b.title = titulo;
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-label", titulo);
+    b.style.background = hex;
+    b.addEventListener("click", () => elegirColorZona(valor));
+    return b;
+  }
+  COLORES_NOTA.forEach((c) => z.colores.appendChild(muestraColorZona(c.nombre, c.hex, c.nombre)));
+  PALETA_COLORES.forEach((f) => {
+    const fila = document.createElement("div");
+    fila.className = "paleta-fila";
+    const nombre = document.createElement("span");
+    nombre.className = "paleta-nombre";
+    nombre.textContent = f.titulo;
+    const grupo = document.createElement("div");
+    grupo.className = "notas-colores";
+    grupo.setAttribute("role", "radiogroup");
+    grupo.setAttribute("aria-label", f.titulo);
+    f.colores.forEach((hex) => grupo.appendChild(muestraColorZona(hex, hex, f.titulo + " " + hex)));
+    fila.append(nombre, grupo);
+    z.familias.appendChild(fila);
+  });
+  z.colorPersonal.addEventListener("input", () => elegirColorZona(z.colorPersonal.value.toLowerCase()));
+  z.masColores.addEventListener("click", () => {
+    const abrir = z.paleta.hidden;
+    z.paleta.hidden = !abrir;
+    z.masColores.setAttribute("aria-expanded", abrir ? "true" : "false");
+    z.masColores.textContent = abrir ? "Menos colores ▴" : "Más colores ▾";
+  });
+  elegirColorZona("Blanco");
+
+  // ----- Nota sencilla (solo nombre, fecha y descripción); la tuerca abre la edición -----
+  let vista = null;
+  if (cfg.vista) {
+    vista = document.createElement("div");
+    vista.className = "zona-vista";
+    vista.hidden = true;
+    vista.innerHTML = `
+      <div class="zona-vista-caja" role="dialog" aria-modal="true">
+        <div class="zona-vista-botones">
+          <button type="button" class="zona-vista-btn zona-vista-cerrar" aria-label="Cerrar" title="Cerrar">&times;</button>
+          <button type="button" class="zona-vista-btn zona-vista-tuerca" aria-label="Modificar" title="Modificar">&#9881;&#65039;</button>
+        </div>
+        <h3 class="zona-vista-nombre"></h3>
+        <div class="zona-vista-fecha"></div>
+        <p class="zona-vista-texto"></p>
+      </div>`;
+    cont.appendChild(vista);
+  }
+  let viendo = null;
+  function cerrarVista() {
+    if (!vista) return;
+    vista.hidden = true;
+    viendo = null;
+  }
+  function abrirVista(n) {
+    viendo = n;
+    const caja = vista.querySelector(".zona-vista-caja");
+    const hex = hexDeColor(n.color);
+    caja.style.setProperty("--fondo", hex);
+    aplicarContraste(caja, hex);
+    vista.querySelector(".zona-vista-nombre").textContent = n.nombre || "Sin nombre";
+    vista.querySelector(".zona-vista-fecha").textContent = n.fecha || "";
+    vista.querySelector(".zona-vista-texto").textContent = n.texto || "";
+    vista.hidden = false;
+    vista.querySelector(".zona-vista-cerrar").focus();
+  }
+  // Al tocar una tarjeta: nota sencilla (si la zona la usa) o edición directa
+  function abrirTarjeta(n) {
+    if (vista) abrirVista(n);
+    else abrirEdicion(n);
+  }
+  if (vista) {
+    vista.querySelector(".zona-vista-cerrar").addEventListener("click", cerrarVista);
+    vista.querySelector(".zona-vista-tuerca").addEventListener("click", () => {
+      const n = viendo;
+      cerrarVista();
+      if (n) abrirEdicion(n);
+    });
+    // Tocar el fondo oscuro (fuera de la nota) la cierra; Esc también
+    vista.addEventListener("click", (e) => {
+      if (e.target === vista) cerrarVista();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !vista.hidden) cerrarVista();
+    });
+  }
+
+  // ----- Formulario -----
+  function limpiarForm() {
+    z.texto.value = "";
+    z.nombre.value = "";
+    z.ident.value = "";
+    elegirColorZona("Blanco");
+    z.fecha.value = fechaActualInput();
+  }
+  // Muestra u oculta el formulario (el botón de crear hace lo contrario); siempre vuelve a modo «nuevo»
+  function mostrarForm(mostrar) {
+    z.editando = null;
+    z.titulo.textContent = cfg.nuevo;
+    z.guardarBtn.textContent = cfg.guardar;
+    z.form.hidden = !mostrar;
+    z.nuevoBtn.hidden = mostrar;
+    if (mostrar) {
+      z.fecha.value = fechaActualInput();
+      setEstado(z.estado, "");
+      z.nombre.focus();
+      z.snap = z.valores();
+    }
+  }
+  function cancelar() {
+    limpiarForm();
+    mostrarForm(false);
+  }
+
+  // Tocar una tarjeta: el mismo formulario, con sus datos, aquí mismo en la zona
+  function abrirEdicion(n) {
+    if (z.sucio() && !window.confirm("Tienes cambios sin guardar. ¿Descartarlos para editar este?")) return;
+    z.editando = n;
+    z.nombre.value = n.nombre === "Sin nombre" ? "" : n.nombre || "";
+    const c = String(n.color || "").trim();
+    const colorValido = /^#[0-9a-fA-F]{6}$/.test(c) || COLORES_NOTA.some((x) => x.nombre === c);
+    elegirColorZona(colorValido ? (c.startsWith("#") ? c.toLowerCase() : c) : "Blanco");
+    z.fecha.value = fechaAInput(n.fecha) || fechaActualInput();
+    z.ident.value = n.identificador || "";
+    z.texto.value = n.texto || "";
+    z.titulo.textContent = cfg.editar;
+    z.guardarBtn.textContent = "Guardar cambios";
+    setEstado(z.estado, "");
+    z.form.hidden = false;
+    z.nuevoBtn.hidden = true;
+    z.form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    z.snap = z.valores();
+    z.nombre.focus();
+  }
+
+  // ----- Guardar (nueva o editada) y borrar -----
+  async function guardar() {
+    const texto = z.texto.value.trim();
+    if (!texto) {
+      setEstado(z.estado, "Escribe algo primero", "error");
+      return;
+    }
+    const n = z.editando;
+    const datos = {
+      nombre: z.nombre.value.trim() || "Sin nombre",
+      fecha: inputAFecha(z.fecha.value) || (n && n.fecha) || selloFechaHora(),
+      etiqueta: cfg.etiqueta, // siempre la de la zona
+      texto,
+      color: z.color,
+      identificador: z.ident.value.trim(),
+    };
+    z.guardarBtn.disabled = true;
+    setEstado(z.estado, "Guardando…");
+    try {
+      if (n) {
+        await llamarNotas("nota_editar", Object.assign({ id: n.id }, datos));
+        Object.assign(n, datos);
+      } else {
+        const nota = Object.assign({ id: String(Date.now()) }, datos);
+        await llamarNotas("nota_agregar", nota);
+        notas.push(nota);
+      }
+      limpiarForm();
+      mostrarForm(false);
+      dibujarNotas(); // redibuja el panel de Notas y todas las zonas
+      setEstado(z.estadoLista, n ? "Cambios guardados ✓" : "Guardada ✓", "ok");
+    } catch (e) {
+      setEstado(z.estado, "Error: " + e.message, "error");
+    } finally {
+      z.guardarBtn.disabled = false;
+    }
+  }
+
+  async function borrar(id) {
+    if (!window.confirm(cfg.borrar)) return;
+    setEstado(z.estadoLista, "Eliminando…");
+    try {
+      await llamarNotas("nota_borrar", { id });
+      notas = notas.filter((n) => n.id !== id);
+      if (z.editando && z.editando.id === id) cancelar();
+      dibujarNotas();
+      setEstado(z.estadoLista, "Eliminada", "ok");
+    } catch (e) {
+      setEstado(z.estadoLista, "Error: " + e.message, "error");
+    }
+  }
+
+  // ----- Finalizar un trabajo: sale de Notas y entra al Diario, en el día de hoy -----
+  async function finalizar(n, botonSi) {
+    const ahora = new Date();
+    const fecha = claveFecha(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    botonSi.disabled = true;
+    setEstado(z.estadoLista, "Finalizando…");
+    try {
+      await llamarNotas("trabajo_finalizar", { id: n.id, fecha });
+      notas = notas.filter((x) => x.id !== n.id);
+      if (z.editando && z.editando.id === n.id) cancelar();
+      dibujarNotas(); // el trabajo desaparece de Trabajo y de la lista de Notas
+      registrarTerminadoEnDiario({
+        id: n.id,
+        nombre: n.nombre || "Sin nombre",
+        fecha,
+        descripcion: n.texto || "",
+        terminado: true,
+      });
+      setEstado(z.estadoLista, "Trabajo finalizado ✓ (ya está en el Diario)", "ok");
+    } catch (e) {
+      botonSi.disabled = false;
+      setEstado(z.estadoLista, "Error: " + e.message, "error");
+    }
+  }
+
+  // ----- Lista de tarjetas (solo las de esta etiqueta) -----
+  function crearTarjeta(n) {
+    const hex = hexDeColor(n.color);
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "tarjeta-nota";
+    tarjeta.style.setProperty("--fondo", hex);
+    aplicarContraste(tarjeta, hex);
+    const nombre = document.createElement("div");
+    nombre.className = "tarjeta-nombre";
+    nombre.textContent = n.nombre || "Sin nombre";
+    tarjeta.appendChild(nombre);
+    if (n.identificador) {
+      const meta = document.createElement("div");
+      meta.className = "tarjeta-meta";
+      const ident = document.createElement("span");
+      ident.className = "tarjeta-ident";
+      ident.title = "Identificador";
+      ident.textContent = "#" + n.identificador;
+      meta.appendChild(ident);
+      tarjeta.appendChild(meta);
+    }
+    const fecha = document.createElement("div");
+    fecha.className = "tarjeta-fecha";
+    fecha.textContent = n.fecha;
+    const texto = document.createElement("p");
+    texto.className = "tarjeta-texto";
+    texto.textContent = n.texto;
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "tarjeta-borrar";
+    x.setAttribute("aria-label", "Eliminar");
+    x.textContent = "×";
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      borrar(n.id);
+    });
+    tarjeta.append(fecha, texto, x);
+
+    // Botón «Marcar tarea como finalizada»: pide confirmación y pasa el trabajo al Diario
+    if (cfg.finalizar) {
+      const fin = document.createElement("div");
+      fin.className = "tarjeta-finalizar";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tarjeta-fin-btn";
+      btn.textContent = "✔ Marcar tarea como finalizada";
+      const conf = document.createElement("div");
+      conf.className = "tarjeta-fin-conf";
+      conf.hidden = true;
+      const aviso = document.createElement("p");
+      aviso.className = "tarjeta-fin-aviso";
+      aviso.textContent = "¿Seguro? Se quitará de Trabajo y pasará al Diario con la fecha de hoy.";
+      const si = document.createElement("button");
+      si.type = "button";
+      si.className = "tarjeta-fin-si";
+      si.textContent = "Sí, finalizar";
+      const no = document.createElement("button");
+      no.type = "button";
+      no.className = "tarjeta-fin-no";
+      no.textContent = "Cancelar";
+      conf.append(aviso, si, no);
+      btn.addEventListener("click", () => {
+        btn.hidden = true;
+        conf.hidden = false;
+      });
+      no.addEventListener("click", () => {
+        conf.hidden = true;
+        btn.hidden = false;
+      });
+      si.addEventListener("click", () => finalizar(n, si));
+      // Tocar esta zona no abre la nota
+      fin.addEventListener("click", (e) => e.stopPropagation());
+      fin.append(btn, conf);
+      tarjeta.appendChild(fin);
+    }
+
+    // Tocar la tarjeta en cualquier zona abre su edición (la × sigue con su función)
+    tarjeta.tabIndex = 0;
+    tarjeta.setAttribute("role", "button");
+    tarjeta.setAttribute("aria-label", (vista ? "Ver " : "Editar ") + (n.nombre || "Sin nombre"));
+    tarjeta.addEventListener("click", (e) => {
+      if (e.target.closest("button, input")) return;
+      if (String(window.getSelection()).length) return; // si estaba seleccionando texto, no se abre
+      abrirTarjeta(n);
+    });
+    tarjeta.addEventListener("keydown", (e) => {
+      if (e.target === tarjeta && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        abrirTarjeta(n);
+      }
+    });
+    return tarjeta;
+  }
+
+  z.dibujar = function () {
+    z.lista.innerHTML = "";
+    const lista = notasOrdenadas().filter((n) => (n.etiqueta || "General") === cfg.etiqueta);
+    if (!lista.length) {
+      const p = document.createElement("p");
+      p.className = "notas-vacio";
+      p.textContent = cfg.vacio;
+      z.lista.appendChild(p);
+      return;
+    }
+    lista.forEach((n) => z.lista.appendChild(crearTarjeta(n)));
+  };
+
+  // Aviso de inicio de sesión o contenido, según la sesión (devuelve si hay sesión)
+  z.actualizar = function () {
+    const dentro = sesionVigente();
+    z.sinSesion.hidden = dentro;
+    z.contenido.hidden = !dentro;
+    if (!dentro) {
+      cerrarVista();
+      cancelar();
+    }
+    return dentro;
+  };
+
+  z.valores = () => JSON.stringify([z.nombre.value, z.color, z.fecha.value, z.ident.value, z.texto.value]);
+  z.sucio = () => !z.form.hidden && z.valores() !== z.snap;
+  z.cancelar = cancelar;
+  const cancelarConAviso = () => {
+    if (!z.sucio() || window.confirm(MENSAJE_ABANDONAR)) cancelar();
+  };
+
+  z.nuevoBtn.addEventListener("click", () => mostrarForm(true));
+  z.guardarBtn.addEventListener("click", guardar);
+  z.form.querySelector(".zona-cancelar").addEventListener("click", cancelarConAviso);
+  z.form.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") cancelarConAviso();
+  });
+  q(".zona-actualizar").addEventListener("click", () => {
+    if (sesionVigente()) cargarNotasZonas();
+    else z.actualizar();
+  });
+  q(".zona-ir-login").addEventListener("click", abrirLateral);
+  return z;
+}
+
+const zonas = ZONAS_ETIQUETA.map(crearZonaEtiqueta);
+let cargandoZonas = false;
+
+// Lee las notas de la hoja (las mismas que usa el panel de Notas) y redibuja todo
+async function cargarNotasZonas() {
+  if (cargandoZonas) return;
+  cargandoZonas = true;
+  zonas.forEach((z) => setEstado(z.estadoLista, "Cargando…"));
+  try {
+    const j = await llamarNotas("nota_listar");
+    notas = Array.isArray(j.notas) ? j.notas : [];
+    notasCargadas = true;
+    dibujarNotas();
+    zonas.forEach((z) => setEstado(z.estadoLista, ""));
+  } catch (e) {
+    zonas.forEach((z) => setEstado(z.estadoLista, "Error: " + e.message, "error"));
+  } finally {
+    cargandoZonas = false;
+  }
+}
+
+function dibujarZonasEtiqueta() {
+  zonas.forEach((z) => z.dibujar());
+}
+
+// Se llama cuando cambia la sesión (desde actualizarPanelNotas)
+function actualizarZonasEtiqueta() {
+  const dentro = sesionVigente();
+  zonas.forEach((z) => z.actualizar());
+  if (!dentro) {
+    notasCargadas = false;
+    notas = [];
+    dibujarZonasEtiqueta();
+  } else if (!notasCargadas && zonas.some((z) => !z.seccion.hidden)) {
+    cargarNotasZonas();
+  }
+}
+
+// Botón «Pedidos de Yeso» de la barra lateral: abre su propia sección (aparte de Notas)
+document.getElementById("btn-yeso").addEventListener("click", () => {
+  cerrarLateral();
+  mostrarSeccion("pedidos-yeso");
+  const z = zonas.find((x) => x.cfg.seccion === "pedidos-yeso");
+  if (z.actualizar() && !notasCargadas) cargarNotasZonas();
+  else z.dibujar();
+});
+
+// Al abrir una de estas secciones se muestra su zona (y se leen las notas si aún no se han leído)
+botonesMenu.forEach((b) =>
+  b.addEventListener("click", () => {
+    const z = zonas.find((x) => x.cfg.seccion === b.dataset.seccion);
+    if (!z) return;
+    if (z.actualizar() && !notasCargadas) cargarNotasZonas();
+    else z.dibujar();
+  })
+);
+
+// ---------- Color del día (recuadro del calendario y fondo del panel) ----------
+// Usa los mismos colores que las notas. El color de cada día se guarda en la hoja «Colores».
+const popColores = document.getElementById("pop-colores");
+const popMasColores = document.getElementById("pop-mas-colores");
+const popPaleta = document.getElementById("pop-paleta");
+const popPaletaFamilias = document.getElementById("pop-paleta-familias");
+const popPersonal = document.getElementById("pop-personal");
+const popColorPersonal = document.getElementById("pop-color-personal");
+const popColorQuitar = document.getElementById("pop-color-quitar");
+const popColorEstado = document.getElementById("pop-color-estado");
+
+// Pinta el panel con el color del día (sin color = negro de siempre) y marca la muestra elegida
+function pintarPanelDia(valor) {
+  const c = String(valor || "").trim();
+  const hex = c ? hexDeColor(c) : "";
+  if (hex) {
+    const oscuro = esColorOscuro(hex);
+    popover.style.setProperty("--pop-fondo", hex);
+    popover.style.setProperty("--pop-titulo", oscuro ? "#ffffff" : "#2b2140");
+    popover.style.setProperty("--pop-cierre", oscuro ? "#f0eafc" : "#4a3f66");
+  } else {
+    ["--pop-fondo", "--pop-titulo", "--pop-cierre"].forEach((p) => popover.style.removeProperty(p));
+  }
+  let enMuestra = false;
+  document.querySelectorAll("#pop-color .color-op").forEach((b) => {
+    const activo = !!c && b.dataset.color.toLowerCase() === c.toLowerCase();
+    if (activo) enMuestra = true;
+    b.classList.toggle("elegido", activo);
+    b.setAttribute("aria-checked", activo ? "true" : "false");
+  });
+  popColorPersonal.value = hex || "#ffffff";
+  popPersonal.classList.toggle("elegido", !!c && !enMuestra);
+  popColorQuitar.hidden = !c;
+}
+
+function plegarPaletaDia() {
+  popPaleta.hidden = true;
+  popMasColores.setAttribute("aria-expanded", "false");
+  popMasColores.textContent = "Más colores ▾";
+}
+
+// Guarda el color de un día en la hoja «Colores» (color vacío = quitarlo)
+async function guardarColorDia(fecha, color) {
+  if (!configurado()) throw new Error("Falta configurar config.js");
+  const idToken = credencialVigente();
+  if (!idToken) {
+    abrirLateral();
+    throw new Error("Inicia sesión con Google para guardar");
+  }
+  // text/plain evita el "preflight" de CORS con Apps Script
+  const r = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CONFIG.TOKEN, idToken, accion: "calendario_color", fecha, color }),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "Error al guardar");
+}
+
+let secuenciaColorDia = 0;
+// Cambia el color del día: se ve al instante y, si no se puede guardar, vuelve al anterior
+async function cambiarColorDia(fecha, valor) {
+  const anterior = String((datos[fecha] || {}).color || "");
+  const orden = ++secuenciaColorDia;
+  datos[fecha] = datos[fecha] || {};
+  datos[fecha].color = valor;
+  pintarPanelDia(valor);
+  dibujarCalendario();
+  setEstado(popColorEstado, "Guardando…");
+  try {
+    await guardarColorDia(fecha, valor);
+    if (orden === secuenciaColorDia) setEstado(popColorEstado, "Guardado ✓", "ok");
+  } catch (e) {
+    if (orden !== secuenciaColorDia) return;
+    datos[fecha] = datos[fecha] || {};
+    datos[fecha].color = anterior;
+    if (seleccion === fecha) pintarPanelDia(anterior);
+    dibujarCalendario();
+    setEstado(popColorEstado, "Error: " + e.message, "error");
+  }
+}
+
+function muestraColorDia(valor, hex, titulo) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "color-op";
+  b.dataset.color = valor;
+  b.title = titulo;
+  b.setAttribute("role", "radio");
+  b.setAttribute("aria-label", titulo);
+  b.style.background = hex;
+  b.addEventListener("click", () => {
+    if (seleccion) cambiarColorDia(seleccion, valor);
+  });
+  return b;
+}
+COLORES_NOTA.forEach((c) => popColores.appendChild(muestraColorDia(c.nombre, c.hex, c.nombre)));
+PALETA_COLORES.forEach((f) => {
+  const fila = document.createElement("div");
+  fila.className = "paleta-fila";
+  const nombre = document.createElement("span");
+  nombre.className = "paleta-nombre";
+  nombre.textContent = f.titulo;
+  const grupo = document.createElement("div");
+  grupo.className = "notas-colores";
+  grupo.setAttribute("role", "radiogroup");
+  grupo.setAttribute("aria-label", f.titulo);
+  f.colores.forEach((hex) => grupo.appendChild(muestraColorDia(hex, hex, f.titulo + " " + hex)));
+  fila.append(nombre, grupo);
+  popPaletaFamilias.appendChild(fila);
+});
+// Selector libre: mientras se arrastra solo se ve; el color se guarda al soltar
+popColorPersonal.addEventListener("input", () => pintarPanelDia(popColorPersonal.value.toLowerCase()));
+popColorPersonal.addEventListener("change", () => {
+  if (seleccion) cambiarColorDia(seleccion, popColorPersonal.value.toLowerCase());
+});
+popColorQuitar.addEventListener("click", () => {
+  if (seleccion) cambiarColorDia(seleccion, "");
+});
+popMasColores.addEventListener("click", () => {
+  const abrir = popPaleta.hidden;
+  popPaleta.hidden = !abrir;
+  popMasColores.setAttribute("aria-expanded", abrir ? "true" : "false");
+  popMasColores.textContent = abrir ? "Menos colores ▴" : "Más colores ▾";
+});
+
+// ---------- Ejercicio (hoja «Ejercicio» de Google Sheets) ----------
+// Calendario aparte del principal: cada día guarda los ejercicios que hiciste (Nombre | Fecha | Descripcion | Id).
+const ejEl = (id) => document.getElementById(id);
+const panelEj = ejEl("panel-ejercicio");
+const ejSinSesion = ejEl("ej-sin-sesion");
+const ejContenido = ejEl("ej-contenido");
+const ejEstado = ejEl("ej-estado");
+const ejSelMes = ejEl("ej-mes");
+const ejSelAnio = ejEl("ej-anio");
+const ejAnterior = ejEl("ej-anterior");
+const ejSiguiente = ejEl("ej-siguiente");
+const ejCuad = ejEl("ej-cuadricula");
+const ejDiaPanel = ejEl("ej-dia");
+const ejDiaTitulo = ejEl("ej-dia-titulo");
+const ejDiaEstado = ejEl("ej-dia-estado");
+const ejChips = ejEl("ej-chips");
+const ejForm = ejEl("ej-form");
+const ejFormTitulo = ejEl("ej-form-titulo");
+const ejNombre = ejEl("ej-nombre");
+const ejDescripcion = ejEl("ej-descripcion");
+const ejGuardar = ejEl("ej-guardar");
+const ejBorrar = ejEl("ej-borrar");
+const ejFormEstado = ejEl("ej-form-estado");
+
+let ejercicios = []; // [{ id, nombre, fecha: "AAAA-MM-DD", descripcion }]
+let ejCargados = false;
+let ejMes = new Date().getMonth();
+let ejAnio = new Date().getFullYear();
+let ejDia = null; // día abierto en el submenú
+let ejEditando = null; // ejercicio abierto en la ventana (null = ejercicio nuevo)
+
+MESES.forEach((n, i) => ejSelMes.add(new Option(n, i)));
+for (let a = ANIO_MIN; a <= ANIO_MAX; a++) ejSelAnio.add(new Option(a, a));
+
+const ejDeDia = (fecha) => ejercicios.filter((e) => e.fecha === fecha);
+
+// ----- Calendario de ejercicio (igual al principal, pero con sus propios datos) -----
+function dibujarCalendarioEj() {
+  ejSelMes.value = ejMes;
+  ejSelAnio.value = ejAnio;
+  ejAnterior.disabled = ejAnio === ANIO_MIN && ejMes === 0;
+  ejSiguiente.disabled = ejAnio === ANIO_MAX && ejMes === 11;
+  ejCuad.innerHTML = "";
+  DIAS.forEach((d) => {
+    const el = document.createElement("div");
+    el.className = "cal-dia-semana";
+    el.textContent = d;
+    ejCuad.appendChild(el);
+  });
+  const ahora = new Date();
+  const primerDia = (new Date(ejAnio, ejMes, 1).getDay() + 6) % 7;
+  const diasEnMes = new Date(ejAnio, ejMes + 1, 0).getDate();
+  for (let i = 0; i < primerDia; i++) {
+    const vacio = document.createElement("div");
+    vacio.className = "cal-dia vacio";
+    ejCuad.appendChild(vacio);
+  }
+  for (let d = 1; d <= diasEnMes; d++) {
+    const fecha = claveFecha(ejAnio, ejMes, d);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "cal-dia";
+    el.textContent = d;
+    el.dataset.fecha = fecha;
+    if ((primerDia + d - 1) % 7 >= 5) el.classList.add("finde");
+    if (d === ahora.getDate() && ejMes === ahora.getMonth() && ejAnio === ahora.getFullYear()) el.classList.add("hoy");
+    if (fecha === ejDia) el.classList.add("seleccionado");
+    if (ejDeDia(fecha).length) el.classList.add("con-datos");
+    el.addEventListener("click", () => abrirDiaEj(fecha));
+    ejCuad.appendChild(el);
+  }
+}
+
+function ejCambiarMes(delta) {
+  ejMes += delta;
+  if (ejMes < 0) { ejMes = 11; ejAnio--; }
+  if (ejMes > 11) { ejMes = 0; ejAnio++; }
+  ejAnio = Math.max(ANIO_MIN, Math.min(ANIO_MAX, ejAnio));
+  dibujarCalendarioEj();
+}
+
+// ----- Submenú del día: un botón cuadrado por ejercicio + un "+" para añadir -----
+function dibujarChipsEj() {
+  ejChips.innerHTML = "";
+  ejDeDia(ejDia).forEach((e) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip";
+    b.title = e.nombre;
+    b.setAttribute("aria-label", "Ver o editar el ejercicio " + e.nombre);
+    b.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">💪</span><span class="ej-chip-nombre"></span>';
+    b.querySelector(".ej-chip-nombre").textContent = e.nombre;
+    b.addEventListener("click", () => abrirFormEj(e));
+    ejChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chip-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir un ejercicio");
+  nuevo.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">+</span><span class="ej-chip-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormEj(null));
+  ejChips.appendChild(nuevo);
+}
+
+function abrirDiaEj(fecha) {
+  ejDia = fecha;
+  ejDiaTitulo.textContent = textoFecha(fecha);
+  setEstado(ejDiaEstado, "");
+  dibujarChipsEj();
+  ejDiaPanel.hidden = false;
+  dibujarCalendarioEj();
+}
+function cerrarDiaEj() {
+  cerrarFormEj();
+  ejDiaPanel.hidden = true;
+  ejDia = null;
+  dibujarCalendarioEj();
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormEj(e) {
+  ejEditando = e;
+  ejFormTitulo.textContent = e ? "Editar ejercicio" : "Nuevo ejercicio";
+  ejNombre.value = e ? e.nombre : "";
+  ejDescripcion.value = e ? e.descripcion : "";
+  ejBorrar.hidden = !e;
+  setEstado(ejFormEstado, "");
+  ejForm.hidden = false;
+  ejNombre.focus();
+}
+function cerrarFormEj() {
+  ejForm.hidden = true;
+  ejEditando = null;
+}
+
+async function guardarEj() {
+  const nombre = ejNombre.value.trim();
+  if (!nombre) {
+    setEstado(ejFormEstado, "Escribe el nombre del ejercicio", "error");
+    return;
+  }
+  const editando = ejEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const e = { id, nombre, fecha: editando ? editando.fecha : ejDia, descripcion: ejDescripcion.value.trim() };
+  ejGuardar.disabled = true;
+  setEstado(ejFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "ejercicio_editar" : "ejercicio_agregar", e);
+    if (editando) ejercicios = ejercicios.map((x) => (x.id === id ? e : x));
+    else ejercicios.push(e);
+    cerrarFormEj();
+    dibujarChipsEj();
+    dibujarCalendarioEj();
+  } catch (err) {
+    setEstado(ejFormEstado, "Error: " + err.message, "error");
+  } finally {
+    ejGuardar.disabled = false;
+  }
+}
+
+async function borrarEj() {
+  const e = ejEditando;
+  if (!e || !window.confirm("¿Eliminar el ejercicio «" + e.nombre + "»?")) return;
+  ejBorrar.disabled = true;
+  setEstado(ejFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("ejercicio_borrar", { id: e.id });
+    ejercicios = ejercicios.filter((x) => x.id !== e.id);
+    cerrarFormEj();
+    dibujarChipsEj();
+    dibujarCalendarioEj();
+  } catch (err) {
+    setEstado(ejFormEstado, "Error: " + err.message, "error");
+  } finally {
+    ejBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarEjercicios() {
+  setEstado(ejEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("ejercicio_listar");
+    ejercicios = Array.isArray(j.ejercicios) ? j.ejercicios : [];
+    ejCargados = true;
+    setEstado(ejEstado, "");
+    dibujarCalendarioEj();
+    if (ejDia) dibujarChipsEj();
+    // El Diario también muestra los ejercicios hechos cada día
+    dibujarCalendarioDi();
+    if (diDia) dibujarChipsDi();
+  } catch (err) {
+    setEstado(ejEstado, "Error: " + err.message, "error");
+  }
+}
+
+function actualizarPanelEjercicio() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla (el Diario también usa estos ejercicios)
+    ejCargados = false;
+    ejercicios = [];
+  }
+  if (panelEj.hidden) return;
+  const dentro = sesionVigente();
+  ejSinSesion.hidden = dentro;
+  ejContenido.hidden = !dentro;
+  if (dentro) {
+    if (!ejCargados) cargarEjercicios();
+  } else {
+    ejCargados = false;
+    ejercicios = [];
+    cerrarDiaEj();
+  }
+}
+
+// Se llama al entrar a la página de Ejercicio (desde mostrarSeccion)
+function entrarEjercicio() {
+  const ahora = new Date();
+  ejMes = ahora.getMonth(); // siempre abre en el mes actual
+  ejAnio = ahora.getFullYear();
+  ejDia = null;
+  ejDiaPanel.hidden = true;
+  cerrarFormEj();
+  panelEj.hidden = false;
+  dibujarCalendarioEj();
+  actualizarPanelEjercicio();
+}
+// Ejercicio ya es una página: aquí solo se cierran el formulario y el submenú del día
+function cerrarEjercicio() {
+  cerrarFormEj();
+  ejDiaPanel.hidden = true;
+  ejDia = null;
+}
+
+ejEl("ej-cerrar").addEventListener("click", cerrarEjercicio);
+ejEl("ej-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarEjercicios();
+  else actualizarPanelEjercicio();
+});
+ejEl("ej-ir-login").addEventListener("click", () => {
+  cerrarEjercicio();
+  abrirLateral();
+});
+ejAnterior.addEventListener("click", () => ejCambiarMes(-1));
+ejSiguiente.addEventListener("click", () => ejCambiarMes(1));
+ejEl("ej-hoy").addEventListener("click", () => {
+  const ahora = new Date();
+  ejMes = ahora.getMonth();
+  ejAnio = ahora.getFullYear();
+  dibujarCalendarioEj();
+});
+ejSelMes.addEventListener("change", () => { ejMes = Number(ejSelMes.value); dibujarCalendarioEj(); });
+ejSelAnio.addEventListener("change", () => { ejAnio = Number(ejSelAnio.value); dibujarCalendarioEj(); });
+ejEl("ej-dia-volver").addEventListener("click", cerrarDiaEj);
+ejGuardar.addEventListener("click", guardarEj);
+ejEl("ej-cancelar").addEventListener("click", cerrarFormEj);
+ejBorrar.addEventListener("click", borrarEj);
+// Esc cierra primero la ventana y luego el submenú del día
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelEj.hidden) return;
+  if (!ejForm.hidden) cerrarFormEj();
+  else if (!ejDiaPanel.hidden) cerrarDiaEj();
+});
+
+// ---------- Diario (hoja «Diario» de Google Sheets) ----------
+// Calendario aparte del principal: cada día guarda los diarios que hiciste (Nombre | Fecha | Descripcion | Id).
+const diEl = (id) => document.getElementById(id);
+const panelDi = diEl("panel-diario");
+const diSinSesion = diEl("di-sin-sesion");
+const diContenido = diEl("di-contenido");
+const diEstado = diEl("di-estado");
+const diSelMes = diEl("di-mes");
+const diSelAnio = diEl("di-anio");
+const diAnterior = diEl("di-anterior");
+const diSiguiente = diEl("di-siguiente");
+const diCuad = diEl("di-cuadricula");
+const diDiaPanel = diEl("di-dia");
+const diDiaTitulo = diEl("di-dia-titulo");
+const diDiaEstado = diEl("di-dia-estado");
+const diChips = diEl("di-chips");
+const diForm = diEl("di-form");
+const diFormTitulo = diEl("di-form-titulo");
+const diNombre = diEl("di-nombre");
+const diDescripcion = diEl("di-descripcion");
+const diGuardar = diEl("di-guardar");
+const diBorrar = diEl("di-borrar");
+const diFormEstado = diEl("di-form-estado");
+const diEjSub = diEl("di-ejercicios");
+const diEjTitulo = diEl("di-ej-titulo");
+const diEjChips = diEl("di-ej-chips");
+const diEjDetalle = diEl("di-ej-detalle");
+
+let diarios = []; // [{ id, nombre, fecha: "AAAA-MM-DD", descripcion }]
+let diCargados = false;
+let diMes = new Date().getMonth();
+let diAnio = new Date().getFullYear();
+let diDia = null; // día abierto en el submenú
+let diEditando = null; // anotación abierto en la ventana (null = anotación nuevo)
+
+// El Diario solo se puede explorar del 2 de febrero de 1999 al 2 de febrero de 2099
+const DI_FECHA_MIN = "1999-02-02";
+const DI_FECHA_MAX = "2099-02-02";
+const DI_ANIO_MIN = Number(DI_FECHA_MIN.slice(0, 4));
+const DI_ANIO_MAX = Number(DI_FECHA_MAX.slice(0, 4));
+
+MESES.forEach((n, i) => diSelMes.add(new Option(n, i)));
+for (let a = DI_ANIO_MIN; a <= DI_ANIO_MAX; a++) diSelAnio.add(new Option(a, a));
+
+const diFechaValida = (fecha) => fecha >= DI_FECHA_MIN && fecha <= DI_FECHA_MAX;
+// Un mes se puede ver si al menos uno de sus días está dentro del rango
+function diMesValido(a, m) {
+  const ultimo = new Date(a, m + 1, 0).getDate();
+  return claveFecha(a, m, ultimo) >= DI_FECHA_MIN && claveFecha(a, m, 1) <= DI_FECHA_MAX;
+}
+// Si el mes/año elegido queda fuera del rango, se lleva al más cercano permitido
+function ajustarMesDi() {
+  if (claveFecha(diAnio, diMes, 1) > DI_FECHA_MAX) {
+    diAnio = DI_ANIO_MAX;
+    diMes = Number(DI_FECHA_MAX.slice(5, 7)) - 1;
+  } else if (!diMesValido(diAnio, diMes)) {
+    diAnio = DI_ANIO_MIN;
+    diMes = Number(DI_FECHA_MIN.slice(5, 7)) - 1;
+  }
+}
+
+const diDeDia = (fecha) => diarios.filter((e) => e.fecha === fecha);
+
+// Un trabajo recién finalizado aparece en el Diario sin tener que recargar
+// (si el Diario aún no se ha leído, se leerá completo al abrirlo)
+function registrarTerminadoEnDiario(e) {
+  if (!diCargados) return;
+  if (!diarios.some((x) => x.id === e.id)) diarios.push(e);
+  dibujarCalendarioDi();
+  if (diDia) dibujarChipsDi();
+}
+
+// ----- Calendario de anotación (igual al principal, pero con sus propios datos) -----
+function dibujarCalendarioDi() {
+  ajustarMesDi();
+  diSelMes.value = diMes;
+  diSelAnio.value = diAnio;
+  // Los meses que quedan fuera del rango (en 1999 y 2099) no se pueden elegir
+  Array.from(diSelMes.options).forEach((o) => { o.disabled = !diMesValido(diAnio, Number(o.value)); });
+  const mAnt = diMes === 0 ? 11 : diMes - 1;
+  const aAnt = diMes === 0 ? diAnio - 1 : diAnio;
+  const mSig = diMes === 11 ? 0 : diMes + 1;
+  const aSig = diMes === 11 ? diAnio + 1 : diAnio;
+  diAnterior.disabled = !diMesValido(aAnt, mAnt);
+  diSiguiente.disabled = !diMesValido(aSig, mSig);
+  diCuad.innerHTML = "";
+  DIAS.forEach((d) => {
+    const el = document.createElement("div");
+    el.className = "cal-dia-semana";
+    el.textContent = d;
+    diCuad.appendChild(el);
+  });
+  const ahora = new Date();
+  const primerDia = (new Date(diAnio, diMes, 1).getDay() + 6) % 7;
+  const diasEnMes = new Date(diAnio, diMes + 1, 0).getDate();
+  for (let i = 0; i < primerDia; i++) {
+    const vacio = document.createElement("div");
+    vacio.className = "cal-dia vacio";
+    diCuad.appendChild(vacio);
+  }
+  for (let d = 1; d <= diasEnMes; d++) {
+    const fecha = claveFecha(diAnio, diMes, d);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "cal-dia";
+    el.textContent = d;
+    el.dataset.fecha = fecha;
+    if ((primerDia + d - 1) % 7 >= 5) el.classList.add("finde");
+    if (d === ahora.getDate() && diMes === ahora.getMonth() && diAnio === ahora.getFullYear()) el.classList.add("hoy");
+    if (fecha === diDia) el.classList.add("seleccionado");
+    if (diDeDia(fecha).length || ejDeDia(fecha).length) el.classList.add("con-datos");
+    if (!diFechaValida(fecha)) {
+      // Fuera del rango permitido (antes del 2/2/1999 o después del 2/2/2099)
+      el.disabled = true;
+      el.classList.add("fuera-rango");
+    } else el.addEventListener("click", () => abrirDiaDi(fecha));
+    diCuad.appendChild(el);
+  }
+}
+
+function diCambiarMes(delta) {
+  diMes += delta;
+  if (diMes < 0) { diMes = 11; diAnio--; }
+  if (diMes > 11) { diMes = 0; diAnio++; }
+  dibujarCalendarioDi(); // aquí mismo se ajusta al rango permitido
+}
+
+// ----- Submenú del día: un botón cuadrado por anotación + un "+" para añadir -----
+function dibujarChipsDi() {
+  diChips.innerHTML = "";
+  // Si ese día hiciste ejercicio, aparece un cuadro «Ejercicio» (al tocarlo se ven los ejercicios hechos)
+  const hechos = ejDeDia(diDia);
+  if (hechos.length) {
+    const ej = document.createElement("button");
+    ej.type = "button";
+    ej.className = "ej-chip ej-chip-ejercicio";
+    ej.title = "Ejercicio hecho este día";
+    ej.setAttribute("aria-label", "Ver los " + hechos.length + " ejercicios hechos este día");
+    ej.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">💪</span><span class="ej-chip-nombre"></span>';
+    ej.querySelector(".ej-chip-nombre").textContent = "Ejercicio (" + hechos.length + ")";
+    ej.addEventListener("click", abrirEjerciciosDi);
+    diChips.appendChild(ej);
+  }
+  diDeDia(diDia).forEach((e) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip";
+    b.title = e.nombre;
+    b.setAttribute("aria-label", "Ver o editar la anotación " + e.nombre);
+    b.innerHTML = '<span class="ej-chip-icono" aria-hidden="true"></span><span class="ej-chip-nombre"></span>';
+    b.querySelector(".ej-chip-icono").textContent = e.terminado ? "✅" : "📓";
+    if (e.terminado) b.title = e.nombre + " (trabajo terminado)";
+    if (e.marca === "Tarea finalizada") {
+      b.classList.add("ej-chip-finalizada");
+      b.title = e.nombre + " (Anotación de Tarea Finalizada)";
+    }
+    b.querySelector(".ej-chip-nombre").textContent = e.nombre;
+    b.addEventListener("click", () => abrirFormDi(e));
+    diChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chip-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir una anotación");
+  nuevo.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">+</span><span class="ej-chip-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormDi(null));
+  diChips.appendChild(nuevo);
+}
+
+function abrirDiaDi(fecha) {
+  diDia = fecha;
+  diDiaTitulo.textContent = textoFecha(fecha);
+  setEstado(diDiaEstado, "");
+  dibujarChipsDi();
+  diDiaPanel.hidden = false;
+  dibujarCalendarioDi();
+}
+// ----- Ejercicios hechos ese día (se leen de la hoja «Ejercicio»): mini cuadros con descripción breve -----
+function resumenCorto(t, max) {
+  const x = String(t || "").replace(/\s+/g, " ").trim();
+  if (!x) return "Sin descripción";
+  return x.length > max ? x.slice(0, max).trimEnd() + "…" : x;
+}
+
+function dibujarEjerciciosDi() {
+  diEjChips.innerHTML = "";
+  ejDeDia(diDia).forEach((e) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chip-resumen";
+    b.setAttribute("aria-label", "Ver todo el ejercicio " + e.nombre);
+    const n = document.createElement("span");
+    n.className = "ej-chip-nombre";
+    n.textContent = e.nombre;
+    const d = document.createElement("span");
+    d.className = "ej-chip-desc";
+    d.textContent = resumenCorto(e.descripcion, 70);
+    b.append(n, d);
+    b.addEventListener("click", () => abrirDetalleEjDi(e));
+    diEjChips.appendChild(b);
+  });
+}
+
+function abrirEjerciciosDi() {
+  if (!diDia) return;
+  diEjTitulo.textContent = "💪 Ejercicio · " + textoFecha(diDia);
+  dibujarEjerciciosDi();
+  diEjSub.hidden = false;
+}
+
+function abrirDetalleEjDi(e) {
+  diEl("di-ej-detalle-nombre").textContent = e.nombre || "Sin nombre";
+  diEl("di-ej-detalle-fecha").textContent = textoFecha(e.fecha);
+  diEl("di-ej-detalle-texto").textContent = e.descripcion || "Sin descripción";
+  diEjDetalle.hidden = false;
+  diEl("di-ej-detalle-cerrar").focus();
+}
+function cerrarDetalleEjDi() {
+  diEjDetalle.hidden = true;
+}
+function cerrarEjerciciosDi() {
+  cerrarDetalleEjDi();
+  diEjSub.hidden = true;
+}
+
+function cerrarDiaDi() {
+  cerrarEjerciciosDi();
+  cerrarFormDi();
+  diDiaPanel.hidden = true;
+  diDia = null;
+  dibujarCalendarioDi();
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormDi(e) {
+  diEditando = e;
+  diFormTitulo.textContent = e
+    ? e.marca === "Tarea finalizada"
+      ? "Anotación de Tarea Finalizada ✅"
+      : e.terminado
+      ? "Editar trabajo terminado ✅"
+      : "Editar anotación"
+    : "Nueva anotación";
+  diNombre.value = e ? e.nombre : "";
+  diDescripcion.value = e ? e.descripcion : "";
+  diBorrar.hidden = !e;
+  setEstado(diFormEstado, "");
+  diForm.hidden = false;
+  diNombre.focus();
+}
+function cerrarFormDi() {
+  diForm.hidden = true;
+  diEditando = null;
+}
+
+async function guardarDi() {
+  const nombre = diNombre.value.trim();
+  if (!nombre) {
+    setEstado(diFormEstado, "Escribe el nombre de la anotación", "error");
+    return;
+  }
+  const editando = diEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const e = {
+    id,
+    nombre,
+    fecha: editando ? editando.fecha : diDia,
+    descripcion: diDescripcion.value.trim(),
+    terminado: editando ? !!editando.terminado : false, // solo informativo: el Apps Script no toca la columna D
+  };
+  diGuardar.disabled = true;
+  setEstado(diFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "diario_editar" : "diario_agregar", e);
+    if (editando) diarios = diarios.map((x) => (x.id === id ? e : x));
+    else diarios.push(e);
+    cerrarFormDi();
+    dibujarChipsDi();
+    dibujarCalendarioDi();
+  } catch (err) {
+    setEstado(diFormEstado, "Error: " + err.message, "error");
+  } finally {
+    diGuardar.disabled = false;
+  }
+}
+
+async function borrarDi() {
+  const e = diEditando;
+  if (!e || !window.confirm("¿Eliminar la anotación «" + e.nombre + "»?")) return;
+  diBorrar.disabled = true;
+  setEstado(diFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("diario_borrar", { id: e.id });
+    diarios = diarios.filter((x) => x.id !== e.id);
+    cerrarFormDi();
+    dibujarChipsDi();
+    dibujarCalendarioDi();
+  } catch (err) {
+    setEstado(diFormEstado, "Error: " + err.message, "error");
+  } finally {
+    diBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarDiarios() {
+  setEstado(diEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("diario_listar");
+    diarios = Array.isArray(j.diarios) ? j.diarios : [];
+    diCargados = true;
+    setEstado(diEstado, "");
+    dibujarCalendarioDi();
+    if (diDia) dibujarChipsDi();
+  } catch (err) {
+    setEstado(diEstado, "Error: " + err.message, "error");
+  }
+}
+
+// El Diario también muestra los ejercicios hechos: si aún no se han leído, se leen aquí
+let ejCargando = false;
+async function cargarEjerciciosParaDiario() {
+  if (ejCargados || ejCargando || !sesionVigente()) return;
+  ejCargando = true;
+  try {
+    await cargarEjercicios();
+  } finally {
+    ejCargando = false;
+  }
+}
+
+function actualizarPanelDiario() {
+  if (panelDi.hidden) return;
+  const dentro = sesionVigente();
+  diSinSesion.hidden = dentro;
+  diContenido.hidden = !dentro;
+  if (dentro) {
+    if (!diCargados) cargarDiarios();
+    cargarEjerciciosParaDiario();
+  } else {
+    diCargados = false;
+    diarios = [];
+    cerrarDiaDi();
+  }
+}
+
+// Se llama al entrar a la página de Diario (desde mostrarSeccion)
+function entrarDiario() {
+  const ahora = new Date();
+  diMes = ahora.getMonth(); // siempre abre en el mes actual
+  diAnio = ahora.getFullYear();
+  diDia = null;
+  diDiaPanel.hidden = true;
+  cerrarFormDi();
+  panelDi.hidden = false;
+  dibujarCalendarioDi();
+  actualizarPanelDiario();
+}
+// Diario ya es una página: aquí solo se cierran el formulario y el submenú del día
+function cerrarDiario() {
+  cerrarEjerciciosDi();
+  cerrarFormDi();
+  diDiaPanel.hidden = true;
+  diDia = null;
+}
+
+diEl("di-cerrar").addEventListener("click", cerrarDiario);
+diEl("di-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) {
+    cargarDiarios();
+    cargarEjercicios(); // también vuelve a leer los ejercicios
+  } else actualizarPanelDiario();
+});
+diEl("di-ir-login").addEventListener("click", () => {
+  cerrarDiario();
+  abrirLateral();
+});
+diAnterior.addEventListener("click", () => diCambiarMes(-1));
+diSiguiente.addEventListener("click", () => diCambiarMes(1));
+diEl("di-hoy").addEventListener("click", () => {
+  const ahora = new Date();
+  diMes = ahora.getMonth();
+  diAnio = ahora.getFullYear();
+  dibujarCalendarioDi();
+});
+diSelMes.addEventListener("change", () => { diMes = Number(diSelMes.value); dibujarCalendarioDi(); });
+diSelAnio.addEventListener("change", () => { diAnio = Number(diSelAnio.value); dibujarCalendarioDi(); });
+diEl("di-dia-volver").addEventListener("click", cerrarDiaDi);
+diGuardar.addEventListener("click", guardarDi);
+diEl("di-cancelar").addEventListener("click", cerrarFormDi);
+diBorrar.addEventListener("click", borrarDi);
+diEl("di-ej-volver").addEventListener("click", cerrarEjerciciosDi);
+diEl("di-ej-detalle-cerrar").addEventListener("click", cerrarDetalleEjDi);
+// Tocar el fondo oscuro (fuera de la ventana) cierra la información del ejercicio
+diEjDetalle.addEventListener("click", (e) => {
+  if (e.target === diEjDetalle) cerrarDetalleEjDi();
+});
+// Esc cierra primero la información del ejercicio, luego sus cuadros, la ventana y por último el submenú del día
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelDi.hidden) return;
+  if (!diEjDetalle.hidden) cerrarDetalleEjDi();
+  else if (!diEjSub.hidden) cerrarEjerciciosDi();
+  else if (!diForm.hidden) cerrarFormDi();
+  else if (!diDiaPanel.hidden) cerrarDiaDi();
+});
+
+// ---------- Deudas (hoja «Diario», columnas H a J) ----------
+// Notas aparte, sin fecha: cada una guarda Nombre | Descripcion | Id en las columnas H, I y J de la hoja «Diario».
+const deEl = (id) => document.getElementById(id);
+const panelDe = deEl("panel-deudas");
+const deSinSesion = deEl("de-sin-sesion");
+const deContenido = deEl("de-contenido");
+const deEstado = deEl("de-estado");
+const deChips = deEl("de-chips");
+const deForm = deEl("de-form");
+const deFormTitulo = deEl("de-form-titulo");
+const deNombre = deEl("de-nombre");
+const deDescripcion = deEl("de-descripcion");
+const deGuardar = deEl("de-guardar");
+const deBorrar = deEl("de-borrar");
+const deFormEstado = deEl("de-form-estado");
+
+let deudas = []; // [{ id, nombre, descripcion }]
+let deCargadas = false;
+let deEditando = null; // deuda abierta en la ventana (null = deuda nueva)
+
+function dibujarChipsDe() {
+  deChips.innerHTML = "";
+  deudas.forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chip-resumen";
+    b.title = d.nombre;
+    b.setAttribute("aria-label", "Ver o editar la deuda " + d.nombre);
+    const n = document.createElement("span");
+    n.className = "ej-chip-nombre";
+    n.textContent = "💸 " + d.nombre;
+    const t = document.createElement("span");
+    t.className = "ej-chip-desc";
+    t.textContent = resumenCorto(d.descripcion, 70);
+    b.append(n, t);
+    b.addEventListener("click", () => abrirFormDe(d));
+    deChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chip-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir una deuda");
+  nuevo.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">+</span><span class="ej-chip-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormDe(null));
+  deChips.appendChild(nuevo);
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormDe(d) {
+  deEditando = d;
+  deFormTitulo.textContent = d ? "Editar deuda" : "Nueva deuda";
+  deNombre.value = d ? d.nombre : "";
+  deDescripcion.value = d ? d.descripcion : "";
+  deBorrar.hidden = !d;
+  setEstado(deFormEstado, "");
+  deForm.hidden = false;
+  deNombre.focus();
+}
+function cerrarFormDe() {
+  deForm.hidden = true;
+  deEditando = null;
+}
+
+async function guardarDe() {
+  const nombre = deNombre.value.trim();
+  if (!nombre) {
+    setEstado(deFormEstado, "Escribe el nombre de la deuda", "error");
+    return;
+  }
+  const editando = deEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const d = { id, nombre, descripcion: deDescripcion.value.trim() };
+  deGuardar.disabled = true;
+  setEstado(deFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "deuda_editar" : "deuda_agregar", d);
+    if (editando) deudas = deudas.map((x) => (x.id === id ? d : x));
+    else deudas.push(d);
+    cerrarFormDe();
+    dibujarChipsDe();
+  } catch (err) {
+    setEstado(deFormEstado, "Error: " + err.message, "error");
+  } finally {
+    deGuardar.disabled = false;
+  }
+}
+
+async function borrarDe() {
+  const d = deEditando;
+  if (!d || !window.confirm("¿Eliminar la deuda «" + d.nombre + "»?")) return;
+  deBorrar.disabled = true;
+  setEstado(deFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("deuda_borrar", { id: d.id });
+    deudas = deudas.filter((x) => x.id !== d.id);
+    cerrarFormDe();
+    dibujarChipsDe();
+  } catch (err) {
+    setEstado(deFormEstado, "Error: " + err.message, "error");
+  } finally {
+    deBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarDeudas() {
+  setEstado(deEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("deuda_listar");
+    deudas = Array.isArray(j.deudas) ? j.deudas : [];
+    deCargadas = true;
+    setEstado(deEstado, "");
+    dibujarChipsDe();
+  } catch (err) {
+    setEstado(deEstado, "Error: " + err.message, "error");
+  }
+}
+
+function actualizarPanelDeudas() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla
+    deCargadas = false;
+    deudas = [];
+  }
+  if (panelDe.hidden) return;
+  const dentro = sesionVigente();
+  deSinSesion.hidden = dentro;
+  deContenido.hidden = !dentro;
+  if (dentro) {
+    if (!deCargadas) cargarDeudas();
+    else dibujarChipsDe();
+  } else {
+    cerrarFormDe();
+    dibujarChipsDe();
+  }
+}
+
+// Se llama al entrar a la página de Deudas (desde mostrarSeccion)
+function entrarDeudas() {
+  cerrarFormDe();
+  panelDe.hidden = false;
+  dibujarChipsDe();
+  actualizarPanelDeudas();
+}
+// Deudas es una página: aquí solo se cierra la ventana
+function cerrarDeudas() {
+  cerrarFormDe();
+}
+
+deEl("de-cerrar").addEventListener("click", cerrarDeudas);
+deEl("de-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarDeudas();
+  else actualizarPanelDeudas();
+});
+deEl("de-ir-login").addEventListener("click", () => {
+  cerrarDeudas();
+  abrirLateral();
+});
+deGuardar.addEventListener("click", guardarDe);
+deEl("de-cancelar").addEventListener("click", cerrarFormDe);
+deBorrar.addEventListener("click", borrarDe);
+// Esc cierra la ventana de la deuda
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelDe.hidden) return;
+  if (!deForm.hidden) cerrarFormDe();
+});
+
+// ---------- Información Primordial (hoja «Informacion Primordial») ----------
+// Notas con Nombre | Fecha | Descripcion | Id (la Id de la columna D se llena sola).
+const ipEl = (id) => document.getElementById(id);
+const panelIp = ipEl("panel-informacion");
+const ipSinSesion = ipEl("ip-sin-sesion");
+const ipContenido = ipEl("ip-contenido");
+const ipEstado = ipEl("ip-estado");
+const ipChips = ipEl("ip-chips");
+const ipForm = ipEl("ip-form");
+const ipFormTitulo = ipEl("ip-form-titulo");
+const ipNombre = ipEl("ip-nombre");
+const ipFecha = ipEl("ip-fecha");
+const ipDescripcion = ipEl("ip-descripcion");
+const ipContador = ipEl("ip-contador");
+const IP_LIMITE = 50000; // máximo de caracteres por celda de Google Sheets
+// Contador de caracteres de la descripción; avisa cuando queda poco espacio
+function ipActualizarContador() {
+  const largo = ipDescripcion.value.length;
+  const resta = Math.max(0, IP_LIMITE - largo);
+  ipContador.textContent = largo.toLocaleString("es-MX") + " / " + IP_LIMITE.toLocaleString("es-MX") + " caracteres" +
+    (largo >= 45000 ? (resta === 0 ? " — límite alcanzado" : " — queda poco espacio (" + resta.toLocaleString("es-MX") + ")") : "");
+  ipContador.className = "nt-contador" + (largo >= 49000 ? " nt-contador-error" : largo >= 45000 ? " nt-contador-aviso" : "");
+}
+ipDescripcion.addEventListener("input", ipActualizarContador);
+const ipGuardar = ipEl("ip-guardar");
+const ipBorrar = ipEl("ip-borrar");
+const ipFormEstado = ipEl("ip-form-estado");
+
+let informaciones = []; // [{ id, nombre, fecha, descripcion }]
+let ipCargadas = false;
+let ipEditando = null; // nota abierta en la ventana (null = nota nueva)
+
+// Fecha de hoy como "aaaa-mm-dd" (formato del campo de fecha y de la hoja)
+function ipHoy() {
+  const n = new Date();
+  return `${n.getFullYear()}-${dos(n.getMonth() + 1)}-${dos(n.getDate())}`;
+}
+// "aaaa-mm-dd" -> "dd/mm/aaaa" para mostrarla
+function ipFechaCorta(f) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+function dibujarChipsIp() {
+  ipChips.innerHTML = "";
+  informaciones.forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chip-resumen";
+    b.title = d.nombre + (d.fecha ? " (" + ipFechaCorta(d.fecha) + ")" : "");
+    b.setAttribute("aria-label", "Ver o editar la información " + d.nombre);
+    const n = document.createElement("span");
+    n.className = "ej-chip-nombre";
+    n.textContent = "⭐ " + d.nombre;
+    const f = document.createElement("span");
+    f.className = "ej-chip-fecha";
+    f.textContent = ipFechaCorta(d.fecha);
+    const t = document.createElement("span");
+    t.className = "ej-chip-desc";
+    t.textContent = resumenCorto(d.descripcion, 70);
+    b.append(n, f, t);
+    b.addEventListener("click", () => abrirFormIp(d));
+    ipChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chip-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir información primordial");
+  nuevo.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">+</span><span class="ej-chip-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormIp(null));
+  ipChips.appendChild(nuevo);
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormIp(d) {
+  ipEditando = d;
+  ipFormTitulo.textContent = d ? "Editar información" : "Nueva información";
+  ipNombre.value = d ? d.nombre : "";
+  ipFecha.value = d && d.fecha ? d.fecha : ipHoy(); // si es nueva, empieza con la fecha de hoy
+  ipDescripcion.value = d ? d.descripcion : "";
+  ipActualizarContador();
+  ipBorrar.hidden = !d;
+  setEstado(ipFormEstado, "");
+  ipForm.hidden = false;
+  ipNombre.focus();
+}
+function cerrarFormIp() {
+  ipForm.hidden = true;
+  ipEditando = null;
+}
+
+async function guardarIp() {
+  const nombre = ipNombre.value.trim();
+  if (!nombre) {
+    setEstado(ipFormEstado, "Escribe el nombre", "error");
+    return;
+  }
+  const fecha = ipFecha.value || ipHoy();
+  const editando = ipEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const d = { id, nombre, fecha, descripcion: ipDescripcion.value.trim() };
+  ipGuardar.disabled = true;
+  setEstado(ipFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "informacion_editar" : "informacion_agregar", d);
+    if (editando) informaciones = informaciones.map((x) => (x.id === id ? d : x));
+    else informaciones.push(d);
+    cerrarFormIp();
+    dibujarChipsIp();
+  } catch (err) {
+    setEstado(ipFormEstado, "Error: " + err.message, "error");
+  } finally {
+    ipGuardar.disabled = false;
+  }
+}
+
+async function borrarIp() {
+  const d = ipEditando;
+  if (!d || !window.confirm("¿Eliminar «" + d.nombre + "»?")) return;
+  ipBorrar.disabled = true;
+  setEstado(ipFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("informacion_borrar", { id: d.id });
+    informaciones = informaciones.filter((x) => x.id !== d.id);
+    cerrarFormIp();
+    dibujarChipsIp();
+  } catch (err) {
+    setEstado(ipFormEstado, "Error: " + err.message, "error");
+  } finally {
+    ipBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarInformaciones() {
+  setEstado(ipEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("informacion_listar");
+    informaciones = Array.isArray(j.informaciones) ? j.informaciones : [];
+    ipCargadas = true;
+    setEstado(ipEstado, "");
+    dibujarChipsIp();
+  } catch (err) {
+    setEstado(ipEstado, "Error: " + err.message, "error");
+  }
+}
+
+function actualizarPanelInformacion() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla
+    ipCargadas = false;
+    informaciones = [];
+  }
+  if (panelIp.hidden) return;
+  const dentro = sesionVigente();
+  ipSinSesion.hidden = dentro;
+  ipContenido.hidden = !dentro;
+  if (dentro) {
+    if (!ipCargadas) cargarInformaciones();
+    else dibujarChipsIp();
+  } else {
+    cerrarFormIp();
+    dibujarChipsIp();
+  }
+}
+
+// Se llama al entrar a la página de Información Primordial (desde mostrarSeccion)
+function entrarInformacion() {
+  cerrarFormIp();
+  panelIp.hidden = false;
+  dibujarChipsIp();
+  actualizarPanelInformacion();
+}
+// Información Primordial es una página: aquí solo se cierra la ventana
+function cerrarInformacion() {
+  cerrarFormIp();
+}
+
+ipEl("ip-cerrar").addEventListener("click", cerrarInformacion);
+ipEl("ip-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarInformaciones();
+  else actualizarPanelInformacion();
+});
+ipEl("ip-ir-login").addEventListener("click", () => {
+  cerrarInformacion();
+  abrirLateral();
+});
+ipGuardar.addEventListener("click", guardarIp);
+ipEl("ip-cancelar").addEventListener("click", cerrarFormIp);
+ipBorrar.addEventListener("click", borrarIp);
+// Esc cierra la ventana
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelIp.hidden) return;
+  if (!ipForm.hidden) cerrarFormIp();
+});
+
+// ---------- Comandos (hoja «comandos») ----------
+// Notas con Nombre | Fecha | Descripcion | Id (la Id de la columna D se llena sola).
+const cmEl = (id) => document.getElementById(id);
+const panelCm = cmEl("panel-comandos");
+const cmSinSesion = cmEl("cm-sin-sesion");
+const cmContenido = cmEl("cm-contenido");
+const cmEstado = cmEl("cm-estado");
+const cmChips = cmEl("cm-chips");
+const cmForm = cmEl("cm-form");
+const cmFormTitulo = cmEl("cm-form-titulo");
+const cmNombre = cmEl("cm-nombre");
+const cmFecha = cmEl("cm-fecha");
+const cmDescripcion = cmEl("cm-descripcion");
+const cmGuardar = cmEl("cm-guardar");
+const cmBorrar = cmEl("cm-borrar");
+const cmFormEstado = cmEl("cm-form-estado");
+
+let comandosLista = []; // [{ id, nombre, fecha, descripcion }]
+let cmCargadas = false;
+let cmEditando = null; // nota abierta en la ventana (null = nota nueva)
+
+// Fecha de hoy como "aaaa-mm-dd" (formato del campo de fecha y de la hoja)
+function cmHoy() {
+  const n = new Date();
+  return `${n.getFullYear()}-${dos(n.getMonth() + 1)}-${dos(n.getDate())}`;
+}
+// "aaaa-mm-dd" -> "dd/mm/aaaa" para mostrarla
+function cmFechaCorta(f) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+function dibujarChipsCm() {
+  cmChips.innerHTML = "";
+  comandosLista.forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chcm-resumen";
+    b.title = d.nombre + (d.fecha ? " (" + cmFechaCorta(d.fecha) + ")" : "");
+    b.setAttribute("aria-label", "Ver o editar el comando " + d.nombre);
+    const n = document.createElement("span");
+    n.className = "ej-chcm-nombre";
+    n.textContent = "🎙️ " + d.nombre;
+    const f = document.createElement("span");
+    f.className = "ej-chcm-fecha";
+    f.textContent = cmFechaCorta(d.fecha);
+    const t = document.createElement("span");
+    t.className = "ej-chcm-desc";
+    t.textContent = resumenCorto(d.descripcion, 70);
+    b.append(n, f, t);
+    b.addEventListener("click", () => abrirFormCm(d));
+    cmChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chcm-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir un comando");
+  nuevo.innerHTML = '<span class="ej-chcm-icono" aria-hidden="true">+</span><span class="ej-chcm-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormCm(null));
+  cmChips.appendChild(nuevo);
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormCm(d) {
+  cmEditando = d;
+  cmFormTitulo.textContent = d ? "Editar comando" : "Nuevo comando";
+  cmNombre.value = d ? d.nombre : "";
+  cmFecha.value = d && d.fecha ? d.fecha : cmHoy(); // si es nueva, empieza con la fecha de hoy
+  cmDescripcion.value = d ? d.descripcion : "";
+  cmBorrar.hidden = !d;
+  setEstado(cmFormEstado, "");
+  cmForm.hidden = false;
+  cmNombre.focus();
+}
+function cerrarFormCm() {
+  cmForm.hidden = true;
+  cmEditando = null;
+}
+
+async function guardarCm() {
+  const nombre = cmNombre.value.trim();
+  if (!nombre) {
+    setEstado(cmFormEstado, "Escribe el nombre", "error");
+    return;
+  }
+  const fecha = cmFecha.value || cmHoy();
+  const editando = cmEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const d = { id, nombre, fecha, descripcion: cmDescripcion.value.trim() };
+  cmGuardar.disabled = true;
+  setEstado(cmFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "comando_editar" : "comando_agregar", d);
+    if (editando) comandosLista = comandosLista.map((x) => (x.id === id ? d : x));
+    else comandosLista.push(d);
+    cerrarFormCm();
+    dibujarChipsCm();
+  } catch (err) {
+    setEstado(cmFormEstado, "Error: " + err.message, "error");
+  } finally {
+    cmGuardar.disabled = false;
+  }
+}
+
+async function borrarCm() {
+  const d = cmEditando;
+  if (!d || !window.confirm("¿Eliminar «" + d.nombre + "»?")) return;
+  cmBorrar.disabled = true;
+  setEstado(cmFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("comando_borrar", { id: d.id });
+    comandosLista = comandosLista.filter((x) => x.id !== d.id);
+    cerrarFormCm();
+    dibujarChipsCm();
+  } catch (err) {
+    setEstado(cmFormEstado, "Error: " + err.message, "error");
+  } finally {
+    cmBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarComandos() {
+  setEstado(cmEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("comando_listar");
+    comandosLista = Array.isArray(j.comandosLista) ? j.comandosLista : [];
+    cmCargadas = true;
+    setEstado(cmEstado, "");
+    dibujarChipsCm();
+  } catch (err) {
+    setEstado(cmEstado, "Error: " + err.message, "error");
+  }
+}
+
+function actualizarPanelComandos() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla
+    cmCargadas = false;
+    comandosLista = [];
+  }
+  if (panelCm.hidden) return;
+  const dentro = sesionVigente();
+  cmSinSesion.hidden = dentro;
+  cmContenido.hidden = !dentro;
+  if (dentro) {
+    if (!cmCargadas) cargarComandos();
+    else dibujarChipsCm();
+  } else {
+    cerrarFormCm();
+    dibujarChipsCm();
+  }
+}
+
+// Se llama al entrar a la página de Comandos (desde mostrarSeccion)
+function entrarComandos() {
+  cerrarFormCm();
+  panelCm.hidden = false;
+  dibujarChipsCm();
+  actualizarPanelComandos();
+}
+// Comandos es una página: aquí solo se cierra la ventana
+function cerrarComandos() {
+  cerrarFormCm();
+}
+
+cmEl("cm-cerrar").addEventListener("click", cerrarComandos);
+cmEl("cm-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarComandos();
+  else actualizarPanelComandos();
+});
+cmEl("cm-ir-login").addEventListener("click", () => {
+  cerrarComandos();
+  abrirLateral();
+});
+cmGuardar.addEventListener("click", guardarCm);
+cmEl("cm-cancelar").addEventListener("click", cerrarFormCm);
+cmBorrar.addEventListener("click", borrarCm);
+// Esc cierra la ventana
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelCm.hidden) return;
+  if (!cmForm.hidden) cerrarFormCm();
+});
+
+// ---------- Bazar (hoja «Bazar») ----------
+// Registros con Nombre | Informacion | Id (la Id de la columna C se llena sola).
+const bzEl = (id) => document.getElementById(id);
+const panelBz = bzEl("panel-bazar");
+const bzSinSesion = bzEl("bz-sin-sesion");
+const bzContenido = bzEl("bz-contenido");
+const bzEstado = bzEl("bz-estado");
+const bzChips = bzEl("bz-chips");
+const bzForm = bzEl("bz-form");
+const bzFormTitulo = bzEl("bz-form-titulo");
+const bzNombre = bzEl("bz-nombre");
+const bzInformacion = bzEl("bz-informacion");
+const bzGuardar = bzEl("bz-guardar");
+const bzBorrar = bzEl("bz-borrar");
+const bzFormEstado = bzEl("bz-form-estado");
+
+let bazarLista = []; // [{ id, nombre, informacion }]
+let bzCargadas = false;
+let bzEditando = null; // registro abierto en la ventana (null = registro nuevo)
+
+function dibujarChipsBz() {
+  bzChips.innerHTML = "";
+  bazarLista.forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chip-resumen";
+    b.title = d.nombre;
+    b.setAttribute("aria-label", "Ver o editar el registro " + d.nombre);
+    const n = document.createElement("span");
+    n.className = "ej-chip-nombre";
+    n.textContent = d.nombre;
+    const t = document.createElement("span");
+    t.className = "ej-chip-desc";
+    t.textContent = resumenCorto(d.informacion, 70);
+    b.append(n, t);
+    b.addEventListener("click", () => abrirFormBz(d));
+    bzChips.appendChild(b);
+  });
+  const nuevo = document.createElement("button");
+  nuevo.type = "button";
+  nuevo.className = "ej-chip ej-chip-nuevo";
+  nuevo.setAttribute("aria-label", "Añadir un registro al bazar");
+  nuevo.innerHTML = '<span class="ej-chip-icono" aria-hidden="true">+</span><span class="ej-chip-nombre">Añadir</span>';
+  nuevo.addEventListener("click", () => abrirFormBz(null));
+  bzChips.appendChild(nuevo);
+}
+
+// ----- Ventana para añadir / editar -----
+function abrirFormBz(d) {
+  bzEditando = d;
+  bzFormTitulo.textContent = d ? "Editar registro" : "Nuevo registro";
+  bzNombre.value = d ? d.nombre : "";
+  bzInformacion.value = d ? d.informacion : "";
+  bzBorrar.hidden = !d;
+  setEstado(bzFormEstado, "");
+  bzForm.hidden = false;
+  bzNombre.focus();
+}
+function cerrarFormBz() {
+  bzForm.hidden = true;
+  bzEditando = null;
+}
+
+async function guardarBz() {
+  const nombre = bzNombre.value.trim();
+  if (!nombre) {
+    setEstado(bzFormEstado, "Escribe el nombre", "error");
+    return;
+  }
+  const editando = bzEditando;
+  const id = editando ? editando.id : String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  const d = { id, nombre, informacion: bzInformacion.value.trim() };
+  bzGuardar.disabled = true;
+  setEstado(bzFormEstado, "Guardando…");
+  try {
+    await llamarNotas(editando ? "bazar_editar" : "bazar_agregar", d);
+    if (editando) bazarLista = bazarLista.map((x) => (x.id === id ? d : x));
+    else bazarLista.push(d);
+    cerrarFormBz();
+    dibujarChipsBz();
+  } catch (err) {
+    setEstado(bzFormEstado, "Error: " + err.message, "error");
+  } finally {
+    bzGuardar.disabled = false;
+  }
+}
+
+async function borrarBz() {
+  const d = bzEditando;
+  if (!d || !window.confirm("¿Eliminar «" + d.nombre + "»?")) return;
+  bzBorrar.disabled = true;
+  setEstado(bzFormEstado, "Eliminando…");
+  try {
+    await llamarNotas("bazar_borrar", { id: d.id });
+    bazarLista = bazarLista.filter((x) => x.id !== d.id);
+    cerrarFormBz();
+    dibujarChipsBz();
+  } catch (err) {
+    setEstado(bzFormEstado, "Error: " + err.message, "error");
+  } finally {
+    bzBorrar.disabled = false;
+  }
+}
+
+// ----- Carga y sesión -----
+async function cargarBazar() {
+  setEstado(bzEstado, "Cargando…");
+  try {
+    const j = await llamarNotas("bazar_listar");
+    bazarLista = Array.isArray(j.bazarLista) ? j.bazarLista : [];
+    bzCargadas = true;
+    setEstado(bzEstado, "");
+    dibujarChipsBz();
+  } catch (err) {
+    setEstado(bzEstado, "Error: " + err.message, "error");
+  }
+}
+
+function actualizarPanelBazar() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla
+    bzCargadas = false;
+    bazarLista = [];
+  }
+  if (panelBz.hidden) return;
+  const dentro = sesionVigente();
+  bzSinSesion.hidden = dentro;
+  bzContenido.hidden = !dentro;
+  if (dentro) {
+    if (!bzCargadas) cargarBazar();
+    else dibujarChipsBz();
+  } else {
+    cerrarFormBz();
+    dibujarChipsBz();
+  }
+}
+
+// Se llama al entrar a la página de Bazar (desde mostrarSeccion)
+function entrarBazar() {
+  cerrarFormBz();
+  panelBz.hidden = false;
+  dibujarChipsBz();
+  actualizarPanelBazar();
+}
+// Bazar es una página: aquí solo se cierra la ventana
+function cerrarBazar() {
+  cerrarFormBz();
+}
+
+bzEl("bz-cerrar").addEventListener("click", cerrarBazar);
+bzEl("bz-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarBazar();
+  else actualizarPanelBazar();
+});
+bzEl("bz-ir-login").addEventListener("click", () => {
+  cerrarBazar();
+  abrirLateral();
+});
+bzGuardar.addEventListener("click", guardarBz);
+bzEl("bz-cancelar").addEventListener("click", cerrarFormBz);
+bzBorrar.addEventListener("click", borrarBz);
+// Esc cierra la ventana
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || panelBz.hidden) return;
+  if (!bzForm.hidden) cerrarFormBz();
+});
+
+// ---------- Día de Hoy ----------
+// No tiene hoja propia: junta lo que tenga la fecha de hoy en las demás zonas (Calendario, Notas, Ejercicio,
+// Actividades, Trabajo, Diario, Información Primordial, Comandos y Pedidos de Yeso). Deudas y Bazar no
+// guardan fecha, así que no aparecen aquí.
+const hyEl = (id) => document.getElementById(id);
+const seccionHy = hyEl("seccion-hoy");
+const panelHy = hyEl("panel-hoy");
+const hySinSesion = hyEl("hy-sin-sesion");
+const hyContenido = hyEl("hy-contenido");
+const hyEstado = hyEl("hy-estado");
+const hyFecha = hyEl("hy-fecha");
+const hyGruposEl = hyEl("hy-grupos");
+const hyDetalle = hyEl("hy-detalle");
+const hyDetalleIr = hyEl("hy-detalle-ir");
+
+// Zonas que se revisan, en el orden del menú; «seccion» es la página que se abre desde el detalle
+const HY_ZONAS = [
+  { id: "calendario", icono: "📅", titulo: "Calendario", seccion: "calendario" },
+  { id: "notas", icono: "📝", titulo: "Notas", seccion: "seccion-notas" },
+  { id: "ejercicio", icono: "💪", titulo: "Ejercicio", seccion: "seccion-ejercicio" },
+  { id: "actividades", icono: "🎯", titulo: "Actividades", seccion: "actividades" },
+  { id: "trabajo", icono: "💼", titulo: "Trabajo", seccion: "trabajo" },
+  { id: "diario", icono: "📓", titulo: "Diario", seccion: "seccion-diario" },
+  { id: "informacion", icono: "⭐", titulo: "Información Primordial", seccion: "seccion-informacion" },
+  { id: "comandos", icono: "🎙️", titulo: "Comandos", seccion: "seccion-comandos" },
+  { id: "yeso", icono: "📦", titulo: "Pedidos de Yeso", seccion: "pedidos-yeso" },
+];
+
+let hyGrupos = []; // [{ zona, items: [{ nombre, hora, texto, extra }] }]
+let hyCargadas = false;
+let hyCargando = false;
+let hyPeticion = 0; // sirve para ignorar respuestas viejas si se vuelve a pedir
+let hyAbierta = null; // zona del recuadro que está abierto en el detalle
+let hyItemAbierto = null; // recuadro que está abierto en el detalle
+
+// Día de hoy como "aaaa-mm-dd" (misma forma en que lo guardan Ejercicio, Diario, Información y Comandos)
+function hyClaveHoy() {
+  const n = new Date();
+  return `${n.getFullYear()}-${dos(n.getMonth() + 1)}-${dos(n.getDate())}`;
+}
+function hyFechaLarga() {
+  const t = new Date().toLocaleDateString("es-MX", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// Fecha de una nota «dd/mm/aaaa hh:mm» -> { dia: "aaaa-mm-dd", hora: "hh:mm" } (o null si no se entiende)
+function hyDeNota(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2}))?/.exec(String(s || "").trim());
+  if (!m) return null;
+  return { dia: `${m[3]}-${dos(m[2])}-${dos(m[1])}`, hora: m[4] ? `${dos(m[4])}:${m[5]}` : "" };
+}
+// Los textos del calendario empiezan con una línea «dd/mm/aaaa hh:mm»: se separa la hora del texto
+function hySinSello(t) {
+  const m = /^\d{1,2}\/\d{1,2}\/\d{4} (\d{1,2}:\d{2})[ \t]*\r?\n([\s\S]*)$/.exec(String(t || "").trim());
+  return m ? { hora: m[1].padStart(5, "0"), texto: m[2].trim() } : { hora: "", texto: String(t || "").trim() };
+}
+
+// Arma los grupos con lo que tenga la fecha de hoy. Si una zona no se pudo leer llega null y se salta.
+function hyArmar(clave, f) {
+  const por = {};
+  HY_ZONAS.forEach((z) => (por[z.id] = []));
+
+  // Calendario: Descripción (una sola), Actividades y Anotaciones (cada recuadro por separado)
+  const dia = f.calendario ? f.calendario[clave] : null;
+  if (dia) {
+    CAMPOS.forEach((campo) => {
+      const crudo = dia[campo.clave];
+      const elementos = parsearElementos(crudo)
+        .map((t, i) => Object.assign(hySinSello(t), { i }))
+        .filter((e) => e.texto);
+      if (!elementos.length) return;
+      if (campo.clave === "descripcion") {
+        por.calendario.push({
+          nombre: campo.etiqueta,
+          hora: elementos[0].hora,
+          texto: elementos.map((e) => e.texto).join("\n\n"),
+          origen: { tipo: "calendario", fecha: clave, campo: campo.clave, todo: true },
+        });
+      } else {
+        elementos.forEach((e) =>
+          por.calendario.push({
+            nombre: campo.etiqueta,
+            hora: e.hora,
+            texto: e.texto,
+            origen: { tipo: "calendario", fecha: clave, campo: campo.clave, indice: e.i, crudo },
+          })
         );
-    }
-}
-
-// ── Convierte filas CSV en objetos de producto ──
-// Un producto solo se genera si la columna E (Imagenes imgbb) tiene contenido.
-// Si la fila solo tiene nombre/precio pero no imagen, se ignora (no aparece en la web).
-function csvAProductos(filas) {
-    if (filas.length < 2) return [];
-    _validarEncabezadosCSV(filas[0]);
-    // Omitir la fila de encabezados (fila 0)
-    var productos = [];
-    for (var i = 1; i < filas.length; i++) {
-        var f = filas[i];
-        var get = function(idx) { return (f[idx] || '').trim(); };
-
-        // Saltar filas sin imagen en la columna E (aunque tengan nombre o precio)
-        if (!get(4)) continue;
-
-        // Orden de columnas de la hoja exclusiva de Yesos Polo Kukúmita (A a L):
-        // A=0  Producto (nombre)
-        // B=1  Precio Original
-        // C=2  Precio Bazar
-        // D=3  Descripcion
-        // E=4  Imagenes imgbb (URL principal + extras separadas por coma)
-        // F=5  Video (principal del producto)
-        // G=6  Etiqueta Principal
-        // H=7  Sub Etiquetas
-        // I=8  Medidas alto/ancho (texto libre)
-        // J=9  Existencia
-        // K=10 En Oferta   (si / vacío)
-        // L=11 Mas Vendido (si / vacío)
-
-        // Video principal (F=5)
-        var videoPrincipal = get(5).replace(/^"+|"+$/g, '').trim();
-
-        // Imágenes: columna E=4 (Imagenes imgbb)
-        var _rawImg = get(4).replace(/^"+|"+$/g, '').trim();
-        var imagenesExtra = _rawImg
-            ? _rawImg.split(',').map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); }).filter(Boolean)
-            : [];
-
-        // Etiqueta Principal G=6
-        var _rawTipos = get(6).replace(/^"+|"+$/g, '').trim();
-        var tiposArray = _rawTipos
-            ? _rawTipos.split(/[|,]/).map(function(s) { return s.trim().replace(/^"+|"+$/g, '').toLowerCase(); }).filter(Boolean)
-            : ['arreglo'];
-        var tipoPrincipal = tiposArray[0] || 'arreglo';
-
-        // Oferta y Más Vendido (K=10, L=11)
-        var enOferta   = get(10).toLowerCase() === 'si' ? 1 : 0;
-        var masVendido = get(11).toLowerCase() === 'si' ? 1 : 0;
-
-        // Existencia (J=9)
-        var existencia = parseInt(get(9).replace(/[^0-9]/g, '')) || 0;
-
-        // Medidas alto/ancho (I=8) — texto libre, ya no se separa en Alto/Ancho
-        var medidas = get(8).replace(/^"+|"+$/g, '').trim();
-
-        productos.push({
-            id:           i,
-            nombre:       get(0),
-            precioNormal: parseFloat(get(1).replace(/[^0-9.]/g, '')) || 0,
-            precioBazar:  parseFloat(get(2).replace(/[^0-9.]/g, '')) || 0,
-            descripcion:  get(3),
-            video:        videoPrincipal,
-            imagen:       imagenesExtra[0] || '',
-            imagenes:     imagenesExtra,
-            forma:        '',
-            tipo:         tipoPrincipal,
-            tipos:        tiposArray,
-            subtags:      get(7) ? get(7).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
-            // Ya no hay columna de "Etiqueta Evento" en esta hoja — el filtro por
-            // evento queda inactivo (mostrará todos los productos con "todos").
-            eventos:      '',
-            etiquetas:    tiposArray,
-            aditivos:     [],
-            oferta:       enOferta,
-            masVendido:   masVendido,
-            // "Medidas alto/ancho" viene en una sola columna: se guarda completa en
-            // `alto` (que el modal ya muestra en su propio recuadro) y se deja
-            // `ancho` vacío para que su recuadro no se muestre duplicado.
-            alto:         medidas,
-            ancho:        '',
-            existencia:   existencia,
-            // Sin columna dedicada a videos de redes sociales por producto en esta hoja.
-            redYoutube:   [],
-            redFacebook:  [],
-            redInstagram: [],
-            redTiktok:    [],
-            // Sin columna "SubImagen" en esta hoja — el bloque de aditamentos
-            // relacionados en el modal queda vacío (no se muestra, no rompe nada).
-            subImagenes:  []
-        });
-    }
-    return productos;
-}
-
-// ── Mostrar estado de carga en el grid ──
-function mostrarEstadoCarga(mensaje, esError) {
-    var grid = document.getElementById('gridProductos');
-    if (!grid) return;
-    grid.innerHTML =
-        '<div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:' +
-        (esError ? '#c0392b' : '#8c7565') + ';">' +
-        '<div style="font-size:2rem; margin-bottom:12px;">' + (esError ? '⚠️' : '⏳') + '</div>' +
-        '<p style="font-size:1rem; font-weight:600;">' + mensaje + '</p>' +
-        (esError ? '<p style="font-size:0.85rem; color:#999; margin-top:8px;">Revisa que la hoja esté publicada como CSV en Google Sheets.</p>' : '') +
-        '</div>';
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// renderizarCatalogoCompleto()
-// Lee listaProductos y genera dinámicamente cada tarjeta .card-dinamica
-// ══════════════════════════════════════════════════════════════════════════════
-function renderizarCatalogoCompleto() {
-    renderizarCatalogoEnGrid('gridProductos', listaProductos);
-}
-
-// ── Versión genérica: pinta cualquier lista de productos en cualquier grid ──
-function renderizarCatalogoEnGrid(gridId, productos) {
-    var grid = document.getElementById(gridId);
-    if (!grid) { console.warn('renderizarCatalogoEnGrid: #' + gridId + ' no encontrado'); return; }
-    grid.innerHTML = '';
-
-    (productos || []).forEach(function(p) {
-        var card = document.createElement('div');
-        card.className = 'card-dinamica';
-
-        // ── Data-attributes necesarios para filtros y modal ──
-        card.setAttribute('data-num',             String(p.id));
-        card.setAttribute('data-idx',             String(p.id));
-        card.setAttribute('data-sheet-row',       String(p.id + 1));
-        card.setAttribute('data-forma',           p.forma || '');
-        card.setAttribute('data-evento',          p.eventos || '');
-        card.setAttribute('data-precio',          String(parseInt(p.precioNormal, 10) || 0));
-        card.setAttribute('data-precio-bazar',    String(parseInt(p.precioBazar,  10) || ''));
-        card.setAttribute('data-tipo',            p.tipo  || 'arreglo');
-        card.setAttribute('data-tipos',           (p.tipos || [p.tipo || 'arreglo']).join('|'));
-        card.setAttribute('data-subtags',         p.subtags || '');
-        card.setAttribute('data-nombre',          p.nombre);
-        card.setAttribute('data-imagenes',        JSON.stringify(p.imagenes || []));
-        card.setAttribute('data-descripcion',     p.descripcion || '');
-        card.setAttribute('data-alto',             p.alto || '');
-        card.setAttribute('data-ancho',            p.ancho || '');
-        card.setAttribute('data-video',           p.video || '');
-        card.setAttribute('data-oferta',          String(p.oferta || 0));
-        card.setAttribute('data-oferta-desc',     p.ofertaDesc || '');
-        card.setAttribute('data-oferta-duracion', p.ofertaDuracion || '');
-        card.setAttribute('data-mas-vendido',     String(p.masVendido || 0));
-        card.setAttribute('data-mas-vendido-imagenes', JSON.stringify(p.masVendidoImagenes || []));
-        card.setAttribute('data-sub-imagenes', JSON.stringify(p.subImagenes || []));
-        card.setAttribute('data-existencia',   String(p.existencia || 0));
-        card.setAttribute('data-red-youtube',     JSON.stringify(p.redYoutube   || []));
-        card.setAttribute('data-red-facebook',    JSON.stringify(p.redFacebook  || []));
-        card.setAttribute('data-red-instagram',   JSON.stringify(p.redInstagram || []));
-        card.setAttribute('data-red-tiktok',      JSON.stringify(p.redTiktok    || []));
-        card.setAttribute('data-origen-externo',  p._origenExterno || '');
-        card.style.cursor = 'pointer';
-
-        // ── Imagen principal ──
-        var imgContenedor = document.createElement('div');
-        imgContenedor.className = 'img-contenedor-dinamico';
-        var img = document.createElement('img');
-        img.src = p.imagen;
-        img.alt = p.nombre;
-        img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-        img.onerror = function() {
-            if (typeof mostrarPlaceholder === 'function') mostrarPlaceholder(this);
-        };
-        imgContenedor.appendChild(img);
-        card.appendChild(imgContenedor);
-
-        // ── Botón favorito (corazón) ──
-        var btnLike = document.createElement('button');
-        btnLike.className = 'btn-like';
-        btnLike.setAttribute('aria-label', 'Me gusta ' + p.nombre);
-        btnLike.innerHTML = '🤍';
-        btnLike.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var idx = parseInt(card.getAttribute('data-idx'));
-            if (!isNaN(idx)) toggleLike(idx, btnLike);
-        });
-        imgContenedor.appendChild(btnLike);
-
-        // ── Botón carrito rápido ──
-        var btnCartCard = document.createElement('button');
-        btnCartCard.className = 'btn-carrito-card';
-        btnCartCard.setAttribute('aria-label', 'Agregar al carrito ' + p.nombre);
-        btnCartCard.innerHTML = '🛒';
-        btnCartCard.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (typeof abrirModalCantidad === 'function') abrirModalCantidad(card);
-        });
-        imgContenedor.appendChild(btnCartCard);
-
-        // ── Título ──
-        var infoDiv = document.createElement('div');
-        infoDiv.style.cssText = 'margin-top:10px; flex-grow:1;';
-        var h3 = document.createElement('h3');
-        h3.style.cssText = 'font-size:18px; margin:5px 0;';
-        h3.textContent = p.nombre;
-        infoDiv.appendChild(h3);
-        card.appendChild(infoDiv);
-
-        // ── Aditivos ──
-        if (p.aditivos && p.aditivos.length > 0) {
-            var aditivosWrap = document.createElement('div');
-            aditivosWrap.style.cssText = 'font-size:11px; border-top:1px solid #eee; padding-top:6px;';
-            var aditivosFlex = document.createElement('div');
-            aditivosFlex.style.cssText = 'display:flex; gap:5px; margin-top:3px; justify-content:center;';
-
-            p.aditivos.forEach(function(ad) {
-                var rec = document.createElement('div');
-                rec.className = 'recuadro-item';
-                rec.title = ad.titulo;
-                rec.style.cssText = 'width:32px; height:32px; border:1px solid #ccc; border-radius:4px; overflow:hidden;';
-                if (ad.link) {
-                    rec.style.cursor = 'pointer';
-                    rec.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        window.location.href = ad.link;
-                    });
-                }
-                var adImg = document.createElement('img');
-                adImg.src = ad.imagen;
-                adImg.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-                rec.appendChild(adImg);
-                aditivosFlex.appendChild(rec);
-            });
-
-            aditivosWrap.appendChild(aditivosFlex);
-            card.appendChild(aditivosWrap);
-        }
-
-        // ── Precios ──
-        var preciosBloque = document.createElement('div');
-        preciosBloque.className = 'card-precios-bloque';
-
-        var precioNormalDiv = document.createElement('div');
-        precioNormalDiv.className = 'card-precio-normal';
-        precioNormalDiv.innerHTML =
-            '<span class="card-precio-etiqueta">Precio</span>' +
-            '<span class="card-precio-valor">$' + (p.precioNormal || '') + ' MXN</span>';
-        preciosBloque.appendChild(precioNormalDiv);
-
-        if (p.precioBazar) {
-            var precioBazarDiv = document.createElement('div');
-            precioBazarDiv.className = 'card-precio-mayoreo-bloque visible';
-            precioBazarDiv.innerHTML =
-                '<span class="card-precio-mayoreo-etiqueta">Precio Mayoreo</span>' +
-                '<span class="card-precio-mayoreo-badge">$' + p.precioBazar + ' MXN</span>';
-            preciosBloque.appendChild(precioBazarDiv);
-        }
-        card.appendChild(preciosBloque);
-
-        // ── Abrir modal al hacer clic en la card ──
-        card.addEventListener('click', function(e) {
-            if (e.target.closest('.btn-like')) return;
-            if (e.target.closest('.btn-carrito-card')) return;
-            if (typeof abrirModalProducto === 'function') {
-                abrirModalProducto(card);
-            }
-        });
-
-        grid.appendChild(card);
+      }
     });
-    // Sincronizar corazones con favoritos guardados
-    if (typeof syncBotonesLike === 'function') syncBotonesLike();
-}
+  }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════════
-// OPEN GRAPH DINÁMICO — actualiza meta tags según el producto en la URL
-// ══════════════════════════════════════════════════════════════════════════════
+  // Notas: según su etiqueta pertenecen a Actividades, Trabajo, Pedidos de Yeso o a Notas
+  (f.notas || []).forEach((n) => {
+    const fn = hyDeNota(n.fecha);
+    if (!fn || fn.dia !== clave) return;
+    const zona = n.etiqueta === "Actividades" ? "actividades"
+      : n.etiqueta === "Trabajo" ? "trabajo"
+      : n.etiqueta === "Pedidos de Yeso" ? "yeso"
+      : "notas";
+    por[zona].push({
+      nombre: n.nombre || "Sin nombre",
+      hora: fn.hora,
+      texto: n.texto,
+      extra: zona === "notas" ? n.etiqueta : "",
+      origen: { tipo: "nota", id: n.id },
+    });
+  });
 
-function _actualizarMetaOG(titulo, descripcion, imagen, url) {
-    function setMeta(id, valor) {
-        var el = document.getElementById(id);
-        if (el && valor) el.setAttribute('content', valor);
+  (f.ejercicios || []).forEach((e) => {
+    if (e.fecha === clave) {
+      por.ejercicio.push({ nombre: e.nombre, hora: "", texto: e.descripcion, origen: { tipo: "ejercicio", id: e.id } });
     }
-    var urlFinal = url || window.location.href;
-    setMeta('og-url',         urlFinal);
-    setMeta('og-title',       titulo + ' — Yesos Polo Kukúmita');
-    setMeta('og-description', descripcion || 'Descubre este producto en Yesos Polo Kukúmita.');
-    setMeta('og-image',       imagen);
-    setMeta('tw-title',       titulo + ' — Yesos Polo Kukúmita');
-    setMeta('tw-description', descripcion || 'Descubre este producto en Yesos Polo Kukúmita.');
-    setMeta('tw-image',       imagen);
-    // Actualizar también el <title> de la página
-    document.title = titulo + ' — Yesos Polo Kukúmita';
-}
-
-function _abrirProductoDesdeURL() {
-    var params = new URLSearchParams(window.location.search);
-    var nombreParam = params.get('producto');
-    if (!nombreParam) return;
-
-    var nombreBuscado = decodeURIComponent(nombreParam).trim().toLowerCase();
-
-    // Buscar la card que coincida con el nombre
-    var cardEncontrada = null;
-    document.querySelectorAll('.card-dinamica').forEach(function(card) {
-        var nombreCard = (card.getAttribute('data-nombre') || '').trim().toLowerCase();
-        if (nombreCard === nombreBuscado) cardEncontrada = card;
-    });
-
-    if (!cardEncontrada) return;
-
-    // Actualizar meta OG con los datos del producto
-    var nombre    = cardEncontrada.getAttribute('data-nombre') || '';
-    var desc      = cardEncontrada.getAttribute('data-descripcion') || '';
-    var imagenes  = [];
-    try { imagenes = JSON.parse(cardEncontrada.getAttribute('data-imagenes') || '[]'); } catch(e) {}
-    var imagen    = imagenes[0] || '';
-    var urlProd   = window.location.origin + window.location.pathname + '?producto=' + encodeURIComponent(nombre);
-
-    _actualizarMetaOG(nombre, desc, imagen, urlProd);
-
-    // Abrir el modal del producto con un pequeño retraso para que la UI esté lista
-    setTimeout(function() {
-        if (typeof abrirModalProducto === 'function') abrirModalProducto(cardEncontrada);
-    }, 300);
-}
-
-// Restaurar meta OG genéricos al cerrar el modal
-(function() {
-    var _tituloOriginal    = document.title;
-    var _ogTitleOriginal   = 'Yesos Polo Kukúmita — Arreglos y Productos Artesanales';
-    var _ogDescOriginal    = 'Descubre nuestros hermosos arreglos y productos artesanales de Yesos Polo Kukúmita.';
-    var _ogImagenOriginal  = 'https://elpologr.github.io/yesospolokukumita/imagenes/perfil-yesoskukumita.webp';
-
-    document.addEventListener('modalProductoCerrado', function() {
-        document.title = _tituloOriginal;
-        function setMeta(id, val) { var el=document.getElementById(id); if(el) el.setAttribute('content',val); }
-        setMeta('og-title',       _ogTitleOriginal);
-        setMeta('og-description', _ogDescOriginal);
-        setMeta('og-image',       _ogImagenOriginal);
-        setMeta('tw-title',       _ogTitleOriginal);
-        setMeta('tw-description', _ogDescOriginal);
-        setMeta('tw-image',       _ogImagenOriginal);
-    });
-})();
-
-// CARGA DESDE GOOGLE SHEETS (CSV público)
-// ══════════════════════════════════════════════════════════════════════════════
-function cargarDesdeGoogleSheets() {
-    var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv';
-
-    mostrarEstadoCarga('Cargando catálogo desde Google Sheets…', false);
-
-    fetchCSVConCache(csvUrl, 'kukumita_csv_catalogo')
-        .then(function(texto) {
-            var filas = parsearCSV(texto);
-
-            // ── DIAGNÓSTICO: imprime las primeras 3 filas del CSV en consola ──
-            console.group('[Kukumita] RAW CSV — primeras 3 filas');
-            for (var _di = 0; _di < Math.min(3, filas.length); _di++) {
-                console.log('Fila ' + _di + ' (' + filas[_di].length + ' columnas):');
-                filas[_di].forEach(function(val, idx) {
-                    if (val) console.log('  [' + idx + '] = ' + val.substring(0, 80));
-                });
-            }
-            console.groupEnd();
-
-            var productos = csvAProductos(filas);
-
-            if (productos.length === 0) {
-                mostrarEstadoCarga('La hoja está vacía o no tiene el formato correcto.', true);
-                return;
-            }
-
-            listaProductos = productos;
-            renderizarCatalogoCompleto();
-
-            // Re-ejecutar los scripts que procesan las cards (subtags, aditivos, miniaturas, etc.)
-            if (typeof syncBotonesLike === 'function') syncBotonesLike();
-
-            // Disparar evento para que otros sistemas (paginación, filtros) se enteren
-            document.dispatchEvent(new CustomEvent('catalogoCargado'));
-
-            // Refrescar carruseles de ofertas/más vendidos con las nuevas cards
-            if (typeof window.refrescarCarruseles === 'function') {
-                setTimeout(function() { window.refrescarCarruseles(); }, 50);
-            }
-
-            // ── Leer ?producto= de la URL y abrir ese modal automáticamente ──
-            _abrirProductoDesdeURL();
-
-            // Log de diagnostico: precios y tipos de cada producto (visible en DevTools > Consola)
-            console.group('[Kukumita] Catalogo cargado — ' + listaProductos.length + ' productos');
-            listaProductos.forEach(function(p) {
-                console.log(
-                    p.nombre +
-                    ' | precio=$' + p.precioNormal +
-                    ' | imagen=' + (p.imagen ? p.imagen.substring(0,40)+'…' : 'SIN IMAGEN') +
-                    ' | oferta=' + p.oferta +
-                    ' | masVendido=' + p.masVendido +
-                    ' | tipos=[' + (p.tipos || [p.tipo]).join('|') + ']'
-                );
-            });
-            console.groupEnd();
-        })
-        .catch(function(err) {
-            console.error('Error cargando Google Sheets:', err);
-            mostrarEstadoCarga(
-                'No se pudo cargar el catálogo. ¿La hoja está publicada como CSV?',
-                true
-            );
-        });
-}
-
-// Iniciar carga al cargar la página
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', cargarDesdeGoogleSheets);
-} else {
-    cargarDesdeGoogleSheets();
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// CARGA DE PRODUCTOS PARA EL BOTÓN "ETIQUETAS" — Hoja 2 de un Google Sheets distinto
-// ══════════════════════════════════════════════════════════════════════════════
-var listaProductosEtiquetas = [];
-var _etiquetasCargando = false;
-var _etiquetasCargadas = false;
-
-function mostrarEstadoCargaEtiquetas(mensaje, esError) {
-    var grid = document.getElementById('gridProductosEtiquetas');
-    if (!grid) return;
-    grid.innerHTML =
-        '<div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:' +
-        (esError ? '#c0392b' : '#8c7565') + ';">' +
-        '<div style="font-size:2rem; margin-bottom:12px;">' + (esError ? '⚠️' : '⏳') + '</div>' +
-        '<p style="font-size:1rem; font-weight:600;">' + mensaje + '</p>' +
-        (esError ? '<p style="font-size:0.85rem; color:#999; margin-top:8px;">Revisa que "' + SHEET_NOMBRE_ETIQUETAS + '" sea el nombre correcto de la pestaña y que la hoja esté compartida como "Cualquiera con el enlace puede ver".</p>' : '') +
-        '</div>';
-}
-
-// Carga (una sola vez, con caché en memoria) los productos de la Hoja 2 del
-// Google Sheets de Etiquetas y los pinta en su propio grid.
-function cargarProductosEtiquetas(forzar) {
-    if (_etiquetasCargando) return;
-    if (_etiquetasCargadas && !forzar) {
-        renderizarCatalogoEnGrid('gridProductosEtiquetas', listaProductosEtiquetas);
-        return;
+  });
+  (f.diarios || []).forEach((d) => {
+    if (d.fecha === clave) {
+      por.diario.push({
+        nombre: d.nombre,
+        hora: "",
+        marca: d.marca === "Tarea finalizada" ? "✅ Tarea finalizada" : d.terminado ? "✅ Terminado" : "",
+        texto: d.descripcion,
+        extra: d.marca === "Tarea finalizada" ? "Anotación de Tarea Finalizada" : d.terminado ? "Trabajo terminado" : "",
+        finalizada: d.marca === "Tarea finalizada",
+      });
     }
-    _etiquetasCargando = true;
-    mostrarEstadoCargaEtiquetas('Cargando productos desde Google Sheets…', false);
+  });
+  (f.informaciones || []).forEach((i) => {
+    if (i.fecha === clave) {
+      por.informacion.push({ nombre: i.nombre, hora: "", texto: i.descripcion, origen: { tipo: "informacion", id: i.id } });
+    }
+  });
+  (f.comandos || []).forEach((c) => {
+    if (c.fecha === clave) {
+      por.comandos.push({ nombre: c.nombre, hora: "", texto: c.descripcion, origen: { tipo: "comando", id: c.id } });
+    }
+  });
 
-    var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS +
-        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
-
-    fetchCSVConCache(csvUrl, 'kukumita_csv_etiquetas_' + SHEET_NOMBRE_ETIQUETAS)
-        .then(function(texto) {
-            var filas = parsearCSV(texto);
-            var productos = csvAProductos(filas);
-
-            if (productos.length === 0) {
-                mostrarEstadoCargaEtiquetas('Esa hoja está vacía o no tiene el formato correcto.', true);
-                _etiquetasCargando = false;
-                return;
-            }
-
-            listaProductosEtiquetas = productos;
-            _etiquetasCargadas = true;
-            _etiquetasCargando = false;
-            renderizarCatalogoEnGrid('gridProductosEtiquetas', listaProductosEtiquetas);
-
-            if (typeof syncBotonesLike === 'function') syncBotonesLike();
-            document.dispatchEvent(new CustomEvent('catalogoEtiquetasCargado'));
-        })
-        .catch(function(err) {
-            console.error('Error cargando hoja de Etiquetas:', err);
-            _etiquetasCargando = false;
-            mostrarEstadoCargaEtiquetas('No se pudo cargar el catálogo de Etiquetas.', true);
-        });
+  return HY_ZONAS.map((zona) => {
+    // Los que tienen hora van por hora; los demás se quedan en el orden de la hoja
+    const items = por[zona.id].sort((x, y) => (x.hora || "99:99").localeCompare(y.hora || "99:99"));
+    return { zona, items };
+  });
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Polo Kukúmita):
-//   • Zona "Mostrar Más Etiquetas" (fila 9,  posiciones 26-28) → primeras 3
-//     etiquetas de la Hoja 2 de Velas Kukúmita.
-//   • Zona "Mostrar Más Velas"     (fila 10, posiciones 29-31) → primeros 3
-//     productos de la Hoja 1 de Velas Kukúmita.
-// En la hoja de Yesos, las filas 26-31 deben quedar SIN link de imagen en la
-// columna F para que csvAProductos() las ignore y así dejar ese hueco libre
-// para estos 6 productos "prestados".
-// ══════════════════════════════════════════════════════════════════════════════
-var FILA_INICIO_ETIQUETAS = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de "Etiquetas"
-var FILA_INICIO_VELAS     = 29; // ídem para el 1er producto de Velas
-var _especialesInsertados = false;
-
-// Clona un producto (ya parseado desde OTRA hoja) y le asigna el "id" que le
-// haría mostrar en el badge del modal la fila que le correspondería dentro
-// del catálogo de Yesos (data-sheet-row = id + 1), en vez de su fila real
-// en la hoja de Velas Kukúmita.
-function _prepararProductoEspecial(p, filaSheetsSimulada, origen) {
-    var clone = Object.assign({}, p);
-    clone.id = filaSheetsSimulada - 1;
-    clone._origenExterno = origen;
-    return clone;
+// Un grupo de recuadros (título de la zona + sus recuadros)
+function hyCrearGrupo(g) {
+  const sec = document.createElement("section");
+  sec.className = "hoy-grupo";
+  const titulo = document.createElement("h3");
+  titulo.className = "notas-grupo-titulo";
+  titulo.textContent = g.zona.icono + " " + g.zona.titulo;
+  const cuenta = document.createElement("span");
+  cuenta.className = "notas-grupo-cuenta";
+  cuenta.textContent = String(g.items.length);
+  titulo.appendChild(cuenta);
+  const chips = document.createElement("div");
+  chips.className = "ej-chips";
+  g.items.forEach((it) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ej-chip ej-chip-resumen" + (it.finalizada ? " ej-chip-finalizada" : "");
+    b.title = it.nombre + (it.hora ? " (" + it.hora + ")" : "");
+    b.setAttribute("aria-label", "Ver " + it.nombre + " de " + g.zona.titulo);
+    const n = document.createElement("span");
+    n.className = "ej-chip-nombre";
+    n.textContent = it.nombre;
+    const t = document.createElement("span");
+    t.className = "ej-chip-desc";
+    t.textContent = resumenCorto(it.texto, 70);
+    if (it.hora || it.marca) {
+      const f = document.createElement("span");
+      f.className = "ej-chip-fecha";
+      f.textContent = it.hora || it.marca;
+      b.append(n, f, t);
+    } else {
+      b.append(n, t);
+    }
+    b.addEventListener("click", () => abrirDetalleHy(g.zona, it));
+    chips.appendChild(b);
+  });
+  sec.append(titulo, chips);
+  return sec;
 }
 
-function cargarProductosEspecialesVelas() {
-    var urlHoja1 = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS + '/gviz/tq?tqx=out:csv';
-    var urlHoja2 = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID_ETIQUETAS +
-        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_ETIQUETAS);
+function dibujarHoy() {
+  hyFecha.textContent = hyFechaLarga();
+  hyGruposEl.innerHTML = "";
+  if (!hyCargadas) return;
+  const conAlgo = hyGrupos.filter((g) => g.items.length);
+  if (!conAlgo.length) {
+    const p = document.createElement("p");
+    p.className = "notas-vacio";
+    p.textContent = "No hay nada registrado con la fecha de hoy.";
+    hyGruposEl.appendChild(p);
+    return;
+  }
+  // El Diario va aparte: primero las demás zonas, y debajo de una línea los recuadros del Diario
+  conAlgo.filter((g) => g.zona.id !== "diario").forEach((g) => hyGruposEl.appendChild(hyCrearGrupo(g)));
+  const diario = conAlgo.find((g) => g.zona.id === "diario");
+  if (diario) {
+    const linea = document.createElement("hr");
+    linea.className = "hoy-separador";
+    hyGruposEl.append(linea, hyCrearGrupo(diario));
+  }
+}
 
-    Promise.all([
-        fetchCSVConCache(urlHoja1, 'kukumita_csv_velas'),
-        fetchCSVConCache(urlHoja2, 'kukumita_csv_etiquetas_' + SHEET_NOMBRE_ETIQUETAS)
-    ]).then(function(textos) {
-        var productosVelas     = csvAProductos(parsearCSV(textos[0])).slice(0, 3);
-        var productosEtiquetas = csvAProductos(parsearCSV(textos[1])).slice(0, 3);
+// ----- Detalle de un recuadro (solo lectura) -----
+function abrirDetalleHy(zona, it) {
+  hyAbierta = zona;
+  hyItemAbierto = it;
+  hyEl("hy-detalle-fin").hidden = !it.origen; // lo del Diario ya está en el Diario
+  hyEl("hy-detalle-fin").disabled = false;
+  setEstado(hyEl("hy-detalle-estado"), "");
+  hyEl("hy-detalle-nombre").textContent = it.nombre;
+  hyEl("hy-detalle-origen").textContent =
+    zona.icono + " " + zona.titulo + (it.extra ? " · " + it.extra : "") + (it.hora ? " · " + it.hora : "");
+  hyEl("hy-detalle-texto").textContent = it.texto || "Sin descripción";
+  hyDetalleIr.textContent = "Abrir " + zona.titulo;
+  hyDetalle.hidden = false;
+}
+function cerrarDetalleHy() {
+  hyDetalle.hidden = true;
+  hyAbierta = null;
+  hyItemAbierto = null;
+}
 
-        var especiales = [];
-        productosEtiquetas.forEach(function(p, i) {
-            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_ETIQUETAS + i, 'etiquetas-externas'));
-        });
-        productosVelas.forEach(function(p, i) {
-            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_VELAS + i, 'velas'));
-        });
+// Nombre para el Diario cuando lo que se finaliza viene del Calendario (su recuadro solo se llama «Actividades», etc.)
+function hyNombreDeTexto(texto, respaldo) {
+  const linea = String(texto || "").split(/\r?\n/).map((x) => x.trim()).find((x) => x) || respaldo || "Tarea finalizada";
+  return linea.length > 70 ? linea.slice(0, 69) + "…" : linea;
+}
 
-        _insertarProductosEspecialesEnListaPrincipal(especiales);
-    }).catch(function(err) {
-        console.error('No se pudieron cargar los productos especiales de Velas Kukúmita:', err);
+// «Dar por finalizado»: la nota se quita de donde estaba y pasa al Diario (con la fecha de hoy) como
+// «Anotación de Tarea Finalizada». Primero se agrega al Diario y después se quita del origen; si algo falla
+// a medias se puede volver a intentar sin que quede repetida (el Diario no repite un mismo Id).
+async function finalizarHy() {
+  const zona = hyAbierta;
+  const it = hyItemAbierto;
+  if (!zona || !it || !it.origen) return;
+  const o = it.origen;
+  const esCal = o.tipo === "calendario";
+  const nombre = (esCal ? hyNombreDeTexto(it.texto, it.nombre) : it.nombre || "Sin nombre").slice(0, 80);
+  if (!window.confirm("¿Dar por finalizado «" + nombre + "»? Se quitará de " + zona.titulo + " y pasará al Diario con la fecha de hoy.")) return;
+  const boton = hyEl("hy-detalle-fin");
+  const estado = hyEl("hy-detalle-estado");
+  boton.disabled = true;
+  setEstado(estado, "Finalizando…");
+  const hoyClave = hyClaveHoy();
+  const id = o.id || it.finId || (it.finId = String(Date.now() * 1000 + Math.floor(Math.random() * 1000)));
+  const descripcion = String(it.texto || "").slice(0, 50000);
+  try {
+    // 1) Agregarla al Diario como tarea finalizada
+    await llamarNotas("diario_agregar", { id, nombre, fecha: hoyClave, descripcion, terminado: "Tarea finalizada" });
+    // 2) Quitarla de donde estaba
+    if (o.tipo === "nota") {
+      await llamarNotas("nota_borrar", { id: o.id });
+      notas = notas.filter((n) => n.id !== o.id);
+      if (notasCargadas) dibujarNotas();
+    } else if (o.tipo === "ejercicio") {
+      await llamarNotas("ejercicio_borrar", { id: o.id });
+      ejCargados = false; // se vuelve a leer al entrar
+    } else if (o.tipo === "informacion") {
+      await llamarNotas("informacion_borrar", { id: o.id });
+      ipCargadas = false;
+    } else if (o.tipo === "comando") {
+      await llamarNotas("comando_borrar", { id: o.id });
+      cmCargadas = false;
+    } else if (esCal) {
+      let nuevo = "";
+      if (!o.todo) {
+        const elementos = parsearElementos(o.crudo);
+        elementos.splice(o.indice, 1);
+        nuevo = serializarElementos(elementos);
+      }
+      await guardarCampo(o.fecha, o.campo, nuevo);
+      if (calendarioCargado) dibujarCalendario();
+    }
+    diCargados = false; // el Diario se vuelve a leer al entrar y ya trae la nueva anotación
+    // 3) Actualizar esta página: sale de su grupo y aparece en el Diario, en verde
+    const grupo = hyGrupos.find((g) => g.zona.id === zona.id);
+    if (grupo) grupo.items = grupo.items.filter((x) => x !== it);
+    let gd = hyGrupos.find((g) => g.zona.id === "diario");
+    if (!gd) {
+      gd = { zona: HY_ZONAS.find((z) => z.id === "diario"), items: [] };
+      hyGrupos.push(gd);
+    }
+    gd.items.push({
+      nombre,
+      hora: "",
+      marca: "✅ Tarea finalizada",
+      texto: descripcion,
+      extra: "Anotación de Tarea Finalizada",
+      finalizada: true,
     });
+    cerrarDetalleHy();
+    dibujarHoy();
+    setEstado(hyEstado, "Tarea finalizada ✓ (ya está en el Diario)", "ok");
+  } catch (e) {
+    boton.disabled = false;
+    setEstado(estado, "Error: " + e.message + " — puedes volver a intentarlo", "error");
+  }
+}
+// Lleva a la zona de donde viene el recuadro (para verlo completo o modificarlo)
+function irAZonaHy() {
+  const zona = hyAbierta;
+  if (!zona) return;
+  cerrarDetalleHy();
+  mostrarSeccion(zona.seccion);
+  // Actividades, Trabajo y Pedidos de Yeso arman su zona con las notas: se prepara igual que desde su botón
+  const z = zonas.find((x) => x.cfg.seccion === zona.seccion);
+  if (z) {
+    if (z.actualizar() && !notasCargadas) cargarNotasZonas();
+    else z.dibujar();
+  }
 }
 
-function _insertarProductosEspecialesEnListaPrincipal(especiales) {
-    if (!especiales || especiales.length === 0) return;
-    // Punto de inserción: justo antes del primer producto real cuya fila de
-    // Google Sheets sea igual o mayor a donde deberían ir estos especiales.
-    var idx = listaProductos.findIndex(function(p) { return (p.id + 1) >= FILA_INICIO_ETIQUETAS; });
-    if (idx === -1) idx = listaProductos.length;
-    listaProductos.splice.apply(listaProductos, [idx, 0].concat(especiales));
-
-    renderizarCatalogoCompleto();
-    if (typeof syncBotonesLike === 'function') syncBotonesLike();
-    document.dispatchEvent(new CustomEvent('catalogoCargado'));
+// ----- Carga y sesión -----
+// Pide a la vez los datos de todas las zonas con fecha; si alguna falla, se muestran las demás y se avisa cuál.
+async function cargarHoy() {
+  const peticion = ++hyPeticion;
+  hyCargando = true;
+  setEstado(hyEstado, "Cargando…");
+  const clave = hyClaveHoy();
+  const pedidos = [
+    ["Calendario", "calendario_listar"],
+    ["Notas", "nota_listar"],
+    ["Ejercicio", "ejercicio_listar"],
+    ["Diario", "diario_listar"],
+    ["Información Primordial", "informacion_listar"],
+    ["Comandos", "comando_listar"],
+  ];
+  const resultados = await Promise.allSettled(pedidos.map((p) => llamarNotas(p[1])));
+  if (peticion !== hyPeticion) return; // llegó otra petición más nueva: esta ya no sirve
+  hyCargando = false;
+  if (!sesionVigente()) return; // se cerró la sesión mientras cargaba
+  const fallaron = [];
+  const dato = (i) => {
+    const r = resultados[i];
+    if (r.status === "fulfilled") return r.value;
+    fallaron.push(pedidos[i][0]);
+    return null;
+  };
+  const cal = dato(0), nts = dato(1), ejs = dato(2), dis = dato(3), ips = dato(4), cms = dato(5);
+  hyGrupos = hyArmar(clave, {
+    calendario: cal ? cal.datos : null,
+    notas: nts ? nts.notas : null,
+    ejercicios: ejs ? ejs.ejercicios : null,
+    diarios: dis ? dis.diarios : null,
+    informaciones: ips ? ips.informaciones : null,
+    comandos: cms ? cms.comandosLista : null,
+  });
+  hyCargadas = true;
+  if (fallaron.length) setEstado(hyEstado, "No se pudo leer: " + fallaron.join(", "), "error");
+  else setEstado(hyEstado, "");
+  dibujarHoy();
 }
 
-// Se dispara una sola vez, justo después de que el catálogo principal de
-// Yesos haya cargado por primera vez.
-document.addEventListener('catalogoCargado', function() {
-    if (_especialesInsertados) return;
-    _especialesInsertados = true;
-    cargarProductosEspecialesVelas();
+function actualizarPanelHoy() {
+  if (!sesionVigente()) {
+    // Sin sesión no se guardan datos en pantalla
+    hyCargadas = false;
+    hyGrupos = [];
+  }
+  if (panelHy.hidden || seccionHy.hidden) return;
+  const dentro = sesionVigente();
+  hySinSesion.hidden = dentro;
+  hyContenido.hidden = !dentro;
+  if (dentro) {
+    if (!hyCargadas && !hyCargando) cargarHoy();
+    else dibujarHoy();
+  } else {
+    cerrarDetalleHy();
+    dibujarHoy();
+  }
+}
+
+// Se llama al entrar a la página (desde mostrarSeccion): siempre vuelve a leer, porque «hoy» puede haber cambiado
+function entrarHoy() {
+  cerrarDetalleHy();
+  panelHy.hidden = false;
+  hyCargadas = false;
+  dibujarHoy();
+  actualizarPanelHoy();
+}
+// Día de Hoy es una página: aquí solo se cierra la ventana de detalle
+function cerrarHoy() {
+  cerrarDetalleHy();
+}
+
+hyEl("hy-cerrar").addEventListener("click", cerrarHoy);
+hyEl("hy-actualizar").addEventListener("click", () => {
+  if (sesionVigente()) cargarHoy();
+  else actualizarPanelHoy();
+});
+hyEl("hy-ir-login").addEventListener("click", () => {
+  cerrarHoy();
+  abrirLateral();
+});
+hyEl("hy-detalle-cerrar").addEventListener("click", cerrarDetalleHy);
+hyDetalleIr.addEventListener("click", irAZonaHy);
+hyEl("hy-detalle-fin").addEventListener("click", finalizarHy);
+hyDetalle.addEventListener("click", (e) => {
+  if (e.target === hyDetalle) cerrarDetalleHy(); // tocar fuera de la ventana la cierra
+});
+// Esc cierra el detalle
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || hyDetalle.hidden) return;
+  cerrarDetalleHy();
 });
 
+// ---------- Notario: una zona de notas dentro de una zona de notas ----------
+// Un Notario tiene nombre y descripción, y guarda varias notas por separado dentro de UNA sola celda de
+// la hoja «Notarios» (columna E). Google Sheets permite 50,000 caracteres por celda, así que cada Notario
+// muestra un medidor y avisa cuando queda poco espacio; al llegar al límite ya no deja agregar más.
+// Se puede crear desde cualquiera de estas zonas (la clave debe estar también en ZONAS_NOTARIO del Apps Script).
+// El formato de la celda y las reglas de limpieza deben ser iguales a los del Apps Script.
+const NT_LIMITE = 50000; // máximo de caracteres por celda de Google Sheets
+const NT_AVISO = 45000; // desde aquí: «queda poco espacio» (90 %)
+const NT_CRITICO = 49000; // desde aquí: «casi lleno» (98 %)
+const NT_SEPARADOR = "\n~~~✂~~~\n";
+const NT_MARCA = "~~~✂~~~";
 
+var NT = { lista: [], cargados: false, cargando: false, montajes: [], abierto: null, zonaNueva: null, editandoNota: null };
 
-// ===== BARRAS DE CATEGORÍA SOBRE CADA FILA (solo página 1, modo "Mostrar Todo") =====
-// Aparecen arriba de cada una de las 10 filas de 3 productos que forman los
-// primeros 30 productos de la hoja principal de productos (no aplica al grid de "Etiquetas").
-// Cada barra funciona como botón de filtro: al presionarla, filtra el catálogo
-// exactamente igual que si se hubiera seleccionado esa etiqueta en "Filtrar por".
-var CATEGORIAS_BARRAS = [
-    { texto: 'Mostrar Más Figuras',        tipo: 'figuras' },
-    { texto: 'Mostrar Más Bases',          tipo: 'bases' },
-    { texto: 'Mostrar Más Macetas',        tipo: 'macetas' },
-    { texto: 'Mostrar Más Porta Velas',    tipo: 'portavelas' },
-    { texto: 'Mostrar Más Tazones',        tipo: 'tazones' },
-    { texto: 'Mostrar Más Porta Inciensos',tipo: 'portainciensos' },
-    { texto: 'Mostrar Más Alajeros',       tipo: 'alajeros' },
-    { texto: 'Mostrar Más Arreglos',       tipo: 'arreglo' },
-    { texto: 'Mostrar Más Etiquetas',      origenExterno: 'etiquetas-externas' },
-    { texto: 'Mostrar Más Velas',          origenExterno: 'velas' }
-];
+const ntFmt = (n) => Number(n).toLocaleString("es-MX");
+const ntLimpiar = (t) => String(t || "").split(NT_MARCA).join("~~✂~~").trim();
+const ntNuevoId = () => String(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+// Largo EXACTO que tendrá la celda (con encabezados y separadores), tal como lo calcula el Apps Script
+function ntLargo(notas) {
+  return notas.map((n) => "#" + n.id + "|" + n.fecha + "\n" + n.texto).join(NT_SEPARADOR).length;
+}
+function ntNivel(largo) {
+  return largo >= NT_CRITICO ? "critico" : largo >= NT_AVISO ? "aviso" : "ok";
+}
+const ntPorId = (id) => NT.lista.find((n) => n.id === id) || null;
 
-// Grupos de palabras equivalentes usados para reconocer la categoría de cada
-// producto a partir de su(s) data-tipos, igual que el sistema de filtros del sitio.
-// Se comparan sin acentos, espacios ni mayúsculas para tolerar variaciones de
-// escritura en la columna "EtiquetaPrincipal" de Google Sheets.
-var _VARIANTES_CATEGORIA_BARRA = {
-    figuras:        ['figura', 'figuras', 'animal', 'animales'],
-    bases:          ['base', 'bases'],
-    macetas:        ['maceta', 'macetas'],
-    portavelas:     ['portavela', 'portavelas', 'porta vela', 'porta velas'],
-    tazones:        ['tazon', 'tazones', 'tazón', 'tazónes'],
-    portainciensos: ['portaincienso', 'portainciensos', 'porta incienso', 'porta inciensos'],
-    alajeros:       ['alajero', 'alajeros', 'alhajero', 'alhajeros', 'joyero', 'joyeros'],
-    arreglo:        ['arreglo', 'arreglos']
+// ----- Ventana del notario (una sola, compartida por todas las zonas) -----
+const ntModal = document.createElement("div");
+ntModal.className = "nt-modal";
+ntModal.hidden = true;
+ntModal.innerHTML = `
+  <div class="nt-caja" role="dialog" aria-modal="true" aria-labelledby="nt-titulo">
+    <div class="nt-cab">
+      <h3 id="nt-titulo" class="nt-titulo">Nuevo notario</h3>
+      <button type="button" class="nt-cerrar" aria-label="Cerrar" title="Cerrar">&times;</button>
+    </div>
+    <div class="nt-datos">
+      <label class="nt-campo">
+        <span>Nombre</span>
+        <input class="nt-nombre" type="text" maxlength="80" placeholder="Nombre del notario" autocomplete="off" />
+      </label>
+      <label class="nt-campo">
+        <span>Descripción</span>
+        <textarea class="nt-desc" rows="3" maxlength="5000" placeholder="¿Para qué es este notario?"></textarea>
+      </label>
+      <div class="nt-fila">
+        <button type="button" class="notas-btn nt-guardar-datos">Crear notario</button>
+        <button type="button" class="notas-btn nt-borrar-notario" hidden>Eliminar notario</button>
+        <span class="notas-estado nt-estado-datos"></span>
+      </div>
+    </div>
+    <div class="nt-notas" hidden>
+      <div class="nt-medidor nt-ok">
+        <div class="nt-medidor-texto">
+          <strong class="nt-uso"></strong>
+          <span class="nt-resta"></span>
+        </div>
+        <div class="nt-medidor-barra"><i></i></div>
+        <p class="nt-mensaje" hidden></p>
+      </div>
+      <div class="nt-nueva">
+        <textarea class="nt-texto" rows="4" placeholder="Escribe una nota nueva…" aria-label="Nueva nota del notario"></textarea>
+        <div class="nt-fila">
+          <button type="button" class="notas-btn nt-agregar">Agregar nota</button>
+          <span class="nt-contador"></span>
+        </div>
+        <span class="notas-estado nt-estado-nota"></span>
+      </div>
+      <h4 class="nt-lista-titulo"></h4>
+      <div class="nt-lista"></div>
+    </div>
+  </div>`;
+document.body.appendChild(ntModal);
+
+const ntq = (s) => ntModal.querySelector(s);
+const ntEl = {
+  titulo: ntq(".nt-titulo"),
+  nombre: ntq(".nt-nombre"),
+  desc: ntq(".nt-desc"),
+  guardarDatos: ntq(".nt-guardar-datos"),
+  borrarNotario: ntq(".nt-borrar-notario"),
+  estadoDatos: ntq(".nt-estado-datos"),
+  notas: ntq(".nt-notas"),
+  medidor: ntq(".nt-medidor"),
+  uso: ntq(".nt-uso"),
+  resta: ntq(".nt-resta"),
+  barra: ntq(".nt-medidor-barra i"),
+  aviso: ntq(".nt-mensaje"),
+  texto: ntq(".nt-texto"),
+  agregar: ntq(".nt-agregar"),
+  contador: ntq(".nt-contador"),
+  estadoNota: ntq(".nt-estado-nota"),
+  listaTitulo: ntq(".nt-lista-titulo"),
+  lista: ntq(".nt-lista"),
 };
 
-// Quita acentos, espacios, guiones y pasa a minúsculas para comparar sin
-// importar cómo se haya escrito la etiqueta en la hoja de cálculo.
-function _normalizarCategoriaBarra(str) {
-    return (str || '').toString().toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[\s_\-]+/g, '');
+// Medidor de caracteres del notario abierto (con el aviso de poco espacio)
+function ntDibujarMedidor(n) {
+  const largo = ntLargo(n.notas);
+  const resta = Math.max(0, NT_LIMITE - largo);
+  const nivel = ntNivel(largo);
+  ntEl.medidor.className = "nt-medidor nt-" + nivel;
+  ntEl.uso.textContent = ntFmt(largo) + " / " + ntFmt(NT_LIMITE) + " caracteres";
+  ntEl.resta.textContent = "quedan " + ntFmt(resta);
+  ntEl.barra.style.width = Math.min(100, (largo / NT_LIMITE) * 100).toFixed(1) + "%";
+  if (nivel === "ok") {
+    ntEl.aviso.hidden = true;
+  } else {
+    ntEl.aviso.hidden = false;
+    ntEl.aviso.textContent =
+      resta === 0
+        ? "🚫 Este notario está lleno. Ya no caben más notas: elimina o acorta alguna, o crea otro notario."
+        : nivel === "critico"
+        ? "🚫 Casi lleno: solo quedan " + ntFmt(resta) + " caracteres. Crea otro notario para seguir anotando."
+        : "⚠️ Queda poco espacio: solo quedan " + ntFmt(resta) + " caracteres en este notario.";
+  }
 }
 
-function _cardCoincideConCategoriaBarra(card, cfg) {
-    if (cfg.origenExterno) {
-        return card.getAttribute('data-origen-externo') === cfg.origenExterno;
-    }
-    var rawTipos = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
-    var rawSubtags = (card.getAttribute('data-subtags') || '');
-    var candidatos = (rawTipos + '|' + rawSubtags).split(/[|,]/)
-        .map(function(s) { return _normalizarCategoriaBarra(s.replace(/^"+|"+$/g, '')); })
-        .filter(Boolean);
-    var lista = (_VARIANTES_CATEGORIA_BARRA[cfg.tipo] || [cfg.tipo]).map(_normalizarCategoriaBarra);
-    return candidatos.some(function(c) {
-        return lista.some(function(v) { return c === v || c.indexOf(v) !== -1 || v.indexOf(c) !== -1; });
-    });
+// Contador de la nota que se está escribiendo: cuánto ocupará y si cabe
+function ntActualizarContador() {
+  const n = ntPorId(NT.abierto);
+  if (!n) return;
+  const texto = ntLimpiar(ntEl.texto.value);
+  if (!texto) {
+    ntEl.contador.textContent = "";
+    ntEl.contador.className = "nt-contador";
+    ntEl.agregar.disabled = false;
+    return;
+  }
+  const total = ntLargo(n.notas.concat([{ id: "0000000000000000", fecha: selloFechaHora(), texto }]));
+  const sobran = total - NT_LIMITE;
+  if (sobran > 0) {
+    ntEl.contador.textContent = "No cabe: te pasas por " + ntFmt(sobran) + " caracteres";
+    ntEl.contador.className = "nt-contador nt-contador-error";
+    ntEl.agregar.disabled = true;
+  } else {
+    ntEl.contador.textContent = "Con esta nota: " + ntFmt(total) + " / " + ntFmt(NT_LIMITE);
+    ntEl.contador.className = "nt-contador" + (ntNivel(total) === "ok" ? "" : " nt-contador-aviso");
+    ntEl.agregar.disabled = false;
+  }
 }
 
-// Índice (0-9) de la barra actualmente usada como filtro, o null si no hay ninguna activa
-var _filtroBarraCategoriaActivo = null;
-
-function filtrarPorBarraCategoria(fila) {
-    var grid = document.getElementById('gridProductos');
-    if (!grid) return;
-    var cfg = CATEGORIAS_BARRAS[fila];
-    if (!cfg) return;
-
-    if (_filtroBarraCategoriaActivo === fila) {
-        // Ya estaba activa esta categoría: se desactiva y vuelve a mostrar todo
-        _filtroBarraCategoriaActivo = null;
-        grid.querySelectorAll('.card-dinamica').forEach(function(c) { c.classList.remove('oculto'); });
-    } else {
-        _filtroBarraCategoriaActivo = fila;
-        var coincidencias = 0;
-        grid.querySelectorAll('.card-dinamica').forEach(function(c) {
-            var coincide = _cardCoincideConCategoriaBarra(c, cfg);
-            if (coincide) coincidencias++;
-            c.classList.toggle('oculto', !coincide);
-        });
-        if (coincidencias === 0) {
-            console.warn(
-                '[Barra de categoría] "' + cfg.texto + '" no encontró productos con la etiqueta "' +
-                cfg.tipo + '". Revisa el texto exacto que escribiste en la columna EtiquetaPrincipal ' +
-                '(H) de Google Sheets para esos productos.'
-            );
-        }
-    }
-
-    if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-
-    var zonaFiltro = document.getElementById('panelTodos');
-    (zonaFiltro || grid).scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-window.filtrarPorBarraCategoria = filtrarPorBarraCategoria;
-
-// Detecta si hay una búsqueda de texto activa en cualquiera de los 3 buscadores
-// del sitio (buscador global superior, drawer de búsqueda, o el campo de texto
-// del panel "Todos"). Mientras haya búsqueda activa, los resultados ya no
-// corresponden a las categorías ordenadas manualmente entre los primeros 30
-// productos, así que las barras "Mostrar Más X" no deben aparecer.
-function _hayBusquedaDeTextoActiva() {
-    if (document.body.classList.contains('busqueda-global-activa')) return true;
-    if (window._busquedaDrawerTextoActiva) return true;
-    var inputTodos = document.getElementById('inputBusquedaTodos');
-    if (inputTodos && inputTodos.value.trim()) return true;
-    return false;
+// Lista de notas del notario abierto (la más reciente arriba)
+function ntDibujarNotas() {
+  const n = ntPorId(NT.abierto);
+  if (!n) return;
+  ntDibujarMedidor(n);
+  ntActualizarContador();
+  ntEl.listaTitulo.textContent = n.notas.length ? "Notas (" + n.notas.length + ")" : "";
+  ntEl.lista.innerHTML = "";
+  if (!n.notas.length) {
+    const p = document.createElement("p");
+    p.className = "notas-vacio";
+    p.textContent = "Aún no hay notas en este notario. ¡Agrega la primera! ✨";
+    ntEl.lista.appendChild(p);
+    return;
+  }
+  n.notas
+    .slice()
+    .reverse()
+    .forEach((nota) => ntEl.lista.appendChild(ntCrearNota(n, nota)));
 }
 
-function insertarBarrasCategoriaProductos() {
-    var grid = document.getElementById('gridProductos');
-    if (!grid) return;
-
-    // Quitar barras insertadas previamente (se recalculan en cada render)
-    grid.querySelectorAll('.barra-categoria-fila').forEach(function(b) { b.remove(); });
-
-    // Solo debe aparecer en el modo "Mostrar Todo"
-    var btnTodosProductos = document.getElementById('btnModoTodosProductos');
-    var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
-    if (!esModoMostrarTodo) return;
-
-    // No deben aparecer mientras el usuario esté usando algún buscador: el orden
-    // de resultados ya no corresponde a las 10 categorías acomodadas manualmente
-    if (_hayBusquedaDeTextoActiva()) return;
-
-    // Mientras haya un filtro de barra activo, se muestra una única barra para
-    // quitarlo en vez de las 10 (el listado ya no conserva la estructura de
-    // 10 filas de 3, así que las barras normales no aplican)
-    if (_filtroBarraCategoriaActivo !== null) {
-        var primeraCard = grid.querySelector('.card-dinamica');
-        var barraQuitar = document.createElement('button');
-        barraQuitar.type = 'button';
-        barraQuitar.className = 'barra-categoria-fila barra-categoria-fila-quitar';
-        barraQuitar.textContent = '✕ Quitar filtro y ver todo';
-        barraQuitar.addEventListener('click', function() { filtrarPorBarraCategoria(_filtroBarraCategoriaActivo); });
-        if (primeraCard) grid.insertBefore(barraQuitar, primeraCard);
-        else grid.appendChild(barraQuitar);
-        return;
-    }
-
-    // Solo en la página 1 de la paginación
-    var hashMatch = (window.location.hash || '').match(/pagina=(\d+)/);
-    var paginaActualNum = hashMatch ? parseInt(hashMatch[1], 10) : 1;
-    if (paginaActualNum !== 1) return;
-
-    var cards = Array.from(grid.querySelectorAll('.card-dinamica')).filter(function(c) {
-        return !c.classList.contains('oculto') && !c.classList.contains('paginacion-oculto');
-    });
-
-    for (var fila = 0; fila < 10; fila++) {
-        var idx = fila * 3;
-        if (idx >= cards.length) break;
-        var cfg = CATEGORIAS_BARRAS[fila] || { texto: 'Mostrar Más Productos' };
-        var barra = document.createElement('button');
-        barra.type = 'button';
-        barra.className = 'barra-categoria-fila';
-        barra.textContent = cfg.texto;
-        (function(filaCerrada) {
-            barra.addEventListener('click', function() { filtrarPorBarraCategoria(filaCerrada); });
-        })(fila);
-        grid.insertBefore(barra, cards[idx]);
-    }
-}
-window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
-
-// ===== PAGINACIÓN DE 30 PRODUCTOS POR PÁGINA =====
-(function() {
-    const POR_PAGINA = 30;
-    let paginaActual = 1;
-    let tarjetasVisibles = [];
-
-    function obtenerTarjetasVisibles() {
-        return Array.from(document.querySelectorAll('#gridProductos .card-dinamica'))
-            .filter(function(c) {
-                return !c.classList.contains('oculto') &&
-                       !c.classList.contains('oculto-forma-carrusel');
-            });
-    }
-
-    function calcularTotalPaginas() {
-        return Math.ceil(tarjetasVisibles.length / POR_PAGINA);
-    }
-
-    function mostrarPagina(num) {
-        paginaActual = num;
-        // Guardar página en el hash de la URL para que persista al recargar
-        var nuevoHash = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '') || '';
-        var hashFinal = (nuevoHash ? nuevoHash + '&' : '') + 'pagina=' + num;
-        if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', '#' + hashFinal);
-        }
-        var inicio = (num - 1) * POR_PAGINA;
-        var fin = inicio + POR_PAGINA;
-        // Quita paginacion-oculto a todas
-        document.querySelectorAll('#gridProductos .card-dinamica').forEach(function(c) {
-            c.classList.remove('paginacion-oculto');
-        });
-        // Oculta las que no están en la página actual (sólo de las visibles)
-        tarjetasVisibles.forEach(function(card, i) {
-            if (i < inicio || i >= fin) {
-                card.classList.add('paginacion-oculto');
-            }
-        });
-        renderControles();
-        insertarBarrasCategoriaProductos();
-        if (_scrollAlCambiarPagina) {
-            var grid = document.getElementById('gridProductos');
-            if (grid) {
-                grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    }
-
-    var _scrollAlCambiarPagina = false;
-
-    function renderControles() {
-        const total = calcularTotalPaginas();
-        const mostradas = tarjetasVisibles.slice((paginaActual-1)*POR_PAGINA, paginaActual*POR_PAGINA).length;
-        const hayTarjetas = document.querySelectorAll('#gridProductos .card-dinamica').length > 0;
-        const infoTexto = tarjetasVisibles.length > 0
-            ? "Mostrando " + ((paginaActual-1)*POR_PAGINA+1) + "\u2013" + ((paginaActual-1)*POR_PAGINA+mostradas) + " de " + tarjetasVisibles.length + " productos"
-            : (hayTarjetas ? 'Sin resultados para ese filtro' : '');
-
-        ['pagInfoArriba', 'pagInfoAbajo'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.textContent = infoTexto;
-        });
-
-        ['pagControlesArriba', 'pagControlesAbajo'].forEach(function(id) {
-            var cont = document.getElementById(id);
-            if (!cont) return;
-            cont.innerHTML = '';
-            if (total <= 1) {
-                // Limpiar el hash de página para que no quede sucio al quitar filtros
-                if (window.history && window.history.replaceState) {
-                    var hashLimpio = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '');
-                    window.history.replaceState(null, '', hashLimpio ? '#' + hashLimpio : window.location.pathname);
-                }
-                return;
-            }
-
-            var btnPrev = document.createElement('button');
-            btnPrev.className = 'btn-pag';
-            btnPrev.textContent = '\u2190 Anterior';
-            btnPrev.disabled = paginaActual === 1;
-            btnPrev.onclick = function() { _scrollAlCambiarPagina = true; mostrarPagina(paginaActual - 1); _scrollAlCambiarPagina = false; };
-            cont.appendChild(btnPrev);
-
-            for (var i = 1; i <= total; i++) {
-                (function(pg) {
-                    var btn = document.createElement('button');
-                    btn.className = 'btn-pag' + (pg === paginaActual ? ' activo' : '');
-                    btn.textContent = pg;
-                    btn.onclick = function() { _scrollAlCambiarPagina = true; mostrarPagina(pg); _scrollAlCambiarPagina = false; };
-                    cont.appendChild(btn);
-                })(i);
-            }
-
-            var btnNext = document.createElement('button');
-            btnNext.className = 'btn-pag';
-            btnNext.textContent = 'Siguiente \u2192';
-            btnNext.disabled = paginaActual === total;
-            btnNext.onclick = function() { _scrollAlCambiarPagina = true; mostrarPagina(paginaActual + 1); _scrollAlCambiarPagina = false; };
-            cont.appendChild(btnNext);
-        });
-    }
-
-    var _primeraVez = true;
-
-    function actualizarPaginacion() {
-        tarjetasVisibles = obtenerTarjetasVisibles();
-        var paginaInicial = 1;
-        // Solo restaurar la página guardada en el hash durante la carga inicial,
-        // no al cambiar filtros (para evitar mostrar páginas desincronizadas).
-        if (_primeraVez) {
-            var hash = window.location.hash || '';
-            var match = hash.match(/pagina=(\d+)/);
-            var paginaGuardada = match ? parseInt(match[1]) : 1;
-            var totalPags = Math.ceil(tarjetasVisibles.length / POR_PAGINA);
-            paginaInicial = (paginaGuardada > 1 && paginaGuardada <= totalPags) ? paginaGuardada : 1;
-            _primeraVez = false;
-        }
-        mostrarPagina(paginaInicial);
-    }
-
-    // Escuchar el evento de catálogo cargado (Google Sheets) en lugar de usar un timeout fijo
-    document.addEventListener('catalogoCargado', function() {
-        // Detectar el modo activo antes de que el catálogo cargara
-        var btnActivo = document.querySelector('.btn-modo-velas.activo');
-        var mapaIDs = {
-            'btnModoTodosProductos':  'mostrar_todo',
-            'btnModoArreglos':        'arreglos',
-            'btnModoPaquetes':        'paquetes',
-            'btnModoEtiquetas':       'etiquetas'
-        };
-        var modoActual = btnActivo ? (mapaIDs[btnActivo.id] || 'mostrar_todo') : 'mostrar_todo';
-
-        if (typeof window.cambiarModoVelas === 'function') {
-            // Pasar por mostrar_todo para que la paginacion cuente todas las cards...
-            window.cambiarModoVelas('mostrar_todo');
-            // ...luego restaurar el modo activo de inmediato para mantener el layout correcto.
-            window.cambiarModoVelas(modoActual);
-        } else {
-            actualizarPaginacion();
-        }
-    });
-
-    // También respaldo con _ready por si el catálogo ya estaba listo al iniciar
-    _ready(function() {
-        // Solo dispara si ya hay tarjetas en el grid (catálogo estático o carga muy rápida)
-        setTimeout(function() {
-            if (document.querySelectorAll('#gridProductos .card-dinamica').length > 0) {
-                actualizarPaginacion();
-            }
-        }, 300);
-    });
-
-    window.actualizarPaginacion = actualizarPaginacion;
-})();
-
-
-
-        // ===== BANNER: IMÁGENES ALEATORIAS DEL CATÁLOGO =====
-        // Se ejecuta después de que el catálogo cargue para tener las cards disponibles
-        function _llenarBannerAleatorio() {
-            const tarjetasCatalogo = document.querySelectorAll('.card-dinamica');
-            const imagenesCatalogo = [];
-
-            tarjetasCatalogo.forEach(card => {
-                const numProducto = card.getAttribute('data-num');
-                const img = card.querySelector('.img-contenedor-dinamico img');
-                if (img && img.src) {
-                    imagenesCatalogo.push({ src: img.getAttribute('src'), num: numProducto });
-                }
-            });
-
-            if (imagenesCatalogo.length === 0) return;
-
-            // Mezcla aleatoria (Fisher-Yates)
-            for (let i = imagenesCatalogo.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [imagenesCatalogo[i], imagenesCatalogo[j]] = [imagenesCatalogo[j], imagenesCatalogo[i]];
-            }
-
-            // Llena los slots del banner (limpiando primero)
-            const slots = document.querySelectorAll('.banner-slot');
-            slots.forEach((slot, index) => {
-                slot.innerHTML = '';
-                const item = imagenesCatalogo[index % imagenesCatalogo.length];
-                const img = document.createElement('img');
-                img.src = item.src;
-                img.alt = 'Producto ' + item.num;
-
-                const num = document.createElement('span');
-                num.className = 'banner-num';
-                num.textContent = '#' + item.num;
-
-                slot.appendChild(img);
-                slot.appendChild(num);
-            });
-        }
-        document.addEventListener('catalogoCargado', _llenarBannerAleatorio);
-
-        const sliderPrecio = document.getElementById('filtroPrecio');
-        const txtPrecioMax = document.getElementById('txtPrecioMax');
-        // tarjetas se obtiene dinámicamente para incluir las cargadas desde Google Sheets
-        let formaActiva = 'todos';
-        let eventoActivo = 'todos';
-        let precioMaximoActivo = 500;
-
-        function aplicarFiltros() {
-            const tarjetas = document.querySelectorAll('.card-dinamica');
-            tarjetas.forEach(tarjeta => {
-                const fTarjeta = (tarjeta.getAttribute('data-forma') || '').trim().toLowerCase();
-                const eTarjeta = (tarjeta.getAttribute('data-evento') || '').trim().toLowerCase();
-                const pTarjeta = parseInt(tarjeta.getAttribute('data-precio')) || 0;
-
-                const cumpleForma  = (formaActiva  === 'todos' || fTarjeta === formaActiva);
-                const cumpleEvento = (eventoActivo === 'todos' || eTarjeta === eventoActivo);
-                const cumplePrecio = (pTarjeta <= precioMaximoActivo);
-
-                tarjeta.classList.toggle('oculto', !(cumpleForma && cumpleEvento && cumplePrecio));
-            });
-
-            // Actualizar paginación tras filtrar
-            if (typeof window.actualizarPaginacion === 'function') {
-                window.actualizarPaginacion();
-            }
-
-            // Indicador visual: resaltar encabezados de filtros activos
-            var _elFormas = document.querySelector('#filtro-formas');
-            if (_elFormas && _elFormas.closest('.filtro-bloque')) {
-                var _lbFormas = _elFormas.closest('.filtro-bloque').querySelector('label');
-                if (_lbFormas) _lbFormas.style.color = formaActiva !== 'todos' ? '#8c7565' : '';
-            }
-            var _elEventos = document.querySelector('#filtro-eventos');
-            if (_elEventos && _elEventos.closest('.filtro-bloque')) {
-                var _lbEventos = _elEventos.closest('.filtro-bloque').querySelector('label');
-                if (_lbEventos) _lbEventos.style.color = eventoActivo !== 'todos' ? '#4b6b94' : '';
-            }
-        }
-
-        // Filtro de FORMA — selección exclusiva dentro del grupo
-        document.querySelectorAll('#filtro-formas .btn-filtro').forEach(boton => {
-            boton.addEventListener('click', () => {
-                document.querySelectorAll('#filtro-formas .btn-filtro').forEach(b => b.classList.remove('activo'));
-                boton.classList.add('activo');
-                formaActiva = (boton.getAttribute('data-forma') || 'todos').trim().toLowerCase();
-                aplicarFiltros();
-            });
-        });
-
-        // Filtro de EVENTO — selección exclusiva dentro del grupo, independiente del de forma
-        document.querySelectorAll('#filtro-eventos .btn-filtro').forEach(boton => {
-            boton.addEventListener('click', () => {
-                document.querySelectorAll('#filtro-eventos .btn-filtro').forEach(b => b.classList.remove('activo'));
-                boton.classList.add('activo');
-                eventoActivo = (boton.getAttribute('data-evento') || 'todos').trim().toLowerCase();
-                aplicarFiltros();
-            });
-        });
-
-        if (sliderPrecio) {
-            sliderPrecio.addEventListener('input', (e) => {
-                precioMaximoActivo = parseInt(e.target.value);
-                if (txtPrecioMax) txtPrecioMax.textContent = `$${precioMaximoActivo} MXN`;
-                aplicarFiltros();
-            });
-        }
-    
-
-
-    // ── Helper: convierte data-red-* (JSON array de URLs) a objetos para _videosRedes ──
-    function _parsearRedsCard(card, attr, tipo) {
-        var raw = card.getAttribute(attr) || '[]';
-        var urls;
-        try { urls = JSON.parse(raw); } catch(e) { urls = []; }
-        return urls.map(function(url, i) {
-            url = url.trim();
-            if (!url) return null;
-            if (tipo === 'youtube') {
-                // Extraer ID de YouTube desde URL completa o ID directo
-                var ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
-                var ytId = ytMatch ? ytMatch[1] : url;
-                return { tipo: 'youtube', id: ytId, titulo: 'Video ' + (i+1) };
-            }
-            return { tipo: tipo, url: url, titulo: tipo.charAt(0).toUpperCase()+tipo.slice(1)+' ' + (i+1) };
-        }).filter(Boolean);
-    }
-
-    // ===== MODAL DE PRODUCTO (rediseñado) =====
-    let galeriaImagenes = [];
-    let galeriaVideoPrincipal = '';   // URL/embed del video principal del producto
-    let galeriaIndice = 0;
-
-    function abrirModalProducto(card) {
-        const nombre = card.getAttribute('data-nombre') || card.querySelector('h3')?.textContent || 'Producto';
-        const descripcion = card.getAttribute('data-descripcion') || '';
-        const alto = card.getAttribute('data-alto') || '';
-        const ancho = card.getAttribute('data-ancho') || '';
-        const existencia = parseInt(card.getAttribute('data-existencia') || '0') || 0;
-        const imagenesJSON = card.getAttribute('data-imagenes');
-        const precioNum = card.getAttribute('data-precio') || '';
-        const precioBazar = card.getAttribute('data-precio-bazar') || '';
-
-        // ── Video principal (si existe, va PRIMERO en la galería) ──
-        galeriaVideoPrincipal = (card.getAttribute('data-video') || '').trim();
-
-        try {
-            galeriaImagenes = imagenesJSON ? JSON.parse(imagenesJSON) : [];
-        } catch(e) { galeriaImagenes = []; }
-
-        if (galeriaImagenes.length === 0) {
-            const imgPrincipal = card.querySelector('.img-contenedor-dinamico img');
-            if (imgPrincipal) galeriaImagenes = [imgPrincipal.getAttribute('src')];
-        }
-
-        // ── Poblar _videosRedes desde los atributos de la card ──
-        try { _videosRedes.youtube   = _parsearRedsCard(card, 'data-red-youtube',   'youtube');   } catch(e) {}
-        try { _videosRedes.facebook  = _parsearRedsCard(card, 'data-red-facebook',  'facebook');  } catch(e) {}
-        try { _videosRedes.instagram = _parsearRedsCard(card, 'data-red-instagram', 'instagram'); } catch(e) {}
-        try { _videosRedes.tiktok    = _parsearRedsCard(card, 'data-red-tiktok',    'tiktok');    } catch(e) {}
-
-        galeriaIndice = 0;
-        document.getElementById('modalProdTitulo').textContent = nombre;
-
-        // Fila de precios (Original izquierda / Bazar derecha, misma altura)
-        const precioBadge     = document.getElementById('modalPrecioSuperior');
-        const precioFila      = document.getElementById('mpPrecioOriginalFila');
-        const bazarFila       = document.getElementById('mpPrecioBazarFila');
-        const bazarValor      = document.getElementById('mpPrecioBazarValor');
-        const filaCompleta    = document.getElementById('mpPrecioFilaCompleta');
-
-        if (precioNum) {
-            precioBadge.textContent = '$' + precioNum + ' MXN';
-            precioFila.style.display = 'block';
-        } else {
-            precioFila.style.display = 'none';
-        }
-        if (precioBazar) {
-            bazarValor.textContent = '$' + precioBazar + ' MXN';
-            bazarFila.style.display = 'block';
-        } else {
-            bazarFila.style.display = 'none';
-        }
-        // Mostrar/ocultar fila contenedora
-        if (filaCompleta) filaCompleta.style.display = (precioNum || precioBazar) ? 'flex' : 'none';
-
-        // Tags inline — SUB-ETIQUETAS (oferta/más vendido) + etiquetas de evento
-        // La etiqueta PRINCIPAL se inyecta por inyectarEtiquetasModal()
-        const tagsInline = document.getElementById('modalTagsInline');
-        tagsInline.innerHTML = '';
-        tagsInline.style.display = 'none'; // colapsadas por defecto
-
-        // Limpiar también zona etiqueta principal
-        const zonaPrincipal = document.getElementById('mpEtiquetaPrincipalZona');
-        if (zonaPrincipal) { zonaPrincipal.innerHTML = ''; zonaPrincipal.style.display = 'none'; }
-
-        // Ocultar botón toggle hasta saber si hay sub-etiquetas
-        const btnToggleSub = document.getElementById('mpBtnMostrarSubetiquetas');
-        if (btnToggleSub) btnToggleSub.style.display = 'none';
-
-        // — Sub-etiquetas (desde data-subtags: cirio, tazón, stich, etc.) —
-        const dataForma = card.getAttribute('data-forma') || '';
-        const subtags = (card.getAttribute('data-subtags') || '').split('|').map(s => s.trim()).filter(Boolean);
-        let haySubetiquetas = false;
-        if (subtags.length > 0) {
-            haySubetiquetas = true;
-            const rowForma = document.createElement('div');
-            rowForma.style.cssText = 'display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-bottom: 6px;';
-            const labelFm = document.createElement('div');
-            labelFm.textContent = 'Sub-etiquetas';
-            labelFm.style.cssText = 'font-size: 10px; font-weight: 700; color: #705c4f; text-transform: uppercase; letter-spacing: 0.5px; width: 100%; margin-bottom: 4px;';
-            rowForma.appendChild(labelFm);
-            subtags.forEach(tag => {
-                const spanForma = document.createElement('span');
-                spanForma.textContent = tag;
-                spanForma.style.cssText = 'background: #e8e0d7; color: #705c4f; font-size: 11px; padding: 3px 9px; border-radius: 12px; font-weight: 600;';
-                rowForma.appendChild(spanForma);
-            });
-            tagsInline.appendChild(rowForma);
-        }
-
-        // — Etiquetas de Evento —
-        const dataEvento = card.getAttribute('data-evento') || '';
-        const eventoMap = {
-            'bautizo': 'Bautizo', 'primera-comunion': 'Primera Comunión',
-            'fin-novenario': 'Fin de Novenario', 'quince-anos': 'Quinceaños',
-            'quinceanos': 'Quinceaños', 'quinceanera': 'Quinceañera',
-            'boda': 'Boda', 'baby-shower': 'Baby Shower', 'babyshower': 'Baby Shower',
-            'aniversario-luctuoso': 'Aniversario Luctuoso', 'aniversario': 'Aniversario',
-            'confirmacion': 'Confirmación',
-            'despedida-soltera': 'Despedida de Soltera', 'despedida': 'Despedida de Soltera',
-            'graduacion': 'Graduación',
-            'primera-comunion': 'Primera Comunión', 'comunion': 'Primera Comunión',
-            'fin-novenario': 'Fin de Novenario', 'novenario': 'Fin de Novenario',
-            'sin evento': '', 'sin-evento': ''
-        };
-        // Normalizar: quitar acentos y convertir a minúsculas para comparar
-        function _normEvento(s) {
-            return s.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/\s+/g, '-');
-        }
-        // Buscar en el mapa con y sin normalización
-        function _lookupEvento(slug) {
-            if (eventoMap[slug] !== undefined) return eventoMap[slug];
-            var norm = _normEvento(slug);
-            if (eventoMap[norm] !== undefined) return eventoMap[norm];
-            // Si no está en el mapa, mostrarlo tal como viene (con mayúscula inicial)
-            return slug.charAt(0).toUpperCase() + slug.slice(1);
-        }
-        const eventoSlots = dataEvento.split(/\s+/).filter(e => e && e !== 'sin' && e !== 'evento');
-        if (eventoSlots.length > 0) {
-            haySubetiquetas = true;
-            const labelEv = document.createElement('div');
-            labelEv.textContent = 'Etiquetas de Evento';
-            labelEv.style.cssText = 'font-size: 10px; font-weight: 700; color: #4b6b94; text-transform: uppercase; letter-spacing: 0.5px; width: 100%; margin-bottom: 4px;';
-            tagsInline.appendChild(labelEv);
-            const rowEv = document.createElement('div');
-            rowEv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 5px; width: 100%;';
-            eventoSlots.forEach(slug => {
-                const span = document.createElement('span');
-                span.textContent = _lookupEvento(slug);
-                span.style.cssText = 'background: #e3edf7; color: #4b6b94; font-size: 11px; padding: 3px 9px; border-radius: 12px; font-weight: 600;';
-                rowEv.appendChild(span);
-            });
-            tagsInline.appendChild(rowEv);
-        }
-
-        // Mostrar botón toggle solo si hay algo que desplegar
-        if (btnToggleSub) btnToggleSub.style.display = haySubetiquetas ? 'inline-block' : 'none';
-
-        // Descripción
-        const descTexto = document.getElementById('modalDescripcionTexto');
-        const descZona  = document.getElementById('modalDescripcionZona');
-        if (descripcion && descripcion !== 'Descripción del producto.') {
-            descTexto.textContent = descripcion;
-            descZona.style.display = '';
-        } else {
-            descZona.style.display = 'none';
-        }
-
-        // Alto y Ancho
-        const dimZona   = document.getElementById('modalDimensionesZona');
-        const altoZona  = document.getElementById('modalAltoZona');
-        const altoTexto = document.getElementById('modalAltoTexto');
-        const anchoZona = document.getElementById('modalAnchoZona');
-        const anchoTexto= document.getElementById('modalAnchoTexto');
-        if (alto || ancho) {
-            if (alto) { altoTexto.textContent = alto; altoZona.style.display = 'block'; }
-            else       { altoZona.style.display = 'none'; }
-            if (ancho) { anchoTexto.textContent = ancho; anchoZona.style.display = 'block'; }
-            else        { anchoZona.style.display = 'none'; }
-            dimZona.style.display = 'block';
-        } else {
-            dimZona.style.display = 'none';
-        }
-
-        // ── Stock / Existencia ──
-        const existenciaZona  = document.getElementById('modalExistenciaZona');
-        const existenciaTexto = document.getElementById('modalExistenciaTexto');
-        if (existenciaZona && existenciaTexto) {
-            if (existencia > 0) {
-                existenciaTexto.textContent = existencia;
-                existenciaZona.style.display = 'block';
-            } else {
-                existenciaZona.style.display = 'none';
-            }
-        }
-        const aditivosScroll = document.getElementById('modalAditivosScroll');
-        const aditivosZona   = document.getElementById('modalAditivosZona');
-        aditivosScroll.innerHTML = '';
-
-        let subImagenes = [];
-        try { subImagenes = JSON.parse(card.getAttribute('data-sub-imagenes') || '[]'); } catch(e) {}
-
-        function _normTexto(s) {
-            return (s || '').trim().toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/\s+/g, ' ');
-        }
-
-        if (subImagenes.length > 0) {
-            const urlACard    = {};
-            const nombreACard = {};
-            document.querySelectorAll('.card-dinamica').forEach(function(c) {
-                try {
-                    const imgs = JSON.parse(c.getAttribute('data-imagenes') || '[]');
-                    imgs.forEach(function(u) { if (u) urlACard[u.trim()] = c; });
-                } catch(e) {}
-                const n = _normTexto(c.getAttribute('data-nombre') || '');
-                if (n) nombreACard[n] = c;
-            });
-
-            function buscarCardPorNombre(entrada) {
-                const norm = _normTexto(entrada);
-                // No buscar coincidencias parciales con cadenas muy cortas (evita falsos positivos con números)
-                if (norm.length < 3) return null;
-                if (nombreACard[norm]) return nombreACard[norm];
-                const claves = Object.keys(nombreACard);
-                for (let k = 0; k < claves.length; k++) {
-                    if (claves[k].includes(norm) || norm.includes(claves[k])) {
-                        return nombreACard[claves[k]];
-                    }
-                }
-                return null;
-            }
-
-            function esURL(s) {
-                return /^https?:\/\//i.test(s) || /^\//.test(s) || /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(s);
-            }
-
-            console.log('[Aditamentos] SubImagenes de "' + nombre + '":', subImagenes);
-
-            subImagenes.forEach(function(entrada) {
-                entrada = (entrada || '').trim();
-                if (!entrada) return;
-
-                // Descartar entradas que sean solo números (podrían ser datos de otra columna)
-                if (/^\d+$/.test(entrada)) return;
-                // Descartar entradas demasiado cortas que no sean URLs
-                if (entrada.length < 3 && !/^https?:\/\//i.test(entrada)) return;
-
-                let cardRelacionada = null;
-                let srcImagen = '';
-
-                if (esURL(entrada)) {
-                    cardRelacionada = urlACard[entrada] || null;
-                    srcImagen = entrada;
-                } else {
-                    cardRelacionada = buscarCardPorNombre(entrada);
-                    if (cardRelacionada) {
-                        try {
-                            const imgs = JSON.parse(cardRelacionada.getAttribute('data-imagenes') || '[]');
-                            srcImagen = imgs[0] || '';
-                        } catch(e) {}
-                    }
-                }
-
-                if (!srcImagen && !cardRelacionada) return;
-
-                const nombreRel = cardRelacionada ? (cardRelacionada.getAttribute('data-nombre') || entrada) : entrada;
-                const item = document.createElement('div');
-                item.style.cssText = 'flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:6px;' +
-                    (cardRelacionada ? ' cursor:pointer;' : '');
-
-                const wrap = document.createElement('div');
-                wrap.style.cssText = 'position:relative; width:90px; height:90px; border-radius:12px; overflow:hidden;' +
-                    ' border:2px solid #e8ddd5; transition:border-color 0.2s, transform 0.18s, box-shadow 0.18s;' +
-                    ' box-shadow:0 2px 8px rgba(0,0,0,0.07);';
-                if (cardRelacionada) {
-                    wrap.onmouseover = function() { this.style.borderColor='#c9a98a'; this.style.transform='translateY(-3px)'; this.style.boxShadow='0 6px 18px rgba(140,117,101,0.22)'; };
-                    wrap.onmouseout  = function() { this.style.borderColor='#e8ddd5'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.07)'; };
-                }
-
-                if (srcImagen) {
-                    const imgEl = document.createElement('img');
-                    imgEl.src = srcImagen;
-                    imgEl.alt = nombreRel;
-                    imgEl.style.cssText = 'width:100%; height:100%; object-fit:cover; display:block;';
-                    imgEl.onerror = function() {
-                        wrap.innerHTML = '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9f5f2;gap:4px;">' +
-                            '<span style="font-size:22px;">🕯️</span>' +
-                            '<span style="font-size:9px;color:#a89080;text-align:center;padding:0 6px;">' + nombreRel + '</span></div>';
-                    };
-                    wrap.appendChild(imgEl);
-                } else {
-                    wrap.innerHTML = '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9f5f2;gap:4px;">' +
-                        '<span style="font-size:22px;">🕯️</span>' +
-                        '<span style="font-size:9px;color:#a89080;text-align:center;padding:0 6px;">' + nombreRel + '</span></div>';
-                }
-
-                if (cardRelacionada) {
-                    const lupa = document.createElement('div');
-                    lupa.style.cssText = 'position:absolute; bottom:4px; right:4px; width:20px; height:20px;' +
-                        ' border-radius:50%; background:rgba(54,42,34,0.55); display:flex; align-items:center;' +
-                        ' justify-content:center; font-size:10px; pointer-events:none;';
-                    lupa.textContent = '🔍';
-                    wrap.appendChild(lupa);
-                }
-
-                item.appendChild(wrap);
-
-                const label = document.createElement('span');
-                label.textContent = nombreRel;
-                label.style.cssText = 'font-size:10px; font-weight:600; color:#8a7a70; text-align:center;' +
-                    ' max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-                item.appendChild(label);
-
-                if (cardRelacionada) {
-                    item.addEventListener('click', function() {
-                        setTimeout(function() { abrirModalProducto(cardRelacionada); }, 60);
-                    });
-                }
-
-                aditivosScroll.appendChild(item);
-            });
-            aditivosZona.style.display = aditivosScroll.children.length > 0 ? '' : 'none';
-        } else {
-            aditivosZona.style.display = 'none';
-        }
-        // Botón Favoritos modal
-        const mpBtnFav = document.getElementById('mpBtnFavoritos');
-        if (mpBtnFav) {
-            const cardIdx = parseInt(card.getAttribute('data-idx'));
-            mpBtnFav._cardIdx = cardIdx; // para que _syncTodo pueda actualizarlo
-            const esFav = esFavorito(card);
-            mpBtnFav.classList.toggle('guardado', esFav);
-            mpBtnFav.textContent = esFav ? '❤️ En Favoritos' : '❤️ Favoritos';
-            mpBtnFav.onclick = () => {
-                toggleFavoritoCard(card);
-                const ahora = esFavorito(card);
-                mpBtnFav.classList.toggle('guardado', ahora);
-                mpBtnFav.textContent = ahora ? '❤️ En Favoritos' : '❤️ Favoritos';
-                mostrarToast(ahora ? '❤️ Añadido a favoritos' : '💔 Quitado de favoritos');
-            };
-        }
-
-        // Botón Añadir al carrito modal — abre modal de cantidad
-        const mpBtnCarrito = document.getElementById('mpBtnCarrito');
-        if (mpBtnCarrito) {
-            mpBtnCarrito.onclick = () => {
-                abrirModalCantidad(card);
-            };
-        }
-
-        // Botón WhatsApp
-        document.getElementById('mpBtnWhatsapp').onclick = () => {
-            const textoPlano = 'Hola, me interesa el producto: ' + nombre + (precioNum ? ' ($' + precioNum + ' MXN)' : '');
-            const imagenProducto = (galeriaImagenes && galeriaImagenes[0]) || '';
-            compartirConImagenOFallback(textoPlano, imagenProducto, '524431382094');
-        };
-
-        // Botón Compartir — actualiza OG y abre submenu
-        document.getElementById('mpBtnCompartir').onclick = (e) => {
-            e.stopPropagation();
-            const url    = window.location.origin + window.location.pathname + '?producto=' + encodeURIComponent(nombre);
-            const urlOG  = (typeof _urlOG === 'function') ? _urlOG(url) : url;
-            // Actualizar meta OG con este producto antes de compartir
-            if (typeof _actualizarMetaOG === 'function') {
-                _actualizarMetaOG(nombre, descripcion, galeriaImagenes[0] || '', urlOG);
-            }
-            abrirSubmenuCompartir(url, nombre, galeriaImagenes[0] || '');
-        };
-
-        // ── Producto especial traído desde Velas Kukúmita (zona "Mostrar Más Velas") ──
-        // Para estos productos: sin Favoritos, sin Carrito y sin Compartir —
-        // solo WhatsApp y un botón para ver el producto en velaskukumita.com
-        const origenExterno    = card.getAttribute('data-origen-externo') || '';
-        const filaFavCarrito   = document.getElementById('mpFilaFavCarrito');
-        const btnCompartirModal = document.getElementById('mpBtnCompartir');
-        const btnVisitarVelas   = document.getElementById('mpBtnVisitarVelas');
-
-        if (origenExterno === 'velas') {
-            if (filaFavCarrito)    filaFavCarrito.style.display = 'none';
-            if (btnCompartirModal) btnCompartirModal.style.display = 'none';
-            if (btnVisitarVelas) {
-                btnVisitarVelas.style.display = '';
-                btnVisitarVelas.onclick = () => {
-                    const urlVelas = 'https://velaskukumita.com/?producto=' + encodeURIComponent(nombre);
-                    window.open(urlVelas, '_blank');
-                };
-            }
-        } else {
-            if (filaFavCarrito)    filaFavCarrito.style.display = '';
-            if (btnCompartirModal) btnCompartirModal.style.display = '';
-            if (btnVisitarVelas)   btnVisitarVelas.style.display = 'none';
-        }
-
-        renderizarGaleria();
-
-        document.getElementById('modalProducto').classList.add('abierto');
-        document.body.style.overflow = 'hidden';
-        _modalActivo = 'producto';
-        setTimeout(() => {
-            const caja = document.querySelector('.modal-producto-caja');
-            if (caja) caja.scrollTop = 0;
-        }, 30);
-
-        // Redirigir scroll del mouse al interior del modal aunque el cursor esté en el overlay
-        const _modalEl = document.getElementById('modalProducto');
-        function _redirigirScrollModal(e) {
-            const caja = _modalEl.querySelector('.modal-producto-caja');
-            if (!caja) return;
-            // Solo redirigir si el evento viene del overlay (no de dentro de la caja)
-            if (!caja.contains(e.target)) {
-                e.preventDefault();
-                caja.scrollTop += e.deltaY;
-            }
-        }
-        _modalEl._wheelHandler = _redirigirScrollModal;
-        _modalEl.addEventListener('wheel', _redirigirScrollModal, { passive: false });
-
-        if (history.state && history.state.modalAbierto) return;
-        history.pushState({ modalAbierto: true, kukumitaModal: 'producto' }, '');
-
-        // Inyectar etiquetas principales y de evento
-        setTimeout(function() { inyectarEtiquetasModal(card); }, 0);
-    }
-
-    function cerrarModalProducto() {
-        const modalEl = document.getElementById('modalProducto');
-        modalEl.classList.remove('abierto');
-        // Limpiar el handler de scroll redirigido
-        if (modalEl._wheelHandler) {
-            modalEl.removeEventListener('wheel', modalEl._wheelHandler);
-            delete modalEl._wheelHandler;
-        }
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        if (history.state && history.state.modalAbierto) {
-            history.replaceState(null, '');
-        }
-        // Restaurar meta OG genéricos
-        document.dispatchEvent(new CustomEvent('modalProductoCerrado'));
-        // Resetear sub-etiquetas a estado colapsado para el próximo producto
-        var tagsInline = document.getElementById('modalTagsInline');
-        var btnToggle  = document.getElementById('mpBtnMostrarSubetiquetas');
-        if (tagsInline) tagsInline.style.display = 'none';
-        if (btnToggle)  btnToggle.textContent = 'Ver sub-etiquetas ▾';
-    }
-
-    function renderizarGaleria() {
-        const track = document.getElementById('modalGaleriaTrack');
-        const dotsContainer = document.getElementById('modalDots');
-        track.innerHTML = '';
-        dotsContainer.innerHTML = '';
-
-        // Limpiar listener anterior
-        track._scrollHandler && track.removeEventListener('scroll', track._scrollHandler);
-
-        // ── Slide 0: Video de YouTube (solo si el link es de YouTube) ──
-        let slideOffset = 0;
-        if (galeriaVideoPrincipal) {
-            const ytMatch = galeriaVideoPrincipal.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
-            if (ytMatch) {
-                const videoSlide = document.createElement('div');
-                videoSlide.className = 'modal-galeria-slide';
-                videoSlide.style.cssText = 'display:flex;align-items:center;justify-content:center;background:#000;';
-
-                const iframe = document.createElement('iframe');
-                iframe.src = 'https://www.youtube.com/embed/' + ytMatch[1] + '?rel=0';
-                iframe.style.cssText = 'width:100%;height:100%;border:0;';
-                iframe.setAttribute('allowfullscreen', '');
-                iframe.setAttribute('allow', 'autoplay; encrypted-media');
-
-                videoSlide.appendChild(iframe);
-                track.appendChild(videoSlide);
-
-                const dotV = document.createElement('div');
-                dotV.className = 'modal-dot activo';
-                dotV.onclick = () => irASlide(0);
-                dotsContainer.appendChild(dotV);
-                slideOffset = 1;
-            }
-            // Si el link no es de YouTube, se ignora y solo se muestran las imágenes
-        }
-
-        galeriaImagenes.forEach((src, i) => {
-            const slide = document.createElement('div');
-            slide.className = 'modal-galeria-slide';
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = 'Imagen ' + (i + 1);
-            // Clic en imagen abre zoom
-            img.style.cursor = 'zoom-in';
-            img.onclick = () => abrirZoomGaleria(i);
-            slide.appendChild(img);
-            track.appendChild(slide);
-
-            const dot = document.createElement('div');
-            const dotIdx = i + slideOffset;
-            dot.className = 'modal-dot' + (dotIdx === 0 ? ' activo' : '');
-            dot.onclick = () => irASlide(dotIdx);
-            dotsContainer.appendChild(dot);
-        });
-
-        const totalSlides = galeriaImagenes.length + slideOffset;
-        dotsContainer.style.display = totalSlides <= 1 ? 'none' : 'flex';
-
-        actualizarNavegacion();
-
-        track._scrollHandler = () => {
-            const nuevoIndice = Math.round(track.scrollLeft / track.offsetWidth);
-            if (nuevoIndice !== galeriaIndice) {
-                galeriaIndice = nuevoIndice;
-                actualizarNavegacion();
-            }
-        };
-        track.addEventListener('scroll', track._scrollHandler, { passive: true });
-    }
-
-    function irASlide(indice) {
-        const track = document.getElementById('modalGaleriaTrack');
-        const _totalSlides = galeriaImagenes.length + (galeriaVideoPrincipal ? 1 : 0);
-        galeriaIndice = Math.max(0, Math.min(indice, _totalSlides - 1));
-        track.scrollTo({ left: galeriaIndice * track.offsetWidth, behavior: 'smooth' });
-        actualizarNavegacion();
-    }
-
-    function moverGaleria(direccion) {
-        irASlide(galeriaIndice + direccion);
-    }
-
-    function actualizarNavegacion() {
-        const total = galeriaImagenes.length + (galeriaVideoPrincipal ? 1 : 0);
-        document.getElementById('btnGalPrev').classList.toggle('oculto-nav', galeriaIndice === 0);
-        document.getElementById('btnGalNext').classList.toggle('oculto-nav', galeriaIndice >= total - 1);
-        document.getElementById('modalContador').textContent = total > 1 ? `${galeriaIndice + 1} / ${total}` : '';
-        document.querySelectorAll('.modal-dot').forEach((dot, i) => {
-            dot.classList.toggle('activo', i === galeriaIndice);
-        });
-    }
-
-    // ── ZOOM LIGHTBOX ──────────────────────────────
-    let zoomIndice = 0;
-
-    function abrirZoomGaleria(indice) {
-        zoomIndice = (indice !== undefined) ? indice : galeriaIndice;
-        actualizarZoom();
-        document.getElementById('zoomOverlay').classList.add('abierto');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function cerrarZoomGaleria() {
-        document.getElementById('zoomOverlay').classList.remove('abierto');
-    }
-
-    function zoomNavegar(dir) {
-        zoomIndice = Math.max(0, Math.min(zoomIndice + dir, galeriaImagenes.length - 1));
-        actualizarZoom();
-    }
-
-    function actualizarZoom() {
-        const total = galeriaImagenes.length;
-        const img = document.getElementById('zoomImg');
-        img.style.opacity = '0.4';
-        img.src = galeriaImagenes[zoomIndice] || '';
-        img.onload = () => { img.style.opacity = '1'; };
-        document.getElementById('zoomContador').textContent = total > 1 ? `${zoomIndice + 1} / ${total}` : '';
-        document.getElementById('zoomPrev').classList.toggle('oculto-zoom', zoomIndice === 0);
-        document.getElementById('zoomNext').classList.toggle('oculto-zoom', zoomIndice >= total - 1);
-    }
-
-    // Teclado para zoom
-    document.addEventListener('keydown', function(e) {
-        const overlay = document.getElementById('zoomOverlay');
-        if (!overlay.classList.contains('abierto')) return;
-        if (e.key === 'Escape') cerrarZoomGaleria();
-        if (e.key === 'ArrowLeft') zoomNavegar(-1);
-        if (e.key === 'ArrowRight') zoomNavegar(1);
-    });
-
-    // Cerrar al hacer clic en el fondo del modal de producto
-    document.getElementById('modalProducto').addEventListener('click', function(e) {
-        if (e.target === this) cerrarModalProducto();
-    });
-
-    // ===== PLACEHOLDER PARA IMÁGENES NO ENCONTRADAS =====
-    function mostrarPlaceholder(img) {
-        const nombre = img.alt || 'Imagen próximamente';
-        const contenedor = img.parentElement;
-        img.style.display = 'none';
-        const ph = document.createElement('div');
-        ph.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f0eb;color:#8c7565;text-align:center;padding:12px;box-sizing:border-box;';
-        ph.innerHTML = `
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#c9b8a8" stroke-width="1.5" style="margin-bottom:8px;">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="m21 15-5-5L5 21"/>
-            </svg>
-            <span style="font-size:11px;font-weight:700;color:#8c7565;">Imagen próximamente</span>
-            <span style="font-size:10px;color:#b09080;margin-top:3px;">${nombre}</span>
-        `;
-        contenedor.appendChild(ph);
-    }
-
-    // ===== POST-PROCESADO DE CARDS (se ejecuta cada vez que el catálogo se renderiza) =====
-    function postProcesarCards() {
-        // Activar click en imagen de cada card
-        document.querySelectorAll('.card-dinamica').forEach(card => {
-            const imgContenedor = card.querySelector('.img-contenedor-dinamico');
-            if (imgContenedor) {
-                imgContenedor.style.cursor = 'pointer';
-                // Evitar duplicar listeners usando un flag
-                if (!imgContenedor._clickBound) {
-                    imgContenedor._clickBound = true;
-                    imgContenedor.addEventListener('click', () => abrirModalProducto(card));
-                }
-            }
-
-            // Hint "Toca para ver detalles" (solo si no existe ya)
-            if (!card.querySelector('.card-hint-tap')) {
-                const hint = document.createElement('div');
-                hint.className = 'card-hint-tap';
-                hint.textContent = 'Toca para ver detalles';
-                card.appendChild(hint);
-            }
-
-            // Sub-etiquetas debajo de la imagen desde data-subtags
-            const infoDiv = card.querySelector('.img-contenedor-dinamico');
-            if (infoDiv && !card.querySelector('.subtags-row')) {
-                const subtags = (card.getAttribute('data-subtags') || '').split('|').map(s => s.trim()).filter(Boolean);
-                if (subtags.length > 0) {
-                    const tagsRow = document.createElement('div');
-                    tagsRow.className = 'subtags-row';
-                    tagsRow.style.cssText = 'display: flex; flex-wrap: wrap; gap: 3px; padding: 5px 6px 2px 6px;';
-                    subtags.slice(0, 5).forEach(tag => {
-                        const t = document.createElement('span');
-                        t.textContent = tag;
-                        t.style.cssText = 'font-size: 9px; padding: 2px 6px; border-radius: 10px; font-weight: 600; background: #e8e0d7; color: #705c4f;';
-                        tagsRow.appendChild(t);
-                    });
-                    infoDiv.insertAdjacentElement('afterend', tagsRow);
-                }
-            }
-        });
-
-        // Agregar título "Decoraciones y Aditamentos" y completar hasta 3 recuadros
-        document.querySelectorAll('.card-dinamica').forEach(card => {
-            const primerRecuadro = card.querySelector('.recuadro-item');
-            if (primerRecuadro) {
-                const contenedorFlex = primerRecuadro.parentElement;
-                if (contenedorFlex && !contenedorFlex.previousElementSibling?.classList.contains('titulo-aditivos-card')) {
-                    const titulo = document.createElement('div');
-                    titulo.className = 'titulo-aditivos-card';
-                    titulo.style.cssText = 'font-size: 9px; font-weight: bold; color: #8a7a70; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.4px;';
-                    titulo.textContent = 'Decoraciones y Aditamentos';
-                    contenedorFlex.parentElement.insertBefore(titulo, contenedorFlex);
-                }
-                const contenedorFlex2 = primerRecuadro.parentElement;
-                const recuadrosActuales = contenedorFlex2.querySelectorAll('.recuadro-item').length;
-                for (let i = recuadrosActuales; i < 3; i++) {
-                    const vacio = document.createElement('div');
-                    vacio.className = 'recuadro-item recuadro-vacio';
-                    vacio.title = 'Espacio disponible';
-                    vacio.style.cssText = 'width: 32px; height: 32px; border: 1px dashed #d4c5b8; border-radius: 4px; overflow: hidden; background: #f9f5f2; display: flex; align-items: center; justify-content: center; cursor: default;';
-                    vacio.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9b8a8" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-                    contenedorFlex2.appendChild(vacio);
-                }
-            }
-        });
-
-        // Aplicar onerror placeholder a imágenes de producto
-        document.querySelectorAll('.img-contenedor-dinamico img').forEach(img => {
-            img.onerror = function() { mostrarPlaceholder(this); };
-        });
-    }
-
-    // Ejecutar post-procesado cuando el catálogo asíncrono cargue
-    document.addEventListener('catalogoCargado', postProcesarCards);
-    // También ejecutar ahora por si ya hay cards en el DOM
-    postProcesarCards();
-
-    // ===== FUNCIÓN PARA REDIRIGIR A PRODUCTO DESDE ZONA DE OFERTAS =====
-    function irAProducto(numProducto) {
-        const card = document.querySelector(`.card-dinamica[data-num="${numProducto}"]`);
-        if (card) {
-            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => abrirModalProducto(card), 400);
-        }
-    }
-
-    // ===== INICIALIZAR SLOTS DE OFERTAS Y MÁS VENDIDOS =====
-    document.querySelectorAll('.oferta-slot').forEach(slot => {
-        const numProducto = slot.getAttribute('data-producto');
-        const imagenCustom = slot.getAttribute('data-imagen');
-        const placeholder = slot.querySelector('.oferta-placeholder');
-        const imgWrap = slot.querySelector('.oferta-img-wrap');
-        const infoNombre = slot.querySelector('.oferta-info-nombre');
-        const infoPrecio = slot.querySelector('.oferta-info-precio');
-
-        let imagenSrc = imagenCustom;
-        let nombreProducto = '';
-        let precioProducto = '';
-        let cardRef = null;
-
-        // Si hay número de producto, obtener datos del catálogo
-        if (numProducto) {
-            const card = document.querySelector(`.card-dinamica[data-num="${numProducto}"]`);
-            if (card) {
-                cardRef = card;
-                nombreProducto = card.getAttribute('data-nombre') || '';
-                precioProducto = card.getAttribute('data-precio') ? `$${card.getAttribute('data-precio')} MXN` : '';
-                if (!imagenSrc) {
-                    const imgPrincipal = card.querySelector('.img-contenedor-dinamico img');
-                    if (imgPrincipal) imagenSrc = imgPrincipal.getAttribute('src');
-                }
-            }
-        }
-
-        // Mostrar imagen y datos si existe el producto
-        if (imagenSrc && numProducto) {
-            slot.classList.add('con-producto');
-            if (placeholder) placeholder.style.display = 'none';
-            if (imgWrap) {
-                imgWrap.style.display = 'block';
-                const img = document.createElement('img');
-                img.src = imagenSrc;
-                img.alt = nombreProducto || 'Producto';
-                img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-                img.onerror = function() { imgWrap.style.display = 'none'; if (placeholder) placeholder.style.display = 'flex'; };
-                imgWrap.appendChild(img);
-            }
-            if (infoNombre) infoNombre.textContent = nombreProducto;
-            if (infoPrecio) infoPrecio.textContent = precioProducto;
-
-            // Abrir modal del producto al hacer clic
-            slot.style.cursor = 'pointer';
-            slot.addEventListener('click', () => {
-                if (cardRef) {
-                    cardRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    setTimeout(() => abrirModalProducto(cardRef), 300);
-                }
-            });
-        }
-    });
-
-
-
-
-
-    // ===== MODO OSCURO =====
-    function toggleModoOscuro() {
-        document.body.classList.toggle('modo-oscuro');
-        localStorage.setItem('velas-modo-oscuro', document.body.classList.contains('modo-oscuro') ? '1' : '0');
-    }
-    // Restaurar preferencia guardada
-    if (localStorage.getItem('velas-modo-oscuro') === '1') {
-        document.body.classList.add('modo-oscuro');
-    }
-
-    // ===== CAMBIO DE MODO: ARREGLOS / TODOS LOS PRODUCTOS =====
-    function cambiarModoVelas(modo) {
-        // Limpiar bandera de búsqueda del drawer (se reactiva justo después si el
-        // cambio de modo vino de una búsqueda; ver ejecutarBusquedaDrawer)
-        window._busquedaDrawerTextoActiva = false;
-
-        // Botones
-        const btnTodosProductos = document.getElementById('btnModoTodosProductos');
-        const btnArreglos       = document.getElementById('btnModoArreglos');
-        const btnPaquetes       = document.getElementById('btnModoPaquetes');
-        const btnEtiquetas      = document.getElementById('btnModoEtiquetas');
-
-        const panelArr  = document.getElementById('panelArreglos');
-        const panelEtiq = document.getElementById('panelEtiquetas');
-        const panelTod  = document.getElementById('panelTodos');
-        const bloqueArr = document.getElementById('bloqueFiltroPrecioArreglos');
-        const bloqueTod = document.getElementById('bloqueFiltroPrecioTodos');
-        const gridPrincipal   = document.getElementById('gridProductos');
-        const gridEtiquetas   = document.getElementById('gridProductosEtiquetas');
-
-        // Por defecto: grid principal visible, grid de etiquetas oculto.
-        // (el bloque "etiquetas" de abajo invierte esto cuando corresponde)
-        if (gridPrincipal) gridPrincipal.style.display = '';
-        if (gridEtiquetas) gridEtiquetas.style.display = 'none';
-
-        // Desactivar todos los botones y paneles
-        [btnTodosProductos, btnArreglos, btnPaquetes, btnEtiquetas]
-            .forEach(b => b && b.classList.remove('activo'));
-        [panelArr, panelEtiq, panelTod]
-            .forEach(p => p && p.classList.remove('visible'));
-        if (bloqueArr) bloqueArr.style.display = 'none';
-        if (bloqueTod) bloqueTod.style.display = 'none';
-
-        if (modo === 'mostrar_todo') {
-            if (btnTodosProductos) btnTodosProductos.classList.add('activo');
-            if (panelTod) panelTod.classList.add('visible');
-            if (bloqueTod) bloqueTod.style.display = 'block';
-            _filtroBarraCategoriaActivo = null;
-            aplicarFiltrosUnificados('mostrar_todo');
-        } else if (modo === 'arreglos') {
-            if (btnArreglos) btnArreglos.classList.add('activo');
-            if (bloqueArr) bloqueArr.style.display = 'block';
-            if (panelArr) panelArr.classList.add('visible');
-            aplicarFiltrosArreglos();
-        } else if (modo === 'paquetes') {
-            if (btnPaquetes) btnPaquetes.classList.add('activo');
-            if (panelTod) panelTod.classList.add('visible');
-            if (bloqueTod) bloqueTod.style.display = 'block';
-            aplicarFiltrosUnificados('paquetes');
-        } else if (modo === 'etiquetas') {
-            if (btnEtiquetas) btnEtiquetas.classList.add('activo');
-            if (panelEtiq) panelEtiq.classList.add('visible');
-            if (gridPrincipal) gridPrincipal.style.display = 'none';
-            if (gridEtiquetas) gridEtiquetas.style.display = '';
-            cargarProductosEtiquetas();
-            aplicarFiltrosUnificados('etiquetas');
-        } else {
-            // Fallback: mostrar todo
-            if (btnTodosProductos) btnTodosProductos.classList.add('activo');
-            if (panelTod) panelTod.classList.add('visible');
-            if (bloqueTod) bloqueTod.style.display = 'block';
-            _filtroBarraCategoriaActivo = null;
-            aplicarFiltrosUnificados('mostrar_todo');
-        }
-    }
-
-    // Exponer funciones al scope global para que el HTML pueda llamarlas
-    window.cambiarModoVelas         = cambiarModoVelas;
-
-    // ===== SISTEMA DE BÚSQUEDA UNIFICADA =====
-
-    // Estado de filtros activos por panel
-    const filtrosUnificados = {
-        arreglos:     { forma: 'todos', evento: 'todos' },
-        todos:        { forma: 'todos', evento: 'todos' },
-        mostrar_todo: {},
-        etiquetas:    { evento: 'todos' },
-        decoraciones: {}
+function ntCrearNota(n, nota) {
+  const caja = document.createElement("div");
+  caja.className = "nt-nota";
+  const fecha = document.createElement("div");
+  fecha.className = "nt-nota-fecha";
+  fecha.textContent = nota.fecha || "";
+
+  if (NT.editandoNota === nota.id) {
+    const ta = document.createElement("textarea");
+    ta.className = "nt-nota-edit";
+    ta.rows = 4;
+    ta.value = nota.texto;
+    const estado = document.createElement("span");
+    estado.className = "notas-estado";
+    const fila = document.createElement("div");
+    fila.className = "nt-fila";
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "notas-btn";
+    ok.textContent = "Guardar cambios";
+    const no = document.createElement("button");
+    no.type = "button";
+    no.className = "notas-btn notas-btn-sec";
+    no.textContent = "Cancelar";
+    fila.append(ok, no, estado);
+    const contador = document.createElement("div");
+    contador.className = "nt-contador";
+    const revisar = () => {
+      const t = ntLimpiar(ta.value);
+      const otras = n.notas.map((x) => (x.id === nota.id ? { id: x.id, fecha: x.fecha, texto: t } : x));
+      const sobran = ntLargo(otras) - NT_LIMITE;
+      ok.disabled = !t || sobran > 0;
+      contador.textContent = sobran > 0 ? "No cabe: te pasas por " + ntFmt(sobran) + " caracteres" : "";
+      contador.className = "nt-contador" + (sobran > 0 ? " nt-contador-error" : "");
     };
-
-    // ── Utilidades de búsqueda inteligente ──────────────────────────────────
-    // Quita acentos y pasa a minúsculas para comparar sin importar tildes ni mayúsculas
-    function normalizarTexto(str) {
-        return (str || '').toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '');
-    }
-
-    // Palabras pequeñas que no deben usarse como criterio de búsqueda
-    var STOPWORDS = new Set([
-        'de','del','la','las','el','los','un','una','unos','unas',
-        'y','e','o','u','a','en','con','por','para','que','se',
-        'es','son','su','sus','al','lo','le','les','no','si'
-    ]);
-
-    // Sinónimos y variantes ortográficas: cada grupo agrupa palabras equivalentes.
-    // Si el query contiene cualquiera de ellas, se buscan TODAS en el texto.
-    var SINONIMOS = [
-        ['tazon','tason','tazones','tasones','bowl','tazón','tasón'],
-        ['virgen','virjen','birgen','birjen','virgin'],
-        ['elefante','elefantes'],
-        ['arreglo','arreglos'],
-        ['vela','velas'],
-        ['figura','figuras'],
-        ['flores','flor'],
-    ];
-
-    // Dada una palabra normalizada, devuelve el grupo de variantes al que pertenece (o [la misma palabra])
-    function expandirVariantes(palabra) {
-        for (var i = 0; i < SINONIMOS.length; i++) {
-            if (SINONIMOS[i].indexOf(palabra) !== -1) {
-                return SINONIMOS[i];
-            }
-        }
-        return [palabra];
-    }
-
-    // Divide el query en palabras significativas (sin stopwords, mínimo 2 chars)
-    function palabrasBusqueda(query) {
-        return normalizarTexto(query)
-            .split(/\s+/)
-            .filter(function(p) { return p.length >= 2 && !STOPWORDS.has(p); });
-    }
-
-    // Devuelve true si TODAS las palabras significativas del query aparecen
-    // en alguna parte del texto (nombre + tipo + subtags del producto).
-    // Tolerancia: acepta variantes ortográficas y sinónimos definidos en SINONIMOS.
-    function coincideNombre(nombreCard, query, card) {
-        if (!query || !query.trim()) return true;
-
-        // Construir texto completo del producto para buscar
-        var textoCompleto = normalizarTexto(nombreCard);
-        if (card) {
-            var tipos    = normalizarTexto(card.getAttribute('data-tipos')   || '');
-            var subtags  = normalizarTexto(card.getAttribute('data-subtags') || '');
-            var tipo     = normalizarTexto(card.getAttribute('data-tipo')    || '');
-            textoCompleto += ' ' + tipos + ' ' + subtags + ' ' + tipo;
-        }
-
-        var palabras = palabrasBusqueda(query);
-        if (palabras.length === 0) return true; // solo stopwords → mostrar todo
-
-        return palabras.every(function(p) {
-            var variantes = expandirVariantes(p);
-            // Coincide si alguna variante aparece como substring en el texto completo
-            return variantes.some(function(v) { return textoCompleto.includes(v); });
-        });
-    }
-    // ────────────────────────────────────────────────────────────────────────
-
-    function filtrarPorNombreUnificado(panel, valor) {
-        aplicarFiltrosUnificados(panel);
-    }
-
-    function toggleDropdownFiltros(panel) {
-        const dropdown = document.getElementById('dropdown' + capitalizar(panel));
-        const btnFlecha = document.getElementById('btnFlecha' + capitalizar(panel));
-        if (!dropdown) return;
-        const abierto = dropdown.classList.toggle('abierto');
-        if (btnFlecha) btnFlecha.classList.toggle('abierto', abierto);
-        // Cerrar otros dropdowns
-        ['arreglos','todos','etiquetas'].forEach(p => {
-            if (p !== panel) {
-                const dd = document.getElementById('dropdown' + capitalizar(p));
-                const bf = document.getElementById('btnFlecha' + capitalizar(p));
-                if (dd) dd.classList.remove('abierto');
-                if (bf) bf.classList.remove('abierto');
-            }
-        });
-    }
-
-    function capitalizar(str) {
-        const map = { arreglos: 'Arreglos', todos: 'Todos', etiquetas: 'Etiquetas', decoraciones: 'Decoraciones' };
-        return map[str] || str.charAt(0).toUpperCase() + str.slice(1);
-    }
-
-    function toggleGrupoFiltro(grupoId) {
-        const grupo = document.getElementById(grupoId);
-        if (!grupo) return;
-        const header = grupo.previousElementSibling;
-        grupo.classList.toggle('abierto');
-        if (header) header.classList.toggle('abierto');
-    }
-
-    function seleccionarTagFiltro(btn, panel, tipo, valor) {
-        // Marcar activo dentro del grupo
-        const grupoMap = {
-            arreglos:  { forma: 'grupoFormaArreglos',   evento: 'grupoEventoArreglos' },
-            todos:     { forma: 'grupoFormaTodos',       evento: 'grupoEventoTodos' },
-            etiquetas: { evento: 'grupoEventoEtiquetas' }
-        };
-        const grupoId = grupoMap[panel]?.[tipo];
-        if (grupoId) {
-            document.querySelectorAll('#' + grupoId + ' .bbu-tag').forEach(b => b.classList.remove('activo'));
-            btn.classList.add('activo');
-        }
-        // Guardar estado
-        if (filtrosUnificados[panel]) filtrosUnificados[panel][tipo] = valor;
-        aplicarFiltrosUnificados(panel);
-    }
-
-    // ── Helper: comprueba si una card tiene alguno de los tipos indicados ──
-    function tieneTipo(card, ...buscar) {
-        const rawTipos = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
-        const tipos = rawTipos.toLowerCase().replace(/^"+|"+$/g, '').split(/[|,]/).map(s => s.trim().replace(/^"+|"+$/g, '')).filter(Boolean);
-        const variantes = {
-            'producto':        ['producto','productos'],
-            'arreglo':         ['arreglo','arreglos'],
-            'paquetes':        ['paquete','paquetes'],
-            'decoracion':      ['decoracion','decoraciones','aditamento','aditamentos','centro de mesa','centro_de_mesa','centrodemesa'],
-            'etiqueta':        ['etiqueta','etiquetas'],
-            // Categorías de etiquetaprincipal (col G)
-            'figuras':         ['figura','figuras'],
-            'bases':           ['base','bases'],
-            'macetas':         ['maceta','macetas'],
-            'tazones':         ['tazon','tazones','tazón','tazónes'],
-            'portavelas':      ['porta vela','porta velas','portavela','portavelas','porta_vela','porta_velas'],
-            'portainciensos':  ['porta incienso','porta inciensos','portaincienso','portainciensos','porta_incienso','porta_inciensos'],
-            'aditamentos':     ['aditamento','aditamentos']
-        };
-        return buscar.some(function(b) {
-            const lista = variantes[b] || [b];
-            return tipos.some(function(t) { return lista.includes(t); });
-        });
-    }
-
-    function aplicarFiltrosUnificados(panel) {
-        const inputMap = {
-            arreglos:     'inputBusquedaArreglos',
-            todos:        'inputBusquedaTodos',
-            etiquetas:    'inputBusquedaEtiquetas',
-            decoraciones: 'inputBusquedaDecoraciones'
-        };
-        const inputEl = document.getElementById(inputMap[panel]);
-        const textoBusq = (inputEl ? inputEl.value : '').trim().toLowerCase();
-        const filtros = filtrosUnificados[panel] || {};
-        const formaActiva  = filtros.forma  || 'todos';
-        const eventoActivo = filtros.evento || 'todos';
-
-        // Modos que filtran por etiquetaprincipal directamente
-        const modosPorEtiqueta = ['paquetes'];
-
-        document.querySelectorAll('.card-dinamica').forEach(card => {
-            const formaCard  = (card.dataset.forma  || '').toLowerCase();
-            const eventoCard = (card.dataset.evento || '').toLowerCase();
-            const nombreCard = (card.getAttribute('data-nombre') || '').toLowerCase();
-
-            const okNombre = coincideNombre(nombreCard, textoBusq, card);
-            const okForma  = formaActiva  === 'todos' || formaCard === formaActiva;
-            const okEvento = eventoActivo === 'todos' || eventoCard.split(' ').includes(eventoActivo);
-
-            // Si hay texto de búsqueda activo, ignorar el filtro de tipo y buscar en TODOS los productos
-            if (textoBusq) {
-                card.classList.toggle('oculto', !okNombre);
-            } else if (modosPorEtiqueta.includes(panel)) {
-                // Filtrar por etiquetaprincipal usando tieneTipo con el nombre del modo
-                card.classList.toggle('oculto', !tieneTipo(card, panel));
-            } else if (panel === 'decoraciones') {
-                card.classList.toggle('oculto', !tieneTipo(card, 'decoracion'));
-            } else if (panel === 'etiquetas') {
-                // Los productos de este panel vienen de una hoja dedicada (Hoja 2),
-                // así que se muestran todos por defecto; solo se filtran por
-                // nombre/evento si el usuario usa la búsqueda o los filtros de evento.
-                card.classList.toggle('oculto', !(okNombre && okEvento));
-            } else if (panel === 'arreglos') {
-                // Respetar también el filtro de precio activo en arreglos
-                let okPrecio = true;
-                if (precioArreglosActivo !== 'todos') {
-                    const pAttr = tipoPrecioArreglos === 'bazar'
-                        ? String(parseInt(card.getAttribute('data-precio-bazar') || '0', 10))
-                        : String(parseInt(card.getAttribute('data-precio') || '0', 10));
-                    okPrecio = pAttr === precioArreglosActivo;
-                }
-                card.classList.toggle('oculto', !(tieneTipo(card, 'arreglo') && okForma && okEvento && okPrecio));
-            } else if (panel === 'mostrar_todo') {
-                card.classList.toggle('oculto', false); // sin texto: mostrar todo
-            } else {
-                // panel === 'todos' (Productos): muestra solo los que tienen tipo 'producto'
-                card.classList.toggle('oculto', !(tieneTipo(card, 'producto') && okForma && okEvento));
-            }
-        });
-
-        if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    }
-
-    // Cerrar dropdowns al hacer click fuera
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.barra-busqueda-unificada-wrap')) {
-            document.querySelectorAll('.bbu-dropdown.abierto').forEach(dd => dd.classList.remove('abierto'));
-            document.querySelectorAll('.bbu-btn-flecha.abierto').forEach(bf => bf.classList.remove('abierto'));
-        }
+    ta.addEventListener("input", revisar);
+    no.addEventListener("click", () => {
+      NT.editandoNota = null;
+      ntDibujarNotas();
     });
-
-    // ===== FILTROS DE ARREGLOS (estilo yesos: Forma / Tamaño / Precio) =====
-    let modoFiltroArreglos = 'forma';   // 'forma' | 'tamano'
-    let formaArreglosActiva = 'todos';
-    let tamanoArreglosActivo = 'todos';
-    let tipoPrecioArreglos = 'original'; // 'original' | 'bazar'
-
-    function cambiarModoFiltroArreglos(modo) {
-        modoFiltroArreglos = modo;
-        document.getElementById('btn-arreglos-modo-forma').classList.toggle('activo', modo === 'forma');
-        document.getElementById('btn-arreglos-modo-tamano').classList.toggle('activo', modo === 'tamano');
-        document.getElementById('panel-arreglos-forma').style.display = modo === 'forma' ? '' : 'none';
-        document.getElementById('panel-arreglos-tamano').style.display = modo === 'tamano' ? '' : 'none';
-
-        if (modo === 'forma') {
-            tamanoArreglosActivo = 'todos';
-        } else {
-            formaArreglosActiva = 'todos';
-            document.querySelectorAll('#panel-arreglos-tamano .btn-filtro').forEach(b => b.classList.remove('activo'));
-            document.getElementById('btn-arreglos-tam-todos').classList.add('activo');
-        }
-        aplicarFiltrosArreglos();
-    }
-
-    function filtrarFormaArreglos(btn, forma) {
-        formaArreglosActiva = forma;
-        document.querySelectorAll('#menu-formas-arreglos .btn-filtro').forEach(b => b.classList.remove('activo'));
-        btn.classList.add('activo');
-        aplicarFiltrosArreglos();
-    }
-
-    function filtrarTamanoArreglos(btn, tam) {
-        tamanoArreglosActivo = tam;
-        document.querySelectorAll('#panel-arreglos-tamano .btn-filtro').forEach(b => b.classList.remove('activo'));
-        btn.classList.add('activo');
-        aplicarFiltrosArreglos();
-    }
-
-    let precioArreglosActivo = 'todos'; // precio exacto seleccionado
-
-    function cambiarTipoPrecioArreglos(tipo) {
-        tipoPrecioArreglos = tipo;
-        document.getElementById('btn-arreglos-precio-original').classList.toggle('activo', tipo === 'original');
-        document.getElementById('btn-arreglos-precio-bazar').classList.toggle('activo', tipo === 'bazar');
-        // Resetear selección de precio al cambiar tipo
-        precioArreglosActivo = 'todos';
-        document.querySelectorAll('#lista-precios-arreglos .btn-precio-velas').forEach(b => b.classList.remove('activo'));
-        const btnTodos = document.querySelector('#lista-precios-arreglos .btn-precio-velas');
-        if (btnTodos) btnTodos.classList.add('activo');
-        aplicarFiltrosArreglos();
-    }
-
-    function filtrarPrecioArreglos(btn, precio) {
-        precioArreglosActivo = precio;
-        document.querySelectorAll('#lista-precios-arreglos .btn-precio-velas').forEach(b => b.classList.remove('activo'));
-        btn.classList.add('activo');
-
-        // Si el modo activo es "Mostrar Todo", filtrar por precio sobre TODOS los tipos
-        var btnModoActivo = document.querySelector('.btn-modo-velas.activo');
-        if (!btnModoActivo || btnModoActivo.id === 'btnModoTodosProductos') {
-            aplicarFiltroPrecioSobreTodo(precio, tipoPrecioArreglos);
-        } else {
-            aplicarFiltrosArreglos();
-        }
-    }
-
-    // Filtra por precio exacto sobre TODOS los tipos sin restricción de categoría
-    function aplicarFiltroPrecioSobreTodo(precio, tipoPrecio) {
-        document.querySelectorAll('.card-dinamica').forEach(function(card) {
-            if (precio === 'todos') {
-                card.classList.remove('oculto');
-            } else {
-                var precioNormal = String(parseInt(card.getAttribute('data-precio') || '0', 10));
-                var precioBazar  = String(parseInt(card.getAttribute('data-precio-bazar') || '0', 10));
-                var precioCard   = tipoPrecio === 'bazar'
-                    ? (precioBazar !== '0' ? precioBazar : precioNormal)
-                    : (precioNormal !== '0' ? precioNormal : precioBazar);
-                card.classList.toggle('oculto', precioCard !== String(precio));
-            }
-        });
-        if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    }
-
-    function aplicarFiltrosArreglos() {
-        document.querySelectorAll('.card-dinamica').forEach(card => {
-            let visible = true;
-
-            // Solo mostrar tarjetas que tengan tipo arreglo
-            if (!tieneTipo(card, 'arreglo')) {
-                card.classList.add('oculto');
-                return;
-            }
-
-            // Filtro por forma (usa data-forma)
-            if (modoFiltroArreglos === 'forma' && formaArreglosActiva !== 'todos') {
-                const formaCard = (card.getAttribute('data-forma') || '').toLowerCase();
-                visible = formaCard === formaArreglosActiva;
-            }
-
-            // Filtro por tamaño (usa data-tamano si existe, si no muestra todo)
-            if (modoFiltroArreglos === 'tamano' && tamanoArreglosActivo !== 'todos') {
-                const tamCard = (card.getAttribute('data-tamano') || '').toLowerCase();
-                visible = tamCard === tamanoArreglosActivo;
-            }
-
-            // Filtro por precio exacto según tipo seleccionado — usa data-attributes directamente
-            if (precioArreglosActivo !== 'todos') {
-                const precioNormalCard = String(parseInt(card.getAttribute('data-precio') || '0', 10));
-                const precioBazarCard  = String(parseInt(card.getAttribute('data-precio-bazar') || '0', 10));
-                let precioCard;
-                if (tipoPrecioArreglos === 'bazar') {
-                    precioCard = precioBazarCard !== '0' ? precioBazarCard : precioNormalCard;
-                } else {
-                    precioCard = precioNormalCard !== '0' ? precioNormalCard : precioBazarCard;
-                }
-                if (precioCard !== precioArreglosActivo) visible = false;
-            }
-
-            card.classList.toggle('oculto', !visible);
-        });
-        if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    }
-
-    // Exponer funciones de filtros al scope global
-    window.filtrarPrecioArreglos        = filtrarPrecioArreglos;
-    window.aplicarFiltrosArreglos       = aplicarFiltrosArreglos;
-    window.cambiarTipoPrecioArreglos    = cambiarTipoPrecioArreglos;
-    window.cambiarModoFiltroArreglos    = cambiarModoFiltroArreglos;
-    window.filtrarFormaArreglos         = filtrarFormaArreglos;
-    window.filtrarTamanoArreglos        = filtrarTamanoArreglos;
-    window.aplicarFiltrosUnificados     = aplicarFiltrosUnificados;
-    window.filtrarPorNombreUnificado    = filtrarPorNombreUnificado;
-    window.toggleDropdownFiltros        = toggleDropdownFiltros;
-    window.toggleGrupoFiltro            = toggleGrupoFiltro;
-    window.seleccionarTagFiltro         = seleccionarTagFiltro;
-
-    // ===== FILTROS TODOS LOS PRODUCTOS =====
-    function actualizarPrecio(val) {
-        document.getElementById('txtPrecioMax').textContent = '$' + val + ' MXN';
-        aplicarFiltrosTodos();
-    }
-
-    function filtrarPorNombreTodos(valor) {
-        const btn = document.getElementById('btnLimpiarTodos');
-        btn.classList.toggle('visible', valor.trim().length > 0);
-        aplicarFiltrosTodos();
-    }
-
-    function limpiarBusquedaTodos() {
-        document.getElementById('inputBusquedaTodos').value = '';
-        document.getElementById('btnLimpiarTodos').classList.remove('visible');
-        aplicarFiltrosTodos();
-    }
-
-    let tipoPrecioActual = 'original'; // 'original' | 'bazar'
-
-    let precioExactoTodosActivo = 'todos'; // precio exacto seleccionado en panel "todos"
-
-    function filtrarPrecioTodos(btn, precio) {
-        precioExactoTodosActivo = precio;
-        document.querySelectorAll('#lista-precios-todos .btn-precio-velas').forEach(b => b.classList.remove('activo'));
-        btn.classList.add('activo');
-        aplicarFiltrosPrecioExactoTodos();
-    }
-
-    function aplicarFiltrosPrecioExactoTodos() {
-        // Delegar siempre a aplicarFiltrosTodos para que se respeten TODOS los filtros activos
-        // (forma, evento, nombre, slider) ademas del precio exacto
-        aplicarFiltrosTodos();
-    }
-
-    function cambiarTipoPrecio(tipo) {
-        tipoPrecioActual = tipo;
-        document.getElementById('btn-precio-original').classList.toggle('activo', tipo === 'original');
-        document.getElementById('btn-precio-bazar').classList.toggle('activo', tipo === 'bazar');
-        // Actualizar etiqueta del slider según tipo
-        const label = document.getElementById('labelTipoPrecio');
-        if (label) label.textContent = tipo === 'bazar' ? 'Precio Mayoreo Máximo:' : 'Precio Máximo:';
-        // Resetear selección de precio exacto al cambiar tipo
-        precioExactoTodosActivo = 'todos';
-        const btnTd = document.querySelector('#lista-precios-todos .btn-precio-velas');
-        document.querySelectorAll('#lista-precios-todos .btn-precio-velas').forEach(b => b.classList.remove('activo'));
-        if (btnTd) btnTd.classList.add('activo');
-        aplicarFiltrosPrecioExactoTodos();
-    }
-
-    function aplicarFiltrosTodos() {
-        const formaActiva  = document.querySelector('#filtro-formas .btn-filtro.activo')?.dataset.forma || 'todos';
-        const eventoActivo = document.querySelector('#filtro-eventos .btn-filtro.activo')?.dataset.evento || 'todos';
-        const _sliderEl = document.getElementById('filtroPrecio');
-        const precioMax    = _sliderEl ? parseInt(_sliderEl.value) : 99999;
-        const textoBusq    = (document.getElementById('inputBusquedaTodos').value || '').trim().toLowerCase();
-
-        document.querySelectorAll('.card-dinamica').forEach(card => {
-            const formaCard  = card.dataset.forma || '';
-            const eventoCard = card.dataset.evento || '';
-            const nombreCard = (card.getAttribute('data-nombre') || '').toLowerCase();
-
-            // Seleccionar precio segun tipo activo
-            let precioCard;
-            if (tipoPrecioActual === 'bazar') {
-                precioCard = parseInt(card.getAttribute('data-precio-bazar') || card.getAttribute('data-precio') || '0');
-            } else {
-                precioCard = parseInt(card.getAttribute('data-precio') || '0');
-            }
-
-            const okForma   = formaActiva  === 'todos' || formaCard  === formaActiva;
-            const okEvento  = eventoActivo === 'todos' || eventoCard.split(' ').includes(eventoActivo);
-            const okNombre  = coincideNombre(nombreCard, textoBusq, card);
-
-            // Si hay precio exacto activo (boton $15/$20/etc), tiene prioridad sobre el slider
-            let okPrecio;
-            if (precioExactoTodosActivo !== 'todos') {
-                const precioNormalCard = String(parseInt(card.getAttribute('data-precio') || '0'));
-                const precioBazarCard  = String(parseInt(card.getAttribute('data-precio-bazar') || '0'));
-                if (tipoPrecioActual === 'bazar') {
-                    // En modo mayoreo: primero bazar, si es 0 caer a precio normal
-                    okPrecio = precioBazarCard !== '0'
-                        ? precioBazarCard === String(precioExactoTodosActivo)
-                        : precioNormalCard === String(precioExactoTodosActivo);
-                } else {
-                    // En modo original: primero precio normal, si es 0 caer a precio bazar
-                    okPrecio = precioNormalCard !== '0'
-                        ? precioNormalCard === String(precioExactoTodosActivo)
-                        : precioBazarCard === String(precioExactoTodosActivo);
-                }
-            } else {
-                okPrecio = precioCard <= precioMax;
-            }
-
-            card.classList.toggle('oculto', !(okForma && okEvento && okPrecio && okNombre));
-        });
-        if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    }
-
-    // ===== SCROLL DE BARRA DE PRECIOS =====
-    function scrollPrecios(id, px) {
-        const el = document.getElementById(id);
-        if (el) el.scrollBy({ left: px, behavior: 'smooth' });
-    }
-
-    // Inicializar listeners de filtros de botones (forma / evento)
-    _ready(function() {
-        document.querySelectorAll('#filtro-formas .btn-filtro').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#filtro-formas .btn-filtro').forEach(b => b.classList.remove('activo'));
-                btn.classList.add('activo');
-                aplicarFiltrosTodos();
-            });
-        });
-        document.querySelectorAll('#filtro-eventos .btn-filtro').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#filtro-eventos .btn-filtro').forEach(b => b.classList.remove('activo'));
-                btn.classList.add('activo');
-                aplicarFiltrosTodos();
-            });
-        });
+    ok.addEventListener("click", async () => {
+      const t = ntLimpiar(ta.value);
+      if (!t) return;
+      ok.disabled = true;
+      setEstado(estado, "Guardando…");
+      try {
+        await llamarNotas("notario_nota_guardar", { id: n.id, notaId: nota.id, fecha: nota.fecha, texto: t });
+        nota.texto = t;
+        NT.editandoNota = null;
+        ntDibujarNotas();
+        ntDibujarTodo();
+      } catch (e) {
+        setEstado(estado, "Error: " + e.message, "error");
+        ok.disabled = false;
+      }
     });
+    caja.append(fecha, ta, contador, fila);
+    setTimeout(() => ta.focus(), 0);
+    return caja;
+  }
 
-
-
-// ═══ DRAWER ═══
-function abrirDrawer() {
-    document.getElementById('drawer').classList.add('activo');
-    document.getElementById('drawerOverlay').classList.add('activo');
-    actualizarEstadoSesionDrawer();
-    if (!document.getElementById('drawerResultados').classList.contains('visible')) {
-        mostrarSugerenciasDrawer();
-    }
-    // Empujar entrada al historial para que el botón "atrás" lo cierre
-    history.pushState({ kukumitaModal: 'drawer' }, '');
-}
-function cerrarDrawer() {
-    var drawer = document.getElementById('drawer');
-    if (!drawer || !drawer.classList.contains('activo')) return;
-    drawer.classList.remove('activo');
-    document.getElementById('drawerOverlay').classList.remove('activo');
-    // Si el estado actual es el del drawer, regresamos en el historial
-    if (history.state && history.state.kukumitaModal === 'drawer') {
-        history.replaceState(null, '');
-    }
-}
-function toggleSubpanelDrawer(id) {
-    document.getElementById(id).classList.toggle('visible');
-    const tog = document.getElementById('toggleOscuroDrawer');
-    if (tog) tog.classList.toggle('activo', document.body.classList.contains('modo-oscuro'));
-}
-
-// ═══ SESIÓN SIMULADA (conectar con Firebase cuando esté listo) ═══
-function estaEnSesion() {
-    return localStorage.getItem('velas-sesion-activa') === '1';
-}
-
-function actualizarEstadoSesionDrawer() {
-    const conSesion = estaEnSesion();
-    document.getElementById('drawerZonaSesion').classList.toggle('visible', !conSesion);
-    document.getElementById('drawerPerfilBloque').style.display = conSesion ? 'flex' : 'none';
-    if (conSesion) {
-        const foto = localStorage.getItem('velas-foto-perfil');
-        if (foto) document.getElementById('drawerAvatar').src = foto;
-        const nombre = localStorage.getItem('velas-nombre-usuario') || 'Mi cuenta';
-        document.getElementById('drawerNombreUsuario').textContent = nombre;
-    }
-}
-
-function cerrarSesion() {
-    localStorage.removeItem('velas-sesion-activa');
-    localStorage.removeItem('velas-foto-perfil');
-    localStorage.removeItem('velas-nombre-usuario');
-    cerrarPantallaPerfil();
-    actualizarEstadoSesionDrawer();
-}
-
-// ═══ PANTALLA PERFIL COMPLETA ═══
-function abrirPantallaPerfil() {
-    const foto = localStorage.getItem('velas-foto-perfil');
-    if (foto) document.getElementById('pantallaAvatar').src = foto;
-    document.getElementById('pantallaUsuarioNombre').textContent =
-        localStorage.getItem('velas-nombre-usuario') || 'Mi cuenta';
-    document.getElementById('pantallaPerfil').classList.add('activo');
-    document.body.style.overflow = 'hidden';
-    _modalActivo = 'perfil';
-    history.pushState({ kukumitaModal: 'perfil' }, '');
-}
-
-// ─── SISTEMA CENTRALIZADO DE MODALES CON HISTORIAL ───
-// Registra qué modal está abierto para que el botón "atrás" lo cierre
-var _modalActivo = null; // nombre del modal activo
-
-function _abrirModalConHistorial(nombre, abrirFn) {
-    // Si ya hay un modal abierto, no apilamos otro pushState
-    if (!_modalActivo) {
-        history.pushState({ kukumitaModal: nombre }, '');
-    }
-    _modalActivo = nombre;
-    document.body.style.overflow = 'hidden';
-    abrirFn();
-}
-
-function _cerrarModalConHistorial(cerrarFn) {
-    _modalActivo = null;
-    document.body.style.overflow = '';
-    cerrarFn();
-    // Si el estado del historial fue empujado por este modal, retrocedemos
-    if (history.state && history.state.kukumitaModal) {
-        history.replaceState(null, '');
-    }
-}
-
-// Escucha el botón "atrás" del dispositivo
-window.addEventListener('popstate', function(e) {
-    // Modal de cantidad — debe revisarse primero
-    var modalCantidad = document.getElementById('modalCantidad');
-    if (modalCantidad && modalCantidad.classList.contains('abierto')) {
-        modalCantidad.classList.remove('abierto');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        _mcCardActual = null;
-        return;
-    }
-    // Drawer lateral
-    var drawer = document.getElementById('drawer');
-    if (drawer && drawer.classList.contains('activo')) {
-        drawer.classList.remove('activo');
-        document.getElementById('drawerOverlay').classList.remove('activo');
-        return;
-    }
-    // Pantalla Perfil
-    var pantallaPerfil = document.getElementById('pantallaPerfil');
-    if (pantallaPerfil && pantallaPerfil.classList.contains('activo')) {
-        pantallaPerfil.classList.remove('activo');
-        _modalActivo = null;
-        return;
-    }
-    // Pantalla Carrito
-    var pantallaCarrito = document.getElementById('pantallaCarrito');
-    if (pantallaCarrito && pantallaCarrito.classList.contains('activa')) {
-        pantallaCarrito.classList.remove('activa');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        // Restaurar burbuja al cerrar con botón atrás
-        var burbujaBack = document.getElementById('burbujaCarrito');
-        if (burbujaBack) { burbujaBack.style.removeProperty('display'); }
-        actualizarBurbuja();
-        return;
-    }
-    // Pantalla Favoritos
-    var pantallaFavoritos = document.getElementById('pantallaFavoritos');
-    if (pantallaFavoritos && pantallaFavoritos.classList.contains('activa')) {
-        pantallaFavoritos.classList.remove('activa');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        return;
-    }
-    // Modal de producto (ya tenía su propio manejo, lo respetamos)
-    var modalProd = document.getElementById('modalProducto');
-    if (modalProd && modalProd.classList.contains('abierto')) {
-        modalProd.classList.remove('abierto');
-        document.body.style.overflow = 'auto';
-        _modalActivo = null;
-        return;
-    }
-    // Modal Tienda
-    var modalTienda = document.getElementById('modalTienda');
-    if (modalTienda && modalTienda.classList.contains('abierto')) {
-        modalTienda.classList.remove('abierto');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        return;
-    }
-    // Modal Uber
-    var modalUber = document.getElementById('modalUber');
-    if (modalUber && modalUber.classList.contains('abierto')) {
-        modalUber.classList.remove('abierto');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        return;
-    }
-    // Modal Bazar
-    var modalBazar = document.getElementById('modalBazar');
-    if (modalBazar && (modalBazar.style.display === 'flex' || modalBazar.classList.contains('abierto'))) {
-        if (typeof cerrarModalBazar === 'function') cerrarModalBazar();
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        return;
-    }
-    // Modal QR
-    var modalQR = document.getElementById('modalQR');
-    if (modalQR && modalQR.classList.contains('abierto')) {
-        modalQR.classList.remove('abierto');
-        _modalActivo = null;
-        return;
-    }
-    // Modal Info Etiqueta
-    var modalEtiq = document.getElementById('modalInfoEtiqueta');
-    if (modalEtiq && modalEtiq.classList.contains('abierto')) {
-        modalEtiq.classList.remove('abierto');
-        document.body.style.overflow = '';
-        _modalActivo = null;
-        return;
-    }
-});
-
-// ─── MODAL UBER ENVÍOS ───
-function abrirModalUber() {
-    history.pushState({ kukumitaModal: 'uber' }, '');
-    _modalActivo = 'uber';
-    document.getElementById('modalUber').classList.add('abierto');
-    document.body.style.overflow = 'hidden';
-}
-function cerrarModalUber() {
-    document.getElementById('modalUber').classList.remove('abierto');
-    document.body.style.overflow = '';
-    _modalActivo = null;
-    if (history.state && history.state.kukumitaModal === 'uber') {
-        history.replaceState(null, '');
-    }
-}
-
-// ─── MODAL BÚSCANOS EN TIENDA ───
-function abrirModalTienda() {
-    history.pushState({ kukumitaModal: 'tienda' }, '');
-    _modalActivo = 'tienda';
-    document.getElementById('modalTienda').classList.add('abierto');
-    document.body.style.overflow = 'hidden';
-}
-function cerrarModalTienda() {
-    document.getElementById('modalTienda').classList.remove('abierto');
-    document.body.style.overflow = '';
-    _modalActivo = null;
-    if (history.state && history.state.kukumitaModal === 'tienda') {
-        history.replaceState(null, '');
-    }
-}
-
-// ─── QR MODAL ───
-function abrirModalQR() {
-    const url = window.location.href;
-    document.getElementById('qrUrlTexto').textContent = url;
-    document.getElementById('modalQR').classList.add('abierto');
-    generarQR(url);
-}
-function cerrarModalQR() {
-    document.getElementById('modalQR').classList.remove('abierto');
-}
-_ready(function() {
-    document.getElementById('modalQR').addEventListener('click', function(e) {
-        if (e.target === this) cerrarModalQR();
-    });
-});
-
-function generarQR(texto) {
-    const canvas = document.getElementById('qrCanvas');
-    const ctx = canvas.getContext('2d');
-    const size = window.innerWidth >= 768 ? 380 : 200;
-    canvas.width = size;
-    canvas.height = size;
-
-    if (window.QRious) {
-        new QRious({ element: canvas, value: texto, size: size, backgroundAlpha: 1, foreground: '#362a22', background: '#fff', level: 'H' });
-        return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js';
-    script.onload = () => {
-        new QRious({ element: canvas, value: texto, size: size, backgroundAlpha: 1, foreground: '#362a22', background: '#fff', level: 'H' });
-    };
-    script.onerror = () => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(texto);
-        img.onload = () => { ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size); ctx.drawImage(img, 0, 0, size, size); };
-    };
-    document.head.appendChild(script);
-}
-
-// ─── COPIAR URL ───
-async function copiarURL() {
-    const url = window.location.href;
+  const texto = document.createElement("p");
+  texto.className = "nt-nota-texto";
+  texto.textContent = nota.texto;
+  const botones = document.createElement("div");
+  botones.className = "nt-nota-botones";
+  const editar = document.createElement("button");
+  editar.type = "button";
+  editar.className = "nt-nota-btn";
+  editar.title = "Editar nota";
+  editar.setAttribute("aria-label", "Editar nota");
+  editar.textContent = "✎";
+  editar.addEventListener("click", () => {
+    NT.editandoNota = nota.id;
+    ntDibujarNotas();
+  });
+  const borrar = document.createElement("button");
+  borrar.type = "button";
+  borrar.className = "nt-nota-btn";
+  borrar.title = "Eliminar nota";
+  borrar.setAttribute("aria-label", "Eliminar nota");
+  borrar.textContent = "×";
+  borrar.addEventListener("click", async () => {
+    if (!window.confirm("¿Eliminar esta nota del notario?")) return;
+    setEstado(ntEl.estadoNota, "Eliminando…");
     try {
-        await navigator.clipboard.writeText(url);
-        const btn = document.getElementById('btnCopiarURL');
-        const span = btn.querySelector('span');
-        const textoOriginal = span ? span.textContent : '';
-        if (span) span.textContent = '\u00a1Copiado!'; document.getElementById('btnCopiarTexto').textContent = '\u00a1Copiado!';
-        setTimeout(() => { if (span) span.textContent = textoOriginal; document.getElementById('btnCopiarTexto').textContent = 'Copiar URL'; }, 2000);
-        mostrarToast('\ud83d\udd17 URL copiada al portapapeles');
+      await llamarNotas("notario_nota_borrar", { id: n.id, notaId: nota.id });
+      n.notas = n.notas.filter((x) => x.id !== nota.id);
+      setEstado(ntEl.estadoNota, "Nota eliminada", "ok");
+      ntDibujarNotas();
+      ntDibujarTodo();
     } catch (e) {
-        const temp = document.createElement('textarea');
-        temp.value = url;
-        document.body.appendChild(temp);
-        temp.select();
-        document.execCommand('copy');
-        document.body.removeChild(temp);
-        mostrarToast('\ud83d\udd17 URL copiada al portapapeles');
+      setEstado(ntEl.estadoNota, "Error: " + e.message, "error");
     }
-}
-function cerrarPantallaPerfil() {
-    document.getElementById('pantallaPerfil').classList.remove('activo');
-    if (history.state && history.state.kukumitaModal === 'perfil') {
-        history.replaceState(null, '');
-    }
+  });
+  botones.append(editar, borrar);
+  caja.append(fecha, texto, botones);
+  return caja;
 }
 
-// ═══ FOTO DE PERFIL ═══
-function elegirFotoGaleria() {
-    document.getElementById('inputFotoPerfil').click();
+// ----- Abrir / cerrar la ventana -----
+function ntAbrirNuevo(zona) {
+  NT.abierto = null;
+  NT.zonaNueva = zona;
+  NT.editandoNota = null;
+  ntEl.titulo.textContent = "Nuevo notario";
+  ntEl.nombre.value = "";
+  ntEl.desc.value = "";
+  ntEl.guardarDatos.textContent = "Crear notario";
+  ntEl.borrarNotario.hidden = true;
+  ntEl.notas.hidden = true;
+  setEstado(ntEl.estadoDatos, "");
+  ntModal.hidden = false;
+  ntEl.nombre.focus();
 }
-function aplicarFotoPerfil(event) {
-    const archivo = event.target.files[0];
-    if (!archivo) return;
-    const user = (typeof auth !== 'undefined') ? auth.currentUser : null;
-
-    // Vista previa inmediata mientras sube
-    const reader = new FileReader();
-    reader.onload = e => {
-        const src = e.target.result;
-        const avatarDrawer = document.getElementById('drawerAvatar');
-        const avatarPantalla = document.getElementById('pantallaAvatar');
-        if (avatarDrawer) avatarDrawer.src = src;
-        if (avatarPantalla) avatarPantalla.src = src;
-        localStorage.setItem('velas-foto-perfil', src); // fallback local
-    };
-    reader.readAsDataURL(archivo);
-
-    // Subir a Firebase Storage si hay sesión
-    if (user && typeof firebase !== 'undefined' && firebase.storage) {
-        mostrarToast('⏳ Subiendo foto…');
-        const storage = firebase.storage();
-        const ref = storage.ref('fotos-perfil/' + user.uid + '/avatar.jpg');
-        ref.put(archivo).then(function() {
-            return ref.getDownloadURL();
-        }).then(function(url) {
-            return user.updateProfile({ photoURL: url }).then(function() {
-                localStorage.setItem('velas-foto-perfil', url);
-                const avatarDrawer = document.getElementById('drawerAvatar');
-                const avatarPantalla = document.getElementById('pantallaAvatar');
-                if (avatarDrawer) avatarDrawer.src = url;
-                if (avatarPantalla) avatarPantalla.src = url;
-                mostrarToast('✅ Foto de perfil actualizada');
-            });
-        }).catch(function(err) {
-            console.error('Error subiendo foto:', err);
-            mostrarToast('⚠️ Foto guardada solo en este dispositivo');
-        });
-    } else {
-        mostrarToast('✅ Foto actualizada en este dispositivo');
-    }
+function ntAbrir(n) {
+  NT.abierto = n.id;
+  NT.zonaNueva = null;
+  NT.editandoNota = null;
+  ntEl.titulo.textContent = "📒 Notario";
+  ntEl.nombre.value = n.nombre === "Sin nombre" ? "" : n.nombre;
+  ntEl.desc.value = n.descripcion || "";
+  ntEl.guardarDatos.textContent = "Guardar nombre y descripción";
+  ntEl.borrarNotario.hidden = false;
+  ntEl.notas.hidden = false;
+  ntEl.texto.value = "";
+  setEstado(ntEl.estadoDatos, "");
+  setEstado(ntEl.estadoNota, "");
+  ntModal.hidden = false;
+  ntDibujarNotas();
+  if (!n.notas.length) ntEl.texto.focus();
+}
+function ntCerrar(forzar) {
+  if (ntModal.hidden) return;
+  if (!forzar && ntEl.texto.value.trim() && !window.confirm("Tienes una nota sin agregar. ¿Cerrar y descartarla?")) return;
+  ntModal.hidden = true;
+  NT.abierto = null;
+  NT.zonaNueva = null;
+  NT.editandoNota = null;
+  ntEl.texto.value = "";
 }
 
-_ready(function() {
-    actualizarEstadoSesionDrawer();
-});
-
-// Swipe desde borde izquierdo para abrir
-(function() {
-    var startX = 0, startY = 0, tocandoBorde = false;
-    document.addEventListener('touchstart', function(e) {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        tocandoBorde = startX < 24;
-    }, { passive: true });
-    document.addEventListener('touchend', function(e) {
-        if (!tocandoBorde) return;
-        var dx = e.changedTouches[0].clientX - startX;
-        var dy = Math.abs(e.changedTouches[0].clientY - startY);
-        if (dx > 50 && dy < 60) abrirDrawer();
-    }, { passive: true });
-})();
-
-// ═══ BÚSQUEDA EN DRAWER ═══
-function obtenerProductosDrawer() {
-    return Array.from(document.querySelectorAll('#gridProductos .card-dinamica')).map(function(card) {
-        return {
-            nombre: card.getAttribute('data-nombre') || '',
-            precio: card.getAttribute('data-precio') || '',
-            img: (card.querySelector('.img-contenedor-dinamico img') || {}).src || '',
-            card: card
-        };
-    });
-}
-function mostrarSugerenciasDrawer() {
-    var prods = obtenerProductosDrawer().slice(0, 3);
-    renderizarResultadosDrawer(prods, 'Productos destacados');
-}
-function _normDrawer(str) {
-    return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-// Sinónimos para la búsqueda del drawer (misma tabla que coincideNombre)
-var _SINONIMOS_DRAWER = [
-    ['tazon','tason','tazones','tasones','bowl','tazón','tasón'],
-    ['virgen','virjen','birgen','birjen','virgin'],
-    ['elefante','elefantes'],
-    ['arreglo','arreglos'],
-    ['vela','velas'],
-    ['figura','figuras'],
-    ['flores','flor'],
-];
-function _expandirDrawer(palabra) {
-    for (var i = 0; i < _SINONIMOS_DRAWER.length; i++) {
-        if (_SINONIMOS_DRAWER[i].indexOf(palabra) !== -1) return _SINONIMOS_DRAWER[i];
-    }
-    return [palabra];
-}
-function _coincideDrawer(nombre, query, card) {
-    var texto = _normDrawer(nombre);
-    if (card) {
-        texto += ' ' + _normDrawer(card.getAttribute('data-tipos') || '');
-        texto += ' ' + _normDrawer(card.getAttribute('data-subtags') || '');
-    }
-    var palabras = _normDrawer(query).split(/\s+/).filter(function(p){ return p.length >= 2; });
-    if (!palabras.length) return true;
-    return palabras.every(function(p) {
-        return _expandirDrawer(p).some(function(v){ return texto.includes(v); });
-    });
-}
-
-function ejecutarBusquedaDrawer() {
-    var rawQuery = document.getElementById('drawerInputBusqueda').value.trim();
-    var query    = rawQuery.toLowerCase();
-    if (!query) { window._busquedaDrawerTextoActiva = false; mostrarSugerenciasDrawer(); return; }
-
-    // Mostrar TODOS los resultados en el catálogo principal:
-    // 1. Cerrar drawer
-    cerrarDrawer();
-    // 2. Cambiar a modo "mostrar todo" para que no haya filtro de tipo
-    if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas('mostrar_todo');
-    // Marcar que hay una búsqueda de texto activa (oculta las barras "Mostrar Más X")
-    window._busquedaDrawerTextoActiva = true;
-    // 3. Filtrar todas las cards por query (con acento y sinónimos)
-    var cards = document.querySelectorAll('#gridProductos .card-dinamica');
-    var total = 0;
-    cards.forEach(function(card) {
-        var nombre = card.getAttribute('data-nombre') || '';
-        var match  = _coincideDrawer(nombre, query, card);
-        card.classList.toggle('oculto', !match);
-        card.classList.remove('paginacion-oculto');
-        if (match) total++;
-    });
-    // 4. Repaginar
-    if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    // 5. Scroll al catálogo
-    var grid = document.getElementById('gridProductos');
-    if (grid) setTimeout(function(){ grid.scrollIntoView({ behavior:'smooth', block:'start' }); }, 100);
-    // 6. Toast informativo
-    if (typeof mostrarToast === 'function') {
-        mostrarToast(total > 0
-            ? '🔍 ' + total + ' resultado' + (total !== 1 ? 's' : '') + ' para "' + rawQuery + '"'
-            : '😕 Sin resultados para "' + rawQuery + '"');
-    }
-}
-function renderizarResultadosDrawer(lista, titulo) {
-    var cont = document.getElementById('drawerResultados');
-    var listaEl = document.getElementById('drawerListaResultados');
-    var sinRes = document.getElementById('drawerSinResultados');
-    var tituloEl = document.getElementById('drawerRecTitulo');
-    cont.classList.add('visible');
-    tituloEl.textContent = titulo;
-    listaEl.innerHTML = '';
-    sinRes.style.display = 'none';
-    if (lista.length === 0) { sinRes.style.display = 'block'; return; }
-    lista.slice(0, 4).forEach(function(p) {
-        var item = document.createElement('div');
-        item.className = 'drawer-rec-item';
-        var nombreSeguroDrawer = escapeHtml(p.nombre);
-        item.innerHTML = '<img class="drawer-rec-img" src="' + escapeHtml(p.img) + '" alt="' + nombreSeguroDrawer + '" onerror="this.style.background=\'#eee\'">'
-            + '<div class="drawer-rec-info"><p class="drawer-rec-nombre">' + nombreSeguroDrawer + '</p>'
-            + '<p class="drawer-rec-precio">$' + escapeHtml(p.precio) + ' MXN</p></div>'
-            + '<span style="color:#bbb;">›</span>';
-        item.onclick = function() {
-            cerrarDrawer();
-            p.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(function() {
-                var btn = p.card.querySelector('button');
-                if (btn) btn.click();
-            }, 400);
-        };
-        listaEl.appendChild(item);
-    });
-}
-
-
-
-
-
-// ═══════════════════════════════════════════
-//  FIREBASE CONFIGURACIÓN
-// ═══════════════════════════════════════════
-const firebaseConfig = {
-    apiKey: "AIzaSyBc_AUz1lfgAPFuQd9oKvDYGm1lyrHALGs",
-    authDomain: "velas-kukumita.firebaseapp.com",
-    projectId: "velas-kukumita",
-    storageBucket: "velas-kukumita.firebasestorage.app",
-    messagingSenderId: "76727611900",
-    appId: "1:76727611900:web:d0f8b3c2a04e6fb340c279",
-    measurementId: "G-RWNN074LVT"
-};
-
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const providerGoogle = new firebase.auth.GoogleAuthProvider();
-
-// ─── TOAST ───
-function mostrarToast(msg) {
-    const t = document.getElementById('toastNotif');
-    t.textContent = msg;
-    t.classList.add('visible');
-    setTimeout(() => t.classList.remove('visible'), 2800);
-}
-
-// ─── MODAL GOOGLE ───
-function abrirModalGoogle() {
-    document.getElementById('modalGoogleAuth').classList.add('abierto');
-}
-function cerrarModalGoogle() {
-    document.getElementById('modalGoogleAuth').classList.remove('abierto');
-}
-
-// ─── INICIAR SESIÓN CON GOOGLE ───
-async function iniciarSesionGoogle() {
-    try {
-        const result = await auth.signInWithPopup(providerGoogle);
-        cerrarModalGoogle();
-        cerrarDrawer();
-    } catch (e) {
-        console.error('[Auth Error]', e.code, e.message);
-
-        // Popup bloqueado o cerrado por el usuario → intentar con redirect
-        if (
-            e.code === 'auth/popup-blocked' ||
-            e.code === 'auth/popup-closed-by-user' ||
-            e.code === 'auth/cancelled-popup-request'
-        ) {
-            try {
-                mostrarToast('⏳ Redirigiendo para iniciar sesión…');
-                await auth.signInWithRedirect(providerGoogle);
-                // La página se recargará; el resultado se maneja en getRedirectResult abajo
-            } catch (e2) {
-                console.error('[Redirect fallback error]', e2.code, e2.message);
-                mostrarToast('No se pudo iniciar sesión. Intenta de nuevo.');
-            }
-            return;
-        }
-
-        // Dominio no autorizado en Firebase Console
-        if (e.code === 'auth/unauthorized-domain') {
-            mostrarToast('❌ Dominio no autorizado. Avisa al administrador.');
-            console.warn('Agrega este dominio en Firebase Console → Authentication → Settings → Authorized domains:', window.location.hostname);
-            return;
-        }
-
-        // Proveedor Google no habilitado
-        if (e.code === 'auth/operation-not-allowed') {
-            mostrarToast('❌ Inicio con Google no habilitado. Avisa al administrador.');
-            console.warn('Habilita el proveedor Google en Firebase Console → Authentication → Sign-in method.');
-            return;
-        }
-
-        // Red o configuración de Firebase incorrecta
-        if (e.code === 'auth/network-request-failed') {
-            mostrarToast('Sin conexión. Revisa tu internet e intenta de nuevo.');
-            return;
-        }
-
-        // Cualquier otro error: mostrar código para facilitar el diagnóstico
-        mostrarToast('Error al iniciar sesión (' + (e.code || 'desconocido') + ')');
-    }
-}
-
-// ─── MANEJAR RESULTADO DE REDIRECT (para móvil / Safari) ───
-auth.getRedirectResult().then(result => {
-    if (result && result.user) {
-        cerrarModalGoogle();
-        if (typeof cerrarDrawer === 'function') cerrarDrawer();
-    }
-}).catch(e => {
-    if (e.code && e.code !== 'auth/no-auth-event') {
-        console.error('[Redirect result error]', e.code, e.message);
-        mostrarToast('Error al completar el inicio de sesión (' + e.code + ')');
-    }
-});
-
-// ─── CERRAR SESIÓN (override del anterior) ───
-function cerrarSesion() {
-    auth.signOut().then(() => {
-        cerrarPantallaPerfil();
-        mostrarToast('Sesión cerrada');
-    });
-}
-
-// ─── ESCUCHAR CAMBIOS DE SESIÓN ───
-auth.onAuthStateChanged(user => {
-    if (user) {
-        // Guardar datos en localStorage como cache visual
-        localStorage.setItem('velas-sesion-activa', '1');
-        if (user.photoURL) localStorage.setItem('velas-foto-perfil', user.photoURL);
-        localStorage.setItem('velas-nombre-usuario', user.displayName || 'Mi cuenta');
-        localStorage.setItem('velas-email-usuario', user.email || '');
-        localStorage.setItem('velas-proveedor', user.providerData[0]?.providerId || '');
-    } else {
-        localStorage.removeItem('velas-sesion-activa');
-        localStorage.removeItem('velas-foto-perfil');
-        localStorage.removeItem('velas-nombre-usuario');
-        localStorage.removeItem('velas-email-usuario');
-        localStorage.removeItem('velas-proveedor');
-    }
-    actualizarEstadoSesionDrawer();
-    actualizarPantallaPerfil();
-});
-
-// ─── ACTUALIZAR PANTALLA PERFIL CON DATOS REALES ───
-function actualizarPantallaPerfil() {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const foto = user.photoURL || '';
-    const nombre = user.displayName || 'Mi cuenta';
-    const email = user.email || '';
-    const esGoogle = user.providerData.some(p => p.providerId === 'google.com');
-
-    const avatarEl = document.getElementById('pantallaAvatar');
-    const nombreEl = document.getElementById('pantallaUsuarioNombre');
-    const subNombre = document.getElementById('subNombreActual');
-    const subContrasena = document.getElementById('subContrasenaInfo');
-    const btnContrasena = document.getElementById('btnContrasena');
-
-    if (avatarEl && foto) avatarEl.src = foto;
-    if (nombreEl) nombreEl.textContent = nombre;
-    if (subNombre) subNombre.textContent = nombre + (email ? '  ·  ' + email : '');
-
-    if (esGoogle) {
-        if (subContrasena) subContrasena.textContent = 'Cuenta Google — sin contraseña local';
-        if (btnContrasena) {
-            btnContrasena.querySelector('div').innerHTML =
-                'Contraseña <span class="op-sub">Cuenta Google — sin contraseña local</span>';
-            btnContrasena.style.opacity = '0.5';
-            btnContrasena.style.cursor = 'default';
-            btnContrasena.onclick = () => mostrarToast('Tu cuenta usa Google. No necesitas contraseña.');
-        }
-    } else {
-        if (btnContrasena) btnContrasena.onclick = gestionarContrasena;
-    }
-}
-
-// ─── CAMBIAR NOMBRE DE USUARIO ───
-function cambiarNombreUsuario() {
-    var panel = document.getElementById('panelEditarNombre');
-    if (!panel) return;
-    var abierto = panel.classList.toggle('abierto');
-    if (abierto) {
-        var user = auth.currentUser;
-        var input = document.getElementById('inputNuevoNombre');
-        if (input && user) input.value = user.displayName || '';
-        if (input) setTimeout(function(){ input.focus(); input.select(); }, 50);
-    }
-}
-
-async function guardarNuevoNombre() {
-    const user = auth.currentUser;
-    if (!user) return;
-    const input = document.getElementById('inputNuevoNombre');
-    const nuevoNombre = input ? input.value.trim() : '';
-    if (!nuevoNombre) { mostrarToast('Escribe un nombre válido'); return; }
-    try {
-        await user.updateProfile({ displayName: nuevoNombre });
-        localStorage.setItem('velas-nombre-usuario', nuevoNombre);
-        document.getElementById('pantallaUsuarioNombre').textContent = nuevoNombre;
-        document.getElementById('drawerNombreUsuario').textContent = nuevoNombre;
-        const subNombre = document.getElementById('subNombreActual');
-        if (subNombre) subNombre.textContent = nuevoNombre + '  ·  ' + (user.email || '');
-        document.getElementById('panelEditarNombre').classList.remove('abierto');
-        mostrarToast('✅ Nombre actualizado');
-    } catch (e) {
-        mostrarToast('Error al actualizar el nombre');
-    }
-}
-
-// ─── GESTIONAR CONTRASEÑA ───
-async function gestionarContrasena() {
-    const user = auth.currentUser;
-    if (!user) return;
-    const esGoogle = user.providerData.some(p => p.providerId === 'google.com');
-    if (esGoogle) {
-        mostrarToast('Tu cuenta usa Google. No necesitas contraseña.');
-        return;
-    }
-    // Enviar email de restablecimiento
-    const confirmado = confirm('¿Enviar un correo para restablecer tu contraseña a ' + user.email + '?');
-    if (!confirmado) return;
-    try {
-        await auth.sendPasswordResetEmail(user.email);
-        mostrarToast('📧 Correo enviado a ' + user.email);
-    } catch (e) {
-        mostrarToast('Error al enviar el correo');
-    }
-}
-
-// ─── FOTO DE PERFIL (override con Firebase Storage si se desea) ───
-function aplicarFotoPerfil(event) {
-    const archivo = event.target.files[0];
-    if (!archivo) return;
-    const user = (typeof auth !== 'undefined') ? auth.currentUser : null;
-
-    // Vista previa inmediata
-    const reader = new FileReader();
-    reader.onload = e => {
-        const src = e.target.result;
-        const avatarDrawer = document.getElementById('drawerAvatar');
-        const avatarPantalla = document.getElementById('pantallaAvatar');
-        if (avatarDrawer) avatarDrawer.src = src;
-        if (avatarPantalla) avatarPantalla.src = src;
-        localStorage.setItem('velas-foto-perfil', src);
-    };
-    reader.readAsDataURL(archivo);
-
-    // Subir a Firebase Storage si hay sesión
-    if (user && typeof firebase !== 'undefined' && firebase.storage) {
-        mostrarToast('⏳ Subiendo foto…');
-        const storage = firebase.storage();
-        const ref = storage.ref('fotos-perfil/' + user.uid + '/avatar.jpg');
-        ref.put(archivo).then(function() {
-            return ref.getDownloadURL();
-        }).then(function(url) {
-            return user.updateProfile({ photoURL: url }).then(function() {
-                localStorage.setItem('velas-foto-perfil', url);
-                const avatarDrawer = document.getElementById('drawerAvatar');
-                const avatarPantalla = document.getElementById('pantallaAvatar');
-                if (avatarDrawer) avatarDrawer.src = url;
-                if (avatarPantalla) avatarPantalla.src = url;
-                mostrarToast('✅ Foto de perfil actualizada');
-            });
-        }).catch(function(err) {
-            console.error('Error subiendo foto:', err);
-            mostrarToast('⚠️ Foto guardada solo en este dispositivo');
-        });
-    } else {
-        mostrarToast('✅ Foto actualizada en este dispositivo');
-    }
-}
-
-// ─── ABRIR PANTALLA PERFIL (override con datos reales) ───
-function abrirPantallaPerfil() {
-    actualizarPantallaPerfil();
-    // Fallback si Firebase aún no tiene usuario pero hay sesión guardada
-    const foto = (auth.currentUser?.photoURL) || localStorage.getItem('velas-foto-perfil');
-    const nombre = (auth.currentUser?.displayName) || localStorage.getItem('velas-nombre-usuario') || 'Mi cuenta';
-    const avatarEl = document.getElementById('pantallaAvatar');
-    const nombreEl = document.getElementById('pantallaUsuarioNombre');
-    if (avatarEl && foto) avatarEl.src = foto;
-    if (nombreEl) nombreEl.textContent = nombre;
-    document.getElementById('pantallaPerfil').classList.add('activo');
-    document.body.style.overflow = 'hidden';
-    _modalActivo = 'perfil';
-    history.pushState({ kukumitaModal: 'perfil' }, '');
-}
-
-
-
-// ═══ ETIQUETA "VELA" EN TODAS LAS CARDS ═══
-document.querySelectorAll('.card-dinamica').forEach(function(card) {
-    card.setAttribute('data-tags', 'vela');
-    const tagDivs = Array.from(card.querySelectorAll('div[style*="display: flex"][style*="gap: 5px"]')).filter(function(div) {
-        return div.querySelectorAll('span[style*="background"]').length > 0 
-            && div.querySelectorAll('.recuadro-item').length === 0;
-    });
-    tagDivs.forEach(function(div) { div.style.display = 'none'; });
-});
-
-// ═══ BÚSQUEDA EN DRAWER: wrapper legacy (ya no necesita caso especial, todo va al catálogo) ═══
-// Se conserva por compatibilidad pero la función ejecutarBusquedaDrawer ya maneja todo.
-
-
-
-// ===== PÍLDORAS (BIOGRAFÍA / OFERTAS / MÁS VENDIDOS) =====
-var _pillBtns   = { biografia:'pillBiografia', productos:'pillProductos', ofertas:'pillOfertas', masvendidos:'pillMasVendidos' };
-var _pillPanels = { biografia:'panelPillBiografia', productos:null, ofertas:'panelPillOfertas', masvendidos:'panelPillMasVendidos' };
-
-function activarPill(cual, opts) {
-    var sinScroll = !!(opts && opts.sinScroll);
-
-    // Desactivar todos
-    Object.values(_pillBtns).forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.classList.remove('activo');
-    });
-    // FIX: filtrar nulls para evitar getElementById(null) que rompe el script
-    Object.values(_pillPanels).filter(Boolean).forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.classList.remove('activo');
-    });
-
-    // Activar el seleccionado
-    var btnEl = document.getElementById(_pillBtns[cual]);
-    if (btnEl) btnEl.classList.add('activo');
-    var panelId = _pillPanels[cual];
-    var panelEl = panelId ? document.getElementById(panelId) : null;
-    if (panelEl) panelEl.classList.add('activo');
-
-    // Mostrar/ocultar catálogo de productos
-    var catalogo = document.getElementById('zona-catalogo');
-    if (catalogo) catalogo.style.display = (cual === 'productos') ? 'block' : 'none';
-
-    // El scroll automático hacia el catálogo solo ocurre cuando el usuario
-    // elige "Productos" manualmente (por ejemplo, desde la sección de biografía).
-    // En la carga inicial de la página (F5) se omite para que se muestre
-    // siempre el banner de arriba, sin desplazamiento automático.
-    if (cual === 'productos' && !sinScroll) {
-        setTimeout(function() {
-            if (catalogo) catalogo.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
-    }
-}
-
-// ===== PREFERENCIA DE PÁGINA DE INICIO =====
-function setPaginaInicio(cual) {
-    localStorage.setItem('kukumita-inicio', cual);
-    _actualizarBotonesInicio(cual);
-    activarPill(cual);
-}
-
-function _actualizarBotonesInicio(cual) {
-    var btnProd = document.getElementById('btnInicioProductos');
-    var btnBio  = document.getElementById('btnInicioBiografia');
-    if (!btnProd || !btnBio) return;
-    if (cual === 'productos') {
-        btnProd.style.background = '#8c7565';
-        btnProd.style.color      = 'white';
-        btnProd.style.borderColor= '#8c7565';
-        btnBio.style.background  = '';
-        btnBio.style.color       = '';
-        btnBio.style.borderColor = '';
-    } else {
-        btnBio.style.background  = '#8c7565';
-        btnBio.style.color       = 'white';
-        btnBio.style.borderColor = '#8c7565';
-        btnProd.style.background = '';
-        btnProd.style.color      = '';
-        btnProd.style.borderColor= '';
-    }
-}
-
-// Aplicar preferencia guardada (o productos por defecto).
-// Nunca hace scroll automático en la carga/recarga de la página:
-// siempre se muestra primero la parte de arriba (banner) y el usuario
-// decide cuándo bajar.
-(function() {
-    var pref = 'productos'; // Siempre inicia en la zona de Catálogo, sin importar preferencias guardadas
-    // Evita que el navegador restaure una posición de scroll previa al recargar (F5)
-    if ('scrollRestoration' in window.history) {
-        window.history.scrollRestoration = 'manual';
-    }
-    _ready(function() {
-        activarPill(pref, { sinScroll: true });
-        _actualizarBotonesInicio(pref);
-        window.scrollTo(0, 0);
-    });
-})();
-
-// ===== FAVORITOS =====
-// Los IDs se guardan como enteros. listaProductos es la fuente de verdad.
-var favoritos = (JSON.parse(localStorage.getItem('kukumita-favoritos') || '[]')).map(Number);
-
-function _guardarFavoritos() {
-    localStorage.setItem('kukumita-favoritos', JSON.stringify(favoritos));
-}
-
-function esFavorito(card) {
-    if (!card) return false;
-    var idx = parseInt(card.getAttribute('data-idx'));
-    return !isNaN(idx) && favoritos.indexOf(idx) !== -1;
-}
-
-function _syncTodo(idx, esFav) {
-    // 1. Botón exterior en la tarjeta del catálogo
-    var card = document.querySelector('[data-idx="' + idx + '"]');
-    if (card) {
-        var like = card.querySelector('.btn-like');
-        if (like) { like.textContent = esFav ? '❤️' : '🤍'; like.classList.toggle('liked', esFav); }
-    }
-    // 2. Botón dentro del modal si el modal está mostrando este producto
-    var mpBtnFav = document.getElementById('mpBtnFavoritos');
-    if (mpBtnFav && mpBtnFav._cardIdx === idx) {
-        mpBtnFav.classList.toggle('guardado', esFav);
-        mpBtnFav.textContent = esFav ? '❤️ En Favoritos' : '❤️ Favoritos';
-    }
-    // 3. Panel de favoritos si está abierto
-    var panel = document.getElementById('pantallaFavoritos');
-    if (panel && panel.classList.contains('activa')) renderizarFavoritos();
-}
-
-// ── Modal de login requerido para favoritos ──
-function _mostrarModalLoginFavoritos() {
-    // Si ya existe el modal, solo mostrarlo
-    var m = document.getElementById('modalLoginFavoritos');
-    if (!m) {
-        m = document.createElement('div');
-        m.id = 'modalLoginFavoritos';
-        m.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
-        m.innerHTML = [
-            '<div style="background:#fff;border-radius:20px;max-width:340px;width:100%;padding:32px 24px 24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.25);position:relative;">',
-            '<div style="font-size:2.8rem;margin-bottom:10px;">❤️</div>',
-            '<h3 style="margin:0 0 8px;font-size:1.15rem;font-weight:800;color:#362a22;">Inicia sesión para guardar favoritos</h3>',
-            '<p style="font-size:0.88rem;color:#8c7565;margin:0 0 22px;line-height:1.6;">Para guardar productos en tu lista de favoritos necesitas tener una cuenta.</p>',
-            '<button onclick="cerrarDrawer();document.getElementById(\'modalLoginFavoritos\').remove();iniciarSesionGoogle();" ',
-            'style="width:100%;background:linear-gradient(135deg,#f5a623,#e8921a);color:#fff;border:none;border-radius:999px;padding:13px 20px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:10px;transition:opacity .2s;" ',
-            'onmouseover="this.style.opacity=\'0.88\'" onmouseout="this.style.opacity=\'1\'">',
-            '🔑 Iniciar sesión / Registrarse</button>',
-            '<button onclick="document.getElementById(\'modalLoginFavoritos\').remove()" ',
-            'style="width:100%;background:transparent;color:#8c7565;border:2px solid #e8ddd5;border-radius:999px;padding:11px 20px;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:inherit;transition:border-color .2s;" ',
-            'onmouseover="this.style.borderColor=\'#8c7565\'" onmouseout="this.style.borderColor=\'#e8ddd5\'">',
-            'Continuar sin cuenta</button>',
-            '</div>'
-        ].join('');
-        // Cerrar al hacer clic en el fondo
-        m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
-        document.body.appendChild(m);
-    } else {
-        m.style.display = 'flex';
-    }
-}
-
-function toggleFavoritoCard(card) {
-    if (!estaEnSesion()) { _mostrarModalLoginFavoritos(); return; }
-    var idx = card ? parseInt(card.getAttribute('data-idx')) : NaN;
-    if (isNaN(idx)) return;
-    var pos = favoritos.indexOf(idx);
-    var esFav;
-    if (pos === -1) { favoritos.push(idx); esFav = true; }
-    else { favoritos.splice(pos, 1); esFav = false; }
-    _guardarFavoritos();
-    _syncTodo(idx, esFav);
-}
-
-function toggleLike(productoIdx, btn) {
-    if (!estaEnSesion()) { _mostrarModalLoginFavoritos(); return; }
-    var idx = parseInt(productoIdx);
-    if (isNaN(idx)) return;
-    var pos = favoritos.indexOf(idx);
-    var esFav;
-    if (pos === -1) { favoritos.push(idx); esFav = true; }
-    else { favoritos.splice(pos, 1); esFav = false; }
-    _guardarFavoritos();
-    _syncTodo(idx, esFav);
-}
-
-function abrirPantallaFavoritos() {
-    var overlay = document.getElementById('drawerOverlay');
-    var drawer = document.getElementById('drawer') || document.getElementById('drawerLateral');
-    if (overlay) overlay.style.display = 'none';
-    if (drawer) drawer.classList.remove('abierto');
-    renderizarFavoritos();
-    document.getElementById('pantallaFavoritos').classList.add('activa');
-    document.body.style.overflow = 'hidden';
-    _modalActivo = 'favoritos';
-    // Siempre empujar una entrada propia al historial
-    history.pushState({ kukumitaModal: 'favoritos' }, '');
-}
-
-function cerrarFavoritos() {
-    var pantalla = document.getElementById('pantallaFavoritos');
-    if (!pantalla || !pantalla.classList.contains('activa')) return;
-    pantalla.classList.remove('activa');
-    document.body.style.overflow = '';
-    _modalActivo = null;
-    if (history.state && history.state.kukumitaModal === 'favoritos') {
-        history.replaceState(null, '');
-    }
-}
-
-function renderizarFavoritos() {
-    var grid = document.getElementById('favGrid');
-    var vacio = document.getElementById('favVacio');
-    if (!grid) return;
-    grid.innerHTML = '';
-    if (favoritos.length === 0) {
-        vacio.style.display = 'block';
-        grid.style.display = 'none';
-        return;
-    }
-    vacio.style.display = 'none';
-    grid.style.display = 'grid';
-    favoritos.forEach(function(idxProd) {
-        // Buscar en listaProductos primero (fuente de verdad, siempre disponible)
-        var prod = (typeof listaProductos !== 'undefined')
-            ? listaProductos.find(function(p) { return p.id === idxProd; })
-            : null;
-        // Si no está en lista, intenta desde el DOM como fallback
-        var card = document.querySelector('[data-idx="' + idxProd + '"]');
-
-        var nombre = prod ? prod.nombre : (card ? (card.querySelector('h3') || {}).textContent : 'Producto');
-        var precio = prod ? ('$' + (prod.precioBazar || prod.precioNormal || '') + ' MXN') : '';
-        var imgSrc = prod ? (prod.imagen || (prod.imagenes && prod.imagenes[0]) || '') :
-                    (card ? ((card.querySelector('img') || {}).src || '') : '');
-
-        var div = document.createElement('div');
-        div.className = 'fav-card';
-        var nombreSeguro = escapeHtml(nombre || 'Producto');
-        div.innerHTML =
-            '<button class="btn-quitar-fav" onclick="quitarFavorito(' + idxProd + ')">✕</button>' +
-            (imgSrc ? '<img class="fav-card-img" src="' + escapeHtml(imgSrc) + '" alt="' + nombreSeguro + '">' :
-                      '<div class="fav-card-img" style="background:#f0eae4;display:flex;align-items:center;justify-content:center;font-size:2rem;">🕯️</div>') +
-            '<div class="fav-card-info">' +
-            '<div class="fav-card-nombre">' + nombreSeguro + '</div>' +
-            '<div class="fav-card-precio">' + escapeHtml(precio) + '</div>' +
-            '</div>';
-        div.onclick = function(e) {
-            if (e.target.classList.contains('btn-quitar-fav')) return;
-            cerrarFavoritos();
-            setTimeout(function() {
-                var c = document.querySelector('[data-idx="' + idxProd + '"]');
-                if (c) c.scrollIntoView({ behavior:'smooth', block:'center' });
-            }, 200);
-        };
-        grid.appendChild(div);
-    });
-}
-
-function quitarFavorito(idxProd) {
-    var idx = parseInt(idxProd);
-    var pos = favoritos.indexOf(idx);
-    if (pos !== -1) favoritos.splice(pos, 1);
-    _guardarFavoritos();
-    _syncTodo(idx, false);
-    renderizarFavoritos();
-}
-
-// Sincronizar botones like al terminar de renderizar el catálogo
-function syncBotonesLike() {
-    var tarjetas = document.querySelectorAll('[data-idx]');
-    tarjetas.forEach(function(card) {
-        var idx = parseInt(card.getAttribute('data-idx'));
-        if (isNaN(idx)) return;
-        var esFav = favoritos.indexOf(idx) !== -1;
-        var like = card.querySelector('.btn-like');
-        if (like) { like.textContent = esFav ? '❤️' : '🤍'; like.classList.toggle('liked', esFav); }
-    });
-}
-_ready(syncBotonesLike);
-
-
-
-// ══════════════════════════════════════════════════════════════════════════════
-// DATOS DINÁMICOS DEL MODAL "BÚSCANOS EN BAZAR" (2ª pestaña de la hoja de Sheets)
-// ──────────────────────────────────────────────────────────────────────────────
-// Columnas esperadas en esa pestaña (fila 1 = encabezados, datos desde fila 2):
-//   A: imagen imgbb            → 3 filas de datos:
-//                                 fila de datos 1 = Plaza del Carmen
-//                                 fila de datos 2 = Bosque Cuauhtémoc
-//                                 fila de datos 3 = Villas del Pedregal
-//   B: imagen elegida          → solo se usa la 1ª fila de datos. Escribe "Plaza del
-//                                 Carmen", "Bosque Cuahutemoc" o "Villas del Pedregal"
-//                                 para elegir cuál de las 3 imágenes de la columna A
-//                                 se muestra en el submenú.
-//   C: descripcion              → solo se usa la 1ª fila de datos. Escribe "1" o "2"
-//                                 para elegir cuál plantilla de la columna I se muestra.
-//   D: dias                     → solo se usa la 1ª fila de datos. Texto libre con
-//                                 los días (ej. "7, 8 y 9 de Septiembre").
-//   E: lugar                    → solo se usa la 1ª fila de datos. Escribe una de las
-//                                 opciones de la columna G ("Plaza del Carmen",
-//                                 "Bosque Cuahutemoc" o "Villas del Pedregal") — se usa
-//                                 únicamente en el texto del aviso (no decide la imagen).
-//   F: estado                   → solo se usa la 1ª fila de datos. Escribe "1" o "2"
-//                                 para elegir cuál opción de la columna H se muestra
-//                                 como etiqueta en la zona de "Aviso Actual"
-//                                 (1 = fila de datos 1 de H, 2 = fila de datos 2 de H).
-//   G: opciones de lugar        → lista de referencia para la columna E (no se lee por código).
-//   H: opciones de estado       → fila de datos 1 = etiqueta de la opción "1"
-//                                 fila de datos 2 = etiqueta de la opción "2"
-//   I: opciones de descripcion  → fila de datos 1 = plantilla de la opción "1"
-//                                 fila de datos 2 = plantilla de la opción "2"
-//      Dentro de esas plantillas, dondequiera que escribas "(lugar: )" se reemplaza
-//      por el valor de la columna E (fila 1), y "(dias: )" se reemplaza por el valor
-//      de la columna D (fila 1) — lo que escribas dentro de esos paréntesis en la
-//      columna I ya no importa, solo actúan como marcador de posición.
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Reemplaza "(lugar: ...)" por valorLugar y "(dias: ...)" por valorDias.
-function _resolverPlaceholdersBazar(texto, valorLugar, valorDias) {
-    if (!texto) return '';
-    return texto
-        .replace(/\(\s*lugar\s*:[^)]*\)/gi, function() { return (valorLugar || '').trim(); })
-        .replace(/\(\s*dias\s*:[^)]*\)/gi, function() { return (valorDias || '').trim(); })
-        .trim();
-}
-
-function cargarDatosBazar() {
-    var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-        '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NOMBRE_BAZAR);
-
-    fetchCSVConCache(csvUrl, 'kukumita_csv_bazar')
-        .then(function(texto) {
-            var filas = parsearCSV(texto);
-            var datos = filas.slice(1); // quita la fila de encabezados
-            if (datos.length === 0) return;
-
-            var filaDatos1 = datos[0] || [];
-            var filaDatos2 = datos[1] || [];
-            var filaDatos3 = datos[2] || [];
-
-            // ── Imagen a mostrar (columna B "imagen elegida" decide, columna A trae la imagen) ──
-            var seleccionImagen = (filaDatos1[1] || '').toLowerCase();
-            var urlImagen = '';
-            if (seleccionImagen.indexOf('plaza') !== -1) {
-                urlImagen = filaDatos1[0];
-            } else if (seleccionImagen.indexOf('bosque') !== -1) {
-                urlImagen = filaDatos2[0];
-            } else if (seleccionImagen.indexOf('villas') !== -1) {
-                urlImagen = filaDatos3[0];
-            }
-            var imgEl = document.getElementById('bazarImgDinamica');
-            if (imgEl && urlImagen) imgEl.src = urlImagen;
-
-            // ── Texto del aviso (columna C decide, columna I trae la plantilla) ──
-            var opcionDescripcion = (filaDatos1[2] || '').trim();
-            var plantilla = '';
-            if (opcionDescripcion === '1') {
-                plantilla = filaDatos1[8];
-            } else if (opcionDescripcion === '2') {
-                plantilla = filaDatos2[8];
-            }
-
-            var lugarTexto  = filaDatos1[4] || '';
-            var diasTexto   = filaDatos1[3] || '';
-
-            var textoFinal = _resolverPlaceholdersBazar(plantilla, lugarTexto, diasTexto);
-            var avisoEl = document.getElementById('bazarAvisoTexto');
-            if (avisoEl && textoFinal) avisoEl.textContent = textoFinal;
-
-            // ── Etiqueta de estado (columna F decide, columna H trae la etiqueta) ──
-            var opcionEstado = (filaDatos1[5] || '').trim();
-            var estadoTexto = '';
-            if (opcionEstado === '1') {
-                estadoTexto = filaDatos1[7];
-            } else if (opcionEstado === '2') {
-                estadoTexto = filaDatos2[7];
-            }
-            var estadoEl = document.getElementById('bazarEstadoBadge');
-            if (estadoEl && estadoTexto && estadoTexto.trim()) estadoEl.textContent = estadoTexto.trim();
-        })
-        .catch(function(err) {
-            console.error('[Kukumita] No se pudo cargar la info del bazar (¿la 2ª pestaña está publicada/compartida?):', err);
-        });
-}
-_ready(cargarDatosBazar);
-
-function abrirModalBazar() {
-    var modal = document.getElementById('modalBazar');
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    if (typeof window._actualizarContadorBazar === 'function') window._actualizarContadorBazar();
-    if (typeof cargarDatosBazar === 'function') cargarDatosBazar();
-}
-function cerrarModalBazar() {
-    var modal = document.getElementById('modalBazar');
-    modal.style.display = 'none';
-    document.body.style.overflow = '';
-}
-// Cierra al hacer clic en el fondo oscuro
-document.getElementById('modalBazar').addEventListener('click', function(e) {
-    if (e.target === this) cerrarModalBazar();
-});
-// Responsive: centrado en escritorio
-(function() {
-    var style = document.createElement('style');
-    style.textContent = '@media (min-width:600px) { #modalBazar { align-items:center !important; padding:16px !important; } #modalBazar > div { border-radius:16px !important; height:auto !important; max-height:92vh !important; } }';
-    document.head.appendChild(style);
-})();
-
-
-
-(function() {
-    // ── AQUÍ AÑADES TUS LINKS DE FACEBOOK ──
-    // Pega el link directo de cada imagen copiada desde Facebook
-    var imagenesGaleriaFB = [
-        // Ejemplo de estructura (reemplaza con tus URLs reales de Facebook):
-        // "https://scontent.xx.fbcdn.net/v/t1.0-0/...",
-        // "https://scontent.xx.fbcdn.net/v/t1.0-0/...",
-    ];
-
-    var POR_PAGINA = 12;
-    var paginaActual = 1;
-
-    function totalPaginas() {
-        return Math.max(1, Math.ceil(imagenesGaleriaFB.length / POR_PAGINA));
-    }
-
-    function renderizarGaleriaFB() {
-        var grid = document.getElementById('galeria-facebook-grid');
-        var pagNav = document.getElementById('galeria-facebook-paginacion');
-        if (!grid || !pagNav) return;
-
-        grid.innerHTML = '';
-        pagNav.innerHTML = '';
-
-        var inicio = (paginaActual - 1) * POR_PAGINA;
-        var fin = Math.min(inicio + POR_PAGINA, imagenesGaleriaFB.length);
-        var imagenesPagina = imagenesGaleriaFB.slice(inicio, fin);
-
-        if (imagenesGaleriaFB.length === 0) {
-            // Mostrar slots vacíos de ejemplo cuando no hay imágenes
-            for (var i = 0; i < 3; i++) {
-                var slot = document.createElement('div');
-                slot.style.cssText = 'aspect-ratio:1/1; border-radius:8px; overflow:hidden; background:#f5f0eb; border:1px dashed #d4c5b8; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b09080; font-size:0.75rem; text-align:center; padding:12px; box-sizing:border-box;';
-                slot.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c9b8a8" stroke-width="1.5" style="margin-bottom:8px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Imagen de<br>Facebook<br>próximamente</span>';
-                grid.appendChild(slot);
-            }
-        } else {
-            imagenesPagina.forEach(function(src) {
-                var card = document.createElement('div');
-                card.style.cssText = 'aspect-ratio:1/1; border-radius:8px; overflow:hidden; background:#f5f0eb; border:1px solid #e8ddd5; cursor:zoom-in; position:relative;';
-                var img = document.createElement('img');
-                img.src = src;
-                img.loading = 'lazy';
-                img.referrerpolicy = 'no-referrer';
-                img.crossorigin = 'anonymous';
-                img.style.cssText = 'width:100%; height:100%; object-fit:cover; display:block; transition:transform 0.25s;';
-                img.onerror = function() {
-                    card.innerHTML = '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f0eb;color:#b09080;font-size:0.72rem;text-align:center;padding:10px;box-sizing:border-box;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c9b8a8" stroke-width="1.5" style="margin-bottom:6px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>No se pudo<br>cargar</span></div>';
-                };
-                card.addEventListener('mouseenter', function() { img.style.transform = 'scale(1.04)'; });
-                card.addEventListener('mouseleave', function() { img.style.transform = 'scale(1)'; });
-                // Lightbox simple al tocar la imagen
-                card.addEventListener('click', function() { abrirLightboxFB(src); });
-                card.appendChild(img);
-                grid.appendChild(card);
-            });
-        }
-
-        // Paginación — solo si hay más de una página
-        if (totalPaginas() > 1) {
-            // Botón anterior
-            var btnPrev = document.createElement('button');
-            btnPrev.textContent = '‹ Anterior';
-            btnPrev.disabled = paginaActual === 1;
-            btnPrev.style.cssText = 'padding:8px 18px; border-radius:999px; border:2px solid #d4c5b8; background:' + (paginaActual === 1 ? '#f0eae4' : '#fff') + '; color:' + (paginaActual === 1 ? '#bbb' : '#5c4d43') + '; font-size:0.88rem; font-weight:700; cursor:' + (paginaActual === 1 ? 'default' : 'pointer') + '; transition:all 0.2s; font-family:inherit;';
-            btnPrev.onclick = function() {
-                if (paginaActual > 1) { paginaActual--; renderizarGaleriaFB(); }
-            };
-            pagNav.appendChild(btnPrev);
-
-            // Números de página
-            for (var p = 1; p <= totalPaginas(); p++) {
-                (function(num) {
-                    var btnNum = document.createElement('button');
-                    btnNum.textContent = num;
-                    var esActivo = num === paginaActual;
-                    btnNum.style.cssText = 'width:36px; height:36px; border-radius:50%; border:2px solid ' + (esActivo ? '#8c7565' : '#d4c5b8') + '; background:' + (esActivo ? '#8c7565' : '#fff') + '; color:' + (esActivo ? '#fff' : '#5c4d43') + '; font-size:0.88rem; font-weight:700; cursor:pointer; transition:all 0.2s; font-family:inherit;';
-                    btnNum.onclick = function() {
-                        paginaActual = num;
-                        renderizarGaleriaFB();
-                    };
-                    pagNav.appendChild(btnNum);
-                })(p);
-            }
-
-            // Botón siguiente
-            var btnNext = document.createElement('button');
-            btnNext.textContent = 'Siguiente ›';
-            btnNext.disabled = paginaActual === totalPaginas();
-            btnNext.style.cssText = 'padding:8px 18px; border-radius:999px; border:2px solid #d4c5b8; background:' + (paginaActual === totalPaginas() ? '#f0eae4' : '#fff') + '; color:' + (paginaActual === totalPaginas() ? '#bbb' : '#5c4d43') + '; font-size:0.88rem; font-weight:700; cursor:' + (paginaActual === totalPaginas() ? 'default' : 'pointer') + '; transition:all 0.2s; font-family:inherit;';
-            btnNext.onclick = function() {
-                if (paginaActual < totalPaginas()) { paginaActual++; renderizarGaleriaFB(); }
-            };
-            pagNav.appendChild(btnNext);
-        }
-    }
-
-    // ── LIGHTBOX SIMPLE ──
-    function abrirLightboxFB(src) {
-        var lb = document.getElementById('lightboxFB');
-        if (!lb) {
-            lb = document.createElement('div');
-            lb.id = 'lightboxFB';
-            lb.style.cssText = 'display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.88); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
-            lb.innerHTML = '<img id="lightboxFBImg" src="" referrerpolicy="no-referrer" crossorigin="anonymous" style="max-width:100%; max-height:92vh; border-radius:10px; object-fit:contain; box-shadow:0 8px 40px rgba(0,0,0,0.6);"><button onclick="document.getElementById(\'lightboxFB\').style.display=\'none\'; document.body.style.overflow=\'\';" style="position:fixed; top:14px; right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); color:white; border:none; font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);">✕</button>';
-            lb.addEventListener('click', function(e) { if (e.target === lb) { lb.style.display = 'none'; document.body.style.overflow = ''; } });
-            document.body.appendChild(lb);
-        }
-        document.getElementById('lightboxFBImg').src = src;
-        lb.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-    }
-
-    // Exponer función para agregar imágenes desde fuera si se necesita
-    window.agregarImagenFB = function(url) {
-        imagenesGaleriaFB.push(url);
-        renderizarGaleriaFB();
-    };
-    window.establecerImagenesFB = function(arr) {
-        imagenesGaleriaFB = arr;
-        paginaActual = 1;
-        renderizarGaleriaFB();
-    };
-
-    // Inicializar al cargar
-    document.addEventListener('DOMContentLoaded', function() {
-        renderizarGaleriaFB();
-    });
-    // Si el DOM ya cargó
-    if (document.readyState !== 'loading') renderizarGaleriaFB();
-})();
-
-
-
-// ═══════════════════════════════════════════════════════════════════
-//  SISTEMA DE ETIQUETAS PRINCIPALES + SUB-ETIQUETAS + CARRUSELES
-// ═══════════════════════════════════════════════════════════════════
-
-// Tipos → clase CSS y texto
-var TIPO_INFO = {
-    producto:     { cls: 'producto',   label: '📦 Producto' },
-    productos:    { cls: 'producto',   label: '📦 Producto' },
-    arreglo:      { cls: 'arreglo',    label: '🕯️ Arreglo' },
-    arreglos:     { cls: 'arreglo',    label: '🕯️ Arreglo' },
-    aditamento:   { cls: 'aditamento', label: '✨ Aditamento' },
-    aditamentos:  { cls: 'aditamento', label: '✨ Aditamento' },
-    decoracion:   { cls: 'decoracion', label: '🎀 Decoración' },
-    decoraciones: { cls: 'decoracion', label: '🎀 Decoración' },
-    etiqueta:        { cls: 'etiqueta',      label: '🏷️ Etiqueta' },
-    etiquetas:       { cls: 'etiqueta',      label: '🏷️ Etiqueta' },
-    'centro de mesa':{ cls: 'centro-mesa',   label: '🌸 Centro de Mesa' },
-    'centro_de_mesa':{ cls: 'centro-mesa',   label: '🌸 Centro de Mesa' },
-    centrodemesa:    { cls: 'centro-mesa',   label: '🌸 Centro de Mesa' },
-    paquete:         { cls: 'paquete',       label: '🎁 Paquete' },
-    paquetes:        { cls: 'paquete',       label: '🎁 Paquete' }
-};
-
-// ── Inyectar etiqueta principal (sobre el título) y sub-etiquetas (sobre evento) ──
-// ── Toggle sub-etiquetas en el modal de producto ──────────────────────────────
-function toggleSubetiquetasModal() {
-    var zona = document.getElementById('modalTagsInline');
-    var btn  = document.getElementById('mpBtnMostrarSubetiquetas');
-    if (!zona || !btn) return;
-    var abierto = zona.style.display !== 'none';
-    zona.style.display = abierto ? 'none' : 'block';
-    btn.textContent = abierto ? 'Ver sub-etiquetas ▾' : 'Ocultar sub-etiquetas ▴';
-}
-
-function inyectarEtiquetasModal(card) {
-    // 1. ETIQUETAS PRINCIPALES — lee data-tipos (puede haber varias separadas por |)
-    var zonaPrincipal = document.getElementById('mpEtiquetaPrincipalZona');
-    if (zonaPrincipal) {
-        zonaPrincipal.innerHTML = '';
-        var rawTipos = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
-        var tipos = rawTipos.toLowerCase()
-            .replace(/^"+|"+$/g, '')
-            .split('|')
-            .map(function(s) { return s.trim().replace(/^"+|"+$/g, ''); })
-            .filter(Boolean);
-
-        var hayEtiqueta = false;
-        tipos.forEach(function(tipo) {
-            var info = TIPO_INFO[tipo];
-            if (info) {
-                var ePrincipal = document.createElement('span');
-                ePrincipal.className = 'mp-etiqueta-principal ' + info.cls;
-                ePrincipal.textContent = info.label;
-                zonaPrincipal.appendChild(ePrincipal);
-                hayEtiqueta = true;
-            }
-        });
-        if (hayEtiqueta) {
-            zonaPrincipal.style.display = 'flex';
-            zonaPrincipal.style.flexWrap = 'wrap';
-            zonaPrincipal.style.gap = '6px';
-        } else {
-            zonaPrincipal.style.display = 'none';
-        }
-    }
-
-    // ── Badge número de fila en Google Sheets (esquina derecha, misma altura) ──
-    var filaSheets = card.getAttribute('data-sheet-row') || '';
-    var badge = document.getElementById('mpSheetRowBadge');
-    if (badge) {
-        if (filaSheets) {
-            badge.textContent = '# ' + filaSheets;
-            badge.title = 'Fila ' + filaSheets + ' en Google Sheets';
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
-        }
-    }
-
-    // 2. SUB-ETIQUETAS (Oferta / Más vendido) — se PREPENDEN al inicio de modalTagsInline
-    var tagsInline = document.getElementById('modalTagsInline');
-    if (!tagsInline) return;
-
-    var ofertaActiva = card.getAttribute('data-oferta') === '1';
-    var mvActivo     = card.getAttribute('data-mas-vendido') === '1';
-
-    if (ofertaActiva || mvActivo) {
-        var rowSub = document.createElement('div');
-        rowSub.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; width:100%; margin-bottom:8px;';
-
-        if (ofertaActiva) {
-            var eOferta = document.createElement('span');
-            eOferta.className = 'mp-sub-etiqueta oferta';
-            eOferta.innerHTML = '🏷️ Oferta activa';
-            eOferta.title = 'Ver info de la oferta';
-            eOferta.onclick = (function(c){ return function(e){ e.stopPropagation(); abrirModalInfoEtiqueta(c, 'oferta'); }; })(card);
-            rowSub.appendChild(eOferta);
-        }
-        if (mvActivo) {
-            var eMV = document.createElement('span');
-            eMV.className = 'mp-sub-etiqueta masvendido';
-            eMV.innerHTML = '🏆 Más vendido';
-            eMV.title = 'Ver imágenes de pedidos';
-            eMV.onclick = (function(c){ return function(e){ e.stopPropagation(); abrirModalInfoEtiqueta(c, 'masvendido'); }; })(card);
-            rowSub.appendChild(eMV);
-        }
-
-        // Insertar antes del primer hijo (encima de las etiquetas de evento)
-        tagsInline.insertBefore(rowSub, tagsInline.firstChild);
-    }
-}
-
-// ── Modal de info de etiqueta ─────────────────────────────────────
-function abrirModalInfoEtiqueta(card, tipo) {
-    var cuerpo = document.getElementById('modalEtiquetaCuerpo');
-    var titulo = document.getElementById('modalEtiquetaTitulo');
-    cuerpo.innerHTML = '';
-
-    if (tipo === 'oferta') {
-        titulo.textContent = '🏷️ Información de Oferta';
-        var desc = card.getAttribute('data-oferta-desc') || '';
-        var dur  = card.getAttribute('data-oferta-duracion') || '';
-        var nombre = card.getAttribute('data-nombre') || 'Producto';
-
-        var badgeEl = document.createElement('div');
-        badgeEl.style.cssText = 'display:inline-block; background:#e8f5e9; color:#2e7d32; font-size:0.78rem; font-weight:700; padding:4px 12px; border-radius:20px; margin-bottom:8px;';
-        badgeEl.textContent = '✅ Oferta activa';
-        cuerpo.appendChild(badgeEl);
-
-        var h3 = document.createElement('h3');
-        h3.style.cssText = 'font-size:1.1rem; font-weight:800; color:#362a22; margin:0 0 6px;';
-        h3.textContent = nombre;
-        cuerpo.appendChild(h3);
-
-        if (desc) {
-            var descEl = document.createElement('p');
-            descEl.style.cssText = 'font-size:0.9rem; color:#5c4d43; line-height:1.7; margin:0 0 10px; background:#fdf6f0; border-left:3px solid #8c7565; padding:10px 12px; border-radius:0 8px 8px 0;';
-            descEl.textContent = desc;
-            cuerpo.appendChild(descEl);
-        }
-        if (dur) {
-            var durEl = document.createElement('div');
-            durEl.style.cssText = 'display:flex; align-items:center; gap:8px; background:#f5f0eb; border-radius:8px; padding:10px 14px; font-size:0.88rem; color:#5c4d43; font-weight:600;';
-            durEl.innerHTML = '🗓️ <span>Duración: <strong>' + dur + '</strong></span>';
-            cuerpo.appendChild(durEl);
-        }
-        if (!desc && !dur) {
-            var sinInfo = document.createElement('p');
-            sinInfo.style.cssText = 'font-size:0.9rem; color:#999; text-align:center; padding:20px 0;';
-            sinInfo.textContent = 'Este producto está en oferta especial. Contáctanos para más detalles.';
-            cuerpo.appendChild(sinInfo);
-        }
-
-    } else if (tipo === 'masvendido') {
-        titulo.textContent = '🏆 Pedidos Destacados';
-        var nombre = card.getAttribute('data-nombre') || 'Producto';
-
-        var h3 = document.createElement('h3');
-        h3.style.cssText = 'font-size:1.1rem; font-weight:800; color:#362a22; margin:0 0 4px;';
-        h3.textContent = nombre;
-        cuerpo.appendChild(h3);
-
-        var subtitulo = document.createElement('p');
-        subtitulo.style.cssText = 'font-size:0.82rem; color:#8c7565; margin:0 0 12px;';
-        subtitulo.textContent = '¡Mira qué hermosos lucen los pedidos de este producto!';
-        cuerpo.appendChild(subtitulo);
-
-        var imagenesRaw = card.getAttribute('data-mas-vendido-imagenes') || '[]';
-        var imagenes = [];
-        try { imagenes = JSON.parse(imagenesRaw); } catch(e) { imagenes = []; }
-
-        if (imagenes.length > 0) {
-            var galeria = document.createElement('div');
-            galeria.className = 'modal-mv-galeria';
-            imagenes.forEach(function(src) {
-                var img = document.createElement('img');
-                img.className = 'modal-mv-img';
-                img.src = src;
-                img.loading = 'lazy';
-                img.onerror = function() { this.style.display = 'none'; };
-                img.onclick = function() { abrirLightboxMV(src); };
-                galeria.appendChild(img);
-            });
-            cuerpo.appendChild(galeria);
-        } else {
-            var sinImg = document.createElement('p');
-            sinImg.style.cssText = 'font-size:0.9rem; color:#999; text-align:center; padding:20px 0;';
-            sinImg.textContent = 'Las imágenes de pedidos de este producto estarán disponibles próximamente.';
-            cuerpo.appendChild(sinImg);
-        }
-    }
-
-    document.getElementById('modalInfoEtiqueta').classList.add('abierto');
-    document.body.style.overflow = 'hidden';
-}
-
-function cerrarModalInfoEtiqueta() {
-    document.getElementById('modalInfoEtiqueta').classList.remove('abierto');
-    document.body.style.overflow = '';
-}
-document.getElementById('modalInfoEtiqueta').addEventListener('click', function(e) {
-    if (e.target === this) cerrarModalInfoEtiqueta();
-});
-
-// Lightbox rápido para imágenes de más vendidos
-function abrirLightboxMV(src) {
-    var lb = document.getElementById('lightboxFB');
-    if (!lb) {
-        lb = document.createElement('div');
-        lb.id = 'lightboxFB';
-        lb.style.cssText = 'display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.88); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
-        lb.innerHTML = '<img id="lightboxFBImg" src="" style="max-width:100%; max-height:92vh; border-radius:10px; object-fit:contain; box-shadow:0 8px 40px rgba(0,0,0,0.6);"><button onclick="document.getElementById(\'lightboxFB\').style.display=\'none\'; document.body.style.overflow=\'\';" style="position:fixed; top:14px; right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); color:white; border:none; font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);">✕</button>';
-        lb.addEventListener('click', function(e) { if (e.target === lb) { lb.style.display = 'none'; document.body.style.overflow = ''; } });
-        document.body.appendChild(lb);
-    }
-    document.getElementById('lightboxFBImg').src = src;
-    lb.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-}
-
-// ── Carruseles de Ofertas y Más Vendidos ─────────────────────────
-function construirCarrusel(tipo) {
-    // tipo: 'ofertas' | 'masvendidos'
-    var dataAttr = tipo === 'ofertas' ? 'data-oferta' : 'data-mas-vendido';
-    var trackId  = tipo + '-carousel-track';
-    var vacioId  = tipo + '-vacio';
-    var contadorId = tipo + '-contador';
-    var btnPrevId  = tipo + '-btn-prev';
-    var btnNextId  = tipo + '-btn-next';
-
-    var track   = document.getElementById(trackId);
-    var vacioel = document.getElementById(vacioId);
-    var contadorEl = document.getElementById(contadorId);
-    if (!track) return;
-
-    // Recoger productos activos
-    var cards = Array.from(document.querySelectorAll('.card-dinamica'))
-        .filter(function(c) { return c.getAttribute(dataAttr) === '1'; });
-
-    track.innerHTML = '';
-
-    if (cards.length === 0) {
-        track.style.display = 'none';
-        if (vacioel) vacioel.style.display = 'block';
-        if (contadorEl) contadorEl.textContent = '';
-        document.getElementById(btnPrevId).style.display = 'none';
-        document.getElementById(btnNextId).style.display = 'none';
-        return;
-    }
-
-    track.style.display = 'flex';
-    if (vacioel) vacioel.style.display = 'none';
-    if (contadorEl) contadorEl.textContent = cards.length + (cards.length === 1 ? ' producto' : ' productos');
-
-    // Mostrar flechas si hay más de 3
-    var mostrarFlechas = cards.length > 3;
-    var btnPrev = document.getElementById(btnPrevId);
-    var btnNext = document.getElementById(btnNextId);
-    if (btnPrev) { btnPrev.style.display = mostrarFlechas ? 'flex' : 'none'; }
-    if (btnNext) { btnNext.style.display = mostrarFlechas ? 'flex' : 'none'; }
-
-    cards.forEach(function(card) {
-        var nombre = card.getAttribute('data-nombre') || '';
-        var precio = card.getAttribute('data-precio') || '';
-        var precioBazar = card.getAttribute('data-precio-bazar') || '';
-        var imgEl = card.querySelector('.img-contenedor-dinamico img');
-        var imgSrc = imgEl ? imgEl.getAttribute('src') : '';
-
-        var precioMostrar = precioBazar || precio;
-        var esOferta = tipo === 'ofertas';
-
-        var cardEl = document.createElement('div');
-        cardEl.className = 'carrusel-card';
-        var nombreSeguroCarrusel = escapeHtml(nombre);
-        cardEl.innerHTML =
-            '<img class="carrusel-card-img" src="' + escapeHtml(imgSrc) + '" alt="' + nombreSeguroCarrusel + '" loading="lazy" onerror="this.style.background=\'#f5f0eb\'; this.style.height=\'120px\';">' +
-            '<div class="carrusel-card-info">' +
-                '<div class="carrusel-card-badge' + (esOferta ? '' : ' mv') + '">' + (esOferta ? '🏷️ Oferta' : '🏆 Top') + '</div>' +
-                '<div class="carrusel-card-nombre" title="' + nombreSeguroCarrusel + '">' + nombreSeguroCarrusel + '</div>' +
-                '<div class="carrusel-card-precio">' + (precioMostrar ? '$' + escapeHtml(precioMostrar) + ' MXN' : '') + '</div>' +
-            '</div>';
-
-        // Al hacer click abre el modal de producto
-        cardEl.onclick = (function(c){ return function() { abrirModalProducto(c); }; })(card);
-        track.appendChild(cardEl);
-    });
-}
-
-// Navegar carrusel por scroll programático
-function scrollCarrusel(tipo, direccion) {
-    var track = document.getElementById(tipo + '-carousel-track');
-    if (!track) return;
-    var anchoCard = 174; // 160px + 14px gap
-    track.scrollBy({ left: direccion * anchoCard * 3, behavior: 'smooth' });
-}
-
-// Actualizar flechas según posición de scroll
-function actualizarFlechasCarrusel(tipo) {
-    var track = document.getElementById(tipo + '-carousel-track');
-    var btnPrev = document.getElementById(tipo + '-btn-prev');
-    var btnNext = document.getElementById(tipo + '-btn-next');
-    if (!track || !btnPrev || !btnNext) return;
-    var cards = track.querySelectorAll('.carrusel-card').length;
-    if (cards <= 3) return; // flechas ya ocultas
-    // En los extremos del scroll, se puede seguir scrollando hacia el lado opuesto (comportamiento circular simulado via el mismo scroll nativo)
-    // Simplemente siempre mostrar ambas flechas cuando hay >3
-    btnPrev.style.display = 'flex';
-    btnNext.style.display = 'flex';
-}
-
-// ── Patch abrirModalProducto — YA NO NECESARIO ──
-// inyectarEtiquetasModal(card) ahora se llama directamente
-// al final de abrirModalProducto con setTimeout(..., 0).
-
-// ── Inicializar al cargar ─────────────────────────────────────────
-// ── Carruseles se construyen DESPUÉS de que el catálogo cargue ──
-document.addEventListener('catalogoCargado', function() {
-    construirCarrusel('ofertas');
-    construirCarrusel('masvendidos');
-});
-
-// Escuchar scroll en tracks (solo necesita DOM, no catálogo)
-document.addEventListener('DOMContentLoaded', function() {
-    ['ofertas', 'masvendidos'].forEach(function(tipo) {
-        var track = document.getElementById(tipo + '-carousel-track');
-        if (track) {
-            track.addEventListener('scroll', function() { actualizarFlechasCarrusel(tipo); }, { passive: true });
-        }
-    });
-});
-
-// Exponer para poder refrescar desde fuera
-window.refrescarCarruseles = function() {
-    construirCarrusel('ofertas');
-    construirCarrusel('masvendidos');
-};
-
-
-
-// ══════════════════════════════════════════════
-// SISTEMA DE CARRITO KUKUMITA
-// ══════════════════════════════════════════════
-var carrito = (function() {
-    try { var g = localStorage.getItem('kukumita-carrito'); return g ? JSON.parse(g) : []; }
-    catch(e) { return []; }
-})();
-function _guardarCarrito() {
-    try { localStorage.setItem('kukumita-carrito', JSON.stringify(carrito)); } catch(e) {}
-}
-var _mcCardActual = null;
-var _mcCantidadActual = 1;
-var _CARRITO_MAX_PRODUCTOS = 20;
-var _CARRITO_MAX_PIEZAS = 99;
-
-// ── ANTI-SPAM para cotización ──
-var _cotizacionUltimoEnvio = 0;
-var _cotizacionCooldown = 30000; // 30 segundos entre envíos
-
-// ── Modal de Cantidad ──
-function abrirModalCantidad(card) {
-    _mcCardActual = card;
-    _mcCantidadActual = 1;
-    var nombre = card.getAttribute('data-nombre')
-        || (card.querySelector('.nombre-vela, .card-nombre, h3, .producto-nombre') || {}).textContent
-        || 'Producto';
-    nombre = nombre.trim();
-    var precioNum = card.getAttribute('data-precio') || '';
-    var precioBazar = card.getAttribute('data-precio-bazar') || '';
-    var imagenes = [];
-    try { imagenes = JSON.parse(card.getAttribute('data-imagenes') || '[]'); } catch(e) {}
-    var imgEl = card.querySelector('.img-contenedor-dinamico img, img');
-    var imgSrc = imagenes[0] || (imgEl ? (imgEl.getAttribute('src') || imgEl.src) : '') || '';
-
-    document.getElementById('mcNombreProducto').textContent = nombre;
-    if (imgSrc) document.getElementById('mcImgProducto').src = imgSrc;
-    document.getElementById('mcNumCantidad').textContent = '1';
-
-    var precioMostrar = precioBazar || precioNum;
-    if (precioMostrar) {
-        document.getElementById('mcPrecioProducto').textContent = '$' + precioMostrar + ' MXN por pieza';
-    } else {
-        document.getElementById('mcPrecioProducto').textContent = '';
-    }
-
-    actualizarBotonesMC();
-    document.getElementById('modalCantidad').classList.add('abierto');
-    document.body.style.overflow = 'hidden';
-    history.pushState({ kukumitaModal: 'cantidad' }, '');
-    _modalActivo = 'cantidad';
-}
-
-function cerrarModalCantidad() {
-    document.getElementById('modalCantidad').classList.remove('abierto');
-    document.body.style.overflow = '';
-    _modalActivo = null;
-    _mcCardActual = null;
-    if (history.state && history.state.kukumitaModal === 'cantidad') {
-        history.replaceState(null, '');
-    }
-}
-
-function cambiarCantidadMC(delta) {
-    _mcCantidadActual = Math.max(1, Math.min(_CARRITO_MAX_PIEZAS, _mcCantidadActual + delta));
-    document.getElementById('mcNumCantidad').textContent = _mcCantidadActual;
-    actualizarBotonesMC();
-}
-
-function actualizarBotonesMC() {
-    document.getElementById('mcBtnMenos').disabled = _mcCantidadActual <= 1;
-    document.getElementById('mcBtnMas').disabled = _mcCantidadActual >= _CARRITO_MAX_PIEZAS;
-}
-
-function confirmarAgregarCarrito() {
-    if (!_mcCardActual) return;
-    var card = _mcCardActual;
-    var nombre = card.getAttribute('data-nombre') || card.querySelector('h3')?.textContent || 'Producto';
-    var precioNum = card.getAttribute('data-precio') || '';
-    var precioBazar = card.getAttribute('data-precio-bazar') || '';
-    var imagenes = [];
-    try { imagenes = JSON.parse(card.getAttribute('data-imagenes') || '[]'); } catch(e) {}
-    var imgSrc = imagenes[0] || (card.querySelector('.img-contenedor-dinamico img')?.getAttribute('src')) || '';
-    var precioFinal = parseFloat(precioBazar || precioNum) || 0;
-
-    // Verificar si ya está en el carrito
-    var existente = carrito.find(function(i){ return i.nombre === nombre; });
+// ----- Crear el notario / cambiar nombre y descripción -----
+async function ntGuardarDatos() {
+  const nombre = ntEl.nombre.value.trim();
+  const descripcion = ntEl.desc.value.trim();
+  if (!nombre) {
+    setEstado(ntEl.estadoDatos, "Ponle un nombre al notario", "error");
+    ntEl.nombre.focus();
+    return;
+  }
+  ntEl.guardarDatos.disabled = true;
+  setEstado(ntEl.estadoDatos, "Guardando…");
+  try {
+    const existente = ntPorId(NT.abierto);
     if (existente) {
-        existente.cantidad = Math.min(_CARRITO_MAX_PIEZAS, existente.cantidad + _mcCantidadActual);
-        mostrarToast('🛒 Cantidad actualizada en el carrito');
+      await llamarNotas("notario_editar", { id: existente.id, nombre, descripcion });
+      existente.nombre = nombre;
+      existente.descripcion = descripcion;
+      setEstado(ntEl.estadoDatos, "Guardado ✓", "ok");
     } else {
-        // Verificar límite de 20 productos diferentes
-        if (carrito.length >= _CARRITO_MAX_PRODUCTOS) {
-            mostrarToast('⚠️ Límite de 20 productos alcanzado');
-            cerrarModalCantidad();
-            return;
-        }
-        carrito.push({ nombre: nombre, precio: precioFinal, img: imgSrc, cantidad: _mcCantidadActual });
-        mostrarToast('✅ ' + nombre + ' añadido al carrito');
+      const nuevo = { id: ntNuevoId(), zona: NT.zonaNueva, nombre, descripcion, fecha: selloFechaHora(), notas: [] };
+      await llamarNotas("notario_agregar", { id: nuevo.id, zona: nuevo.zona, nombre, descripcion, fecha: nuevo.fecha });
+      NT.lista.push(nuevo);
+      ntAbrir(nuevo); // ya creado: ahora se pueden agregar notas dentro
+      setEstado(ntEl.estadoDatos, "Notario creado ✓", "ok");
     }
-
-    actualizarBurbuja();
-    _guardarCarrito();
-    cerrarModalCantidad();
+    ntDibujarTodo();
+  } catch (e) {
+    setEstado(ntEl.estadoDatos, "Error: " + e.message, "error");
+  } finally {
+    ntEl.guardarDatos.disabled = false;
+  }
 }
 
-// ── Burbuja flotante ──
-function actualizarBurbuja() {
-    var total = carrito.length;
-    var burbuja = document.getElementById('burbujaCarrito');
-    var badge = document.getElementById('burbujaBadge');
-    if (!burbuja || !badge) return;
-
-    // Badge: muestra el número solo cuando hay productos
-    if (total > 0) {
-        badge.textContent = total;
-        badge.style.display = 'flex';
-        badge.style.animation = 'none';
-        badge.offsetWidth; // reflow para reiniciar animación
-        badge.style.animation = 'badge-pop 0.35s cubic-bezier(.34,1.56,.64,1) both';
-    } else {
-        badge.style.display = 'none';
-    }
-    // La burbuja SIEMPRE es visible (nunca se oculta aquí)
-    burbuja.style.removeProperty('display');
-    burbuja.classList.add('visible');
+async function ntBorrarNotario() {
+  const n = ntPorId(NT.abierto);
+  if (!n) return;
+  const cuantas = n.notas.length;
+  const aviso =
+    "¿Eliminar el notario «" + n.nombre + "»" +
+    (cuantas ? " junto con sus " + cuantas + (cuantas === 1 ? " nota" : " notas") : "") +
+    "? No se puede deshacer.";
+  if (!window.confirm(aviso)) return;
+  ntEl.borrarNotario.disabled = true;
+  setEstado(ntEl.estadoDatos, "Eliminando…");
+  try {
+    await llamarNotas("notario_borrar", { id: n.id });
+    NT.lista = NT.lista.filter((x) => x.id !== n.id);
+    ntCerrar(true);
+    ntDibujarTodo();
+  } catch (e) {
+    setEstado(ntEl.estadoDatos, "Error: " + e.message, "error");
+  } finally {
+    ntEl.borrarNotario.disabled = false;
+  }
 }
 
-// ── Pantalla de carrito ──
-function abrirPantallaCarrito() {
-    // Cerrar drawer sin usar cerrarDrawer() para evitar conflicto de history.back()
-    var drawer = document.getElementById('drawer');
-    var overlay = document.getElementById('drawerOverlay');
-    if (drawer && drawer.classList.contains('activo')) {
-        drawer.classList.remove('activo');
-        if (overlay) overlay.classList.remove('activo');
-        // Limpiar el estado del drawer del historial para que no interfiera
-        if (history.state && history.state.kukumitaModal === 'drawer') {
-            history.replaceState(null, '');
-        }
-    }
-    // Limpiar cualquier estado de modal anterior que pudiera haber quedado colgado
-    _modalActivo = null;
-    try { renderizarCarrito(); } catch(e) { console.error('[Kukumita] Error en renderizarCarrito:', e); }
-    var pantalla = document.getElementById('pantallaCarrito');
-    if (!pantalla) return;
-    // Si ya estaba abierta no hacer doble pushState
-    if (pantalla.classList.contains('activa')) return;
-    pantalla.classList.add('activa');
-    document.body.style.overflow = 'hidden';
-    _modalActivo = 'carrito';
-    // Ocultar burbuja mientras el carrito está abierto
-    var burbuja = document.getElementById('burbujaCarrito');
-    if (burbuja) burbuja.style.display = 'none';
-    history.pushState({ kukumitaModal: 'carrito' }, '');
+// ----- Agregar una nota dentro del notario abierto -----
+async function ntAgregarNota() {
+  const n = ntPorId(NT.abierto);
+  if (!n) return;
+  const texto = ntLimpiar(ntEl.texto.value);
+  if (!texto) {
+    setEstado(ntEl.estadoNota, "Escribe algo primero", "error");
+    return;
+  }
+  const nota = { id: ntNuevoId(), fecha: selloFechaHora(), texto };
+  const sobran = ntLargo(n.notas.concat([nota])) - NT_LIMITE;
+  if (sobran > 0) {
+    setEstado(ntEl.estadoNota, "No cabe: te pasas por " + ntFmt(sobran) + " caracteres", "error");
+    return;
+  }
+  ntEl.agregar.disabled = true;
+  setEstado(ntEl.estadoNota, "Guardando…");
+  try {
+    await llamarNotas("notario_nota_guardar", { id: n.id, notaId: nota.id, fecha: nota.fecha, texto: nota.texto });
+    n.notas.push(nota);
+    ntEl.texto.value = "";
+    ntDibujarNotas();
+    ntDibujarTodo();
+    const restan = NT_LIMITE - ntLargo(n.notas);
+    setEstado(
+      ntEl.estadoNota,
+      ntNivel(ntLargo(n.notas)) === "ok" ? "Nota agregada ✓" : "Nota agregada ✓ — ¡queda poco espacio! (" + ntFmt(restan) + " caracteres)",
+      "ok"
+    );
+  } catch (e) {
+    setEstado(ntEl.estadoNota, "Error: " + e.message, "error");
+  } finally {
+    ntEl.agregar.disabled = false;
+    ntActualizarContador();
+  }
 }
 
-function cerrarPantallaCarrito() {
-    var pantalla = document.getElementById('pantallaCarrito');
-    if (!pantalla || !pantalla.classList.contains('activa')) return;
-    pantalla.classList.remove('activa');
-    document.body.style.overflow = '';
-    _modalActivo = null;
-    var burbuja = document.getElementById('burbujaCarrito');
-    if (burbuja) { burbuja.style.removeProperty('display'); }
-    actualizarBurbuja();
-    if (history.state && history.state.kukumitaModal === 'carrito') {
-        history.replaceState(null, '');
-    }
-}
-
-// ── Calcula el total de descuento de los cupones aplicados sobre el carrito ──
-function calcularDescuentoCupones(carritoItems) {
-    var total = 0;
-    _cuponesAplicados.forEach(function(c) {
-        var precioBase = 0;
-        if (c.productoIdx !== undefined && carritoItems[c.productoIdx]) {
-            precioBase = carritoItems[c.productoIdx].precio || 0;
-        } else if (carritoItems.length > 0) {
-            precioBase = carritoItems[0].precio || 0;
-        }
-        if (c.tipo === 'porcentaje') {
-            total += precioBase * (c.descuento / 100);
-        } else {
-            total += Math.min(c.descuento, precioBase);
-        }
-    });
-    return total;
-}
-
-function renderizarCarrito() {
-    var grid = document.getElementById('cartGrid');
-    var vacio = document.getElementById('cartVacio');
-    var totalZona = document.getElementById('cartTotalZona');
-    var ctaZona = document.getElementById('cartCtaZona');
-    var limiteMsg = document.getElementById('cartLimiteMsg');
-    grid.innerHTML = '';
-
-    if (carrito.length === 0) {
-        vacio.style.display = 'block';
-        totalZona.style.display = 'none';
-        ctaZona.style.display = 'none';
-        limiteMsg.classList.remove('visible');
-        return;
-    }
-
-    vacio.style.display = 'none';
-    totalZona.style.display = 'block';
-    ctaZona.style.display = 'block';
-
-    // Mostrar/ocultar mensaje de límite
-    limiteMsg.classList.toggle('visible', carrito.length >= _CARRITO_MAX_PRODUCTOS);
-
-    var total = 0;
-    carrito.forEach(function(item, idx) {
-        total += item.precio * item.cantidad;
-        var div = document.createElement('div');
-        div.className = 'cart-card';
-
-        var nombreSeguroCarrito = escapeHtml(item.nombre);
-        var imgHtml = item.img
-            ? '<img class="cart-card-img" src="' + escapeHtml(item.img) + '" alt="' + nombreSeguroCarrito + '" onerror="this.style.background=\'#f0eae4\'; this.src=\'\';">'
-            : '<div class="cart-card-img" style="background:#f0eae4; display:flex; align-items:center; justify-content:center; font-size:2rem;">🕯️</div>';
-
-        var subtotal = item.precio ? '$' + (item.precio * item.cantidad).toFixed(0) + ' MXN' : '';
-
-        div.innerHTML =
-            '<button class="btn-quitar-cart" onclick="quitarDelCarrito(' + idx + ')">✕</button>' +
-            imgHtml +
-            '<div class="cart-card-info">' +
-            '<div class="cart-card-nombre">' + nombreSeguroCarrito + '</div>' +
-            (item.precio ? '<div class="cart-card-precio">$' + escapeHtml(item.precio) + ' MXN c/u</div>' : '') +
-            // Controles de cantidad editables
-            '<div style="display:flex; align-items:center; gap:6px; margin-top:6px;">' +
-            '<button onclick="cambiarCantidadCarrito(' + idx + ',-1)" style="width:26px;height:26px;border-radius:50%;background:#8c7565;color:white;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;" ' + (item.cantidad <= 1 ? 'disabled style="width:26px;height:26px;border-radius:50%;background:#d9cfc8;color:white;border:none;font-size:16px;cursor:default;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;"' : '') + '>−</button>' +
-            '<span style="font-size:14px;font-weight:800;color:#362a22;min-width:22px;text-align:center;" id="cartQty_' + idx + '">' + item.cantidad + '</span>' +
-            '<button onclick="cambiarCantidadCarrito(' + idx + ',1)" style="width:26px;height:26px;border-radius:50%;background:#8c7565;color:white;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;" ' + (item.cantidad >= _CARRITO_MAX_PIEZAS ? 'disabled style="width:26px;height:26px;border-radius:50%;background:#d9cfc8;color:white;border:none;font-size:16px;cursor:default;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;"' : '') + '>+</button>' +
-            '</div>' +
-            (item.precio ? '<div style="font-size:0.8rem; color:#2e7d32; font-weight:700; margin-top:4px;" id="cartSub_' + idx + '">Subtotal: ' + subtotal + '</div>' : '') +
-            '</div>';
-        grid.appendChild(div);
-    });
-
-    // ── Cupones y total — delegado a _renderizarZonaCupones() ──
-    _renderizarZonaCupones();
-
-    // ── Poblar selector de producto para cupón ──
-    var selectorZona = document.getElementById('cartCuponSelectorZona');
-    var selectEl     = document.getElementById('cartCuponProductoSelect');
-    if (selectorZona) selectorZona.style.display = (_cuponesAplicados.length > 0 && carrito.length > 0) ? 'block' : 'none';
-    if (selectEl) {
-        selectEl.innerHTML = '<option value="">— Elige un producto —</option>';
-        carrito.forEach(function(item, idx) {
-            var opt = document.createElement('option');
-            opt.value = idx;
-            var precioUnidad = item.precio ? '$' + item.precio + ' MXN' : 'Sin precio';
-            opt.textContent = item.nombre + ' (' + item.cantidad + ' pza' + (item.cantidad !== 1 ? 's' : '') + ' · ' + precioUnidad + ' c/u)';
-            selectEl.appendChild(opt);
-        });
-        var yaAsignado = _cuponesAplicados.find(function(c) { return c.productoIdx !== undefined; });
-        if (yaAsignado) selectEl.value = yaAsignado.productoIdx;
-        selectEl.onchange = function() { asignarCuponAProducto(parseInt(this.value)); };
-    }
-
-    // ── Total con descuento ──
-    var descuentoTotal = calcularDescuentoCupones(carrito);
-    var hayDescuento   = descuentoTotal > 0;
-    var displayTotal   = Math.max(0, total - descuentoTotal);
-    document.getElementById('cartTotalValor').textContent = displayTotal > 0 ? '$' + displayTotal.toFixed(0) + ' MXN' : 'Precio por cotizar';
-    if (hayDescuento) document.getElementById('cartTotalValor').title = 'Precio original: $' + total.toFixed(0) + ' MXN';
-}
-
-function quitarDelCarrito(idx) {
-    carrito.splice(idx, 1);
-    _guardarCarrito();
-    actualizarBurbuja();
-    renderizarCarrito();
-}
-
-function cambiarCantidadCarrito(idx, delta) {
-    if (!carrito[idx]) return;
-    var nueva = Math.max(1, Math.min(_CARRITO_MAX_PIEZAS, carrito[idx].cantidad + delta));
-    carrito[idx].cantidad = nueva;
-    _guardarCarrito();
-    renderizarCarrito();
-}
-
-// ── Botón pedir cotización con link compartible + anti-spam ──
-function pedirCotizacionWA() {
-    if (carrito.length === 0) { mostrarToast('Tu carrito está vacío'); return; }
-
-    var ahora = Date.now();
-    if (ahora - _cotizacionUltimoEnvio < _cotizacionCooldown) {
-        var segsRestantes = Math.ceil((_cotizacionCooldown - (ahora - _cotizacionUltimoEnvio)) / 1000);
-        mostrarToast('⏳ Espera ' + segsRestantes + ' segundos antes de volver a enviar');
-        return;
-    }
-    _cotizacionUltimoEnvio = ahora;
-
-    // Construir el link compartible con los productos del carrito
-    var baseUrl = window.location.origin + window.location.pathname;
-    var params = carrito.map(function(item) {
-        return 'p=' + encodeURIComponent(item.nombre) + '&q=' + item.cantidad + '&pr=' + item.precio;
-    }).join('&');
-    var linkCarrito = baseUrl + '?' + params + '#carrito';
-
-    // Calcular total
-    var total = carrito.reduce(function(sum, i){ return sum + i.precio * i.cantidad; }, 0);
-
-    // Construir mensaje
-    var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Polo Kukúmita:\n'];
-    carrito.forEach(function(item, i) {
-        lineas.push((i+1) + '. *' + item.nombre + '*');
-        lineas.push('   Cantidad: ' + item.cantidad + ' piezas');
-        if (item.precio) lineas.push('   Precio unitario: $' + item.precio + ' MXN');
-        if (item.precio) lineas.push('   Subtotal: $' + (item.precio * item.cantidad).toFixed(0) + ' MXN');
-    });
-    if (total > 0) lineas.push('\n*Total estimado: $' + total.toFixed(0) + ' MXN*');
-    lineas.push('\n🔗 Ver mi selección: ' + linkCarrito);
-
-    var mensaje = lineas.join('\n');
-    var btn = document.getElementById('btnPedirCotizacion');
-    btn.disabled = true;
-    btn.textContent = '⏳ Enviando...';
-    setTimeout(function() {
-        window.open('https://wa.me/524431382094?text=' + encodeURIComponent(mensaje), '_blank');
-        btn.disabled = false;
-        btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> Pedir Cotización por WhatsApp';
-    }, 800);
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// SISTEMA DE CUPONES KUKUMITA v2
-// - Cupones activos + cupones usados (historial)
-// - Persistencia en Firestore por usuario Google
-// - Modal de detalle al tocar un cupón
-// - Visibles en el carrito aunque esté vacío
-// ══════════════════════════════════════════════════════════════════════
-
-var _cuponesAplicados = []; // [{codigo, descuento, descripcion, tipo, origen, fechaObtenido}]
-var _cuponesUsados    = []; // [{codigo, descuento, descripcion, tipo, origen, fechaObtenido, fechaUsado}]
-
-// Catálogo de cupones válidos (lado cliente)
-var _catalogoCupones = {
-    'ZONA15':        { descuento: 15, tipo: 'porcentaje', descripcion: '15% de descuento en 1 pieza', origen: 'Zona Interactiva — Biografía', icono: '🎉' },
-    'BIENVENIDA10':  { descuento: 10, tipo: 'porcentaje', descripcion: '10% de descuento en 1 pieza', origen: 'Bienvenida',                   icono: '🎁' }
-};
-
-// ── Fingerprint ligero para anti-abuso en dispositivo ──
-function _generarFingerprint() {
-    var nav = window.navigator;
-    var parts = [nav.language||'', nav.platform||'', window.screen.width+'x'+window.screen.height,
-                 String(nav.hardwareConcurrency||0), Intl.DateTimeFormat().resolvedOptions().timeZone||''];
-    var str = parts.join('|'), hash = 0;
-    for (var i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); hash |= 0; }
-    return 'fp_' + Math.abs(hash).toString(36);
-}
-function _getStorageKey(codigo)    { return 'kuku_cupon_'  + codigo.toUpperCase() + '_' + _generarFingerprint(); }
-function _getStorageKeyUsado(cod)  { return 'kuku_usado_'  + cod.toUpperCase()    + '_' + _generarFingerprint(); }
-
-function _cuponYaUsado(codigo) {
-    try { var raw = localStorage.getItem(_getStorageKey(codigo)); if (!raw) return false; var d = JSON.parse(raw); return !!(d.ts && d.fp); } catch(e) { return false; }
-}
-function _marcarCuponUsado(codigo) {
-    try { localStorage.setItem(_getStorageKey(codigo), JSON.stringify({ codigo: codigo.toUpperCase(), fp: _generarFingerprint(), ts: Date.now(), ua: (navigator.userAgent||'').substring(0,80) })); } catch(e) {}
-}
-function _cuponEnCarritoActual(codigo) {
-    return _cuponesAplicados.some(function(c) { return c.codigo === codigo.toUpperCase(); });
-}
-
-// ── Cargar historial de usados desde localStorage ──
-function _cargarHistorialUsados() {
-    try {
-        var raw = localStorage.getItem('kuku_cupones_usados');
-        if (raw) _cuponesUsados = JSON.parse(raw);
-    } catch(e) {}
-}
-function _guardarHistorialUsados() {
-    try { localStorage.setItem('kuku_cupones_usados', JSON.stringify(_cuponesUsados)); } catch(e) {}
-}
-function _moverCuponAUsados(codigo) {
-    var idx = _cuponesAplicados.findIndex(function(c){ return c.codigo === codigo; });
-    if (idx !== -1) {
-        var c = _cuponesAplicados.splice(idx, 1)[0];
-        c.fechaUsado = new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
-        _cuponesUsados.unshift(c);
-        _guardarHistorialUsados();
-    }
-}
-
-// Inicializar historial al arrancar
-_ready(function() { _cargarHistorialUsados(); });
-
-// ── Modal de detalle de cupón ──
-(function() {
-    var _modal = null;
-    function _crearModal() {
-        if (_modal) return;
-        _modal = document.createElement('div');
-        _modal.id = 'modalDetalleCupon';
-        _modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:20px;';
-        _modal.innerHTML =
-            '<div style="background:#fff;border-radius:20px;max-width:380px;width:100%;padding:28px 24px;box-shadow:0 16px 48px rgba(0,0,0,0.22);position:relative;animation:submenuFadeIn 0.2s ease;">' +
-            '<button onclick="cerrarDetalleCupon()" style="position:absolute;top:14px;right:14px;background:#f5ede8;border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#8c7565;">✕</button>' +
-            '<div id="detalleCuponContenido"></div>' +
-            '</div>';
-        _modal.addEventListener('click', function(e){ if(e.target===_modal) cerrarDetalleCupon(); });
-        document.body.appendChild(_modal);
-    }
-    window.abrirDetalleCupon = function(codigo, esUsado) {
-        _crearModal();
-        var lista = esUsado ? _cuponesUsados : _cuponesAplicados;
-        var c = lista.find(function(x){ return x.codigo === codigo; });
-        if (!c) return;
-        var def = _catalogoCupones[c.codigo] || {};
-        var icono = def.icono || '🎟️';
-        var colorFondo = esUsado ? '#f5f5f5' : 'linear-gradient(135deg,#fdf3e7,#fae8d0)';
-        var colorBorde = esUsado ? '#ddd'    : '#e8c89a';
-        var html =
-            '<div style="text-align:center;margin-bottom:20px;">' +
-            '<div style="font-size:3rem;margin-bottom:8px;">' + icono + '</div>' +
-            '<h3 style="font-size:1.3rem;font-weight:900;color:#362a22;margin:0 0 4px;letter-spacing:1px;">' + c.codigo + '</h3>' +
-            '<span style="font-size:0.78rem;font-weight:700;color:' + (esUsado?'#999':'#8c7565') + ';text-transform:uppercase;letter-spacing:0.8px;">' +
-            (esUsado ? '✅ Cupón utilizado' : '✨ Cupón activo') + '</span>' +
-            '</div>' +
-            '<div style="background:' + colorFondo + ';border:2px solid ' + colorBorde + ';border-radius:14px;padding:16px 18px;margin-bottom:16px;">' +
-            '<p style="font-size:1.1rem;font-weight:900;color:#362a22;margin:0 0 6px;text-align:center;">' +
-            c.descuento + (c.tipo==='porcentaje'?'% de descuento':' MXN de descuento') + ' en 1 pieza' +
-            '</p>' +
-            '<p style="font-size:0.82rem;color:#8c7565;margin:0;text-align:center;">' + (c.descripcion||'') + '</p>' +
-            '</div>' +
-            '<div style="display:flex;flex-direction:column;gap:8px;">' +
-            '<div style="display:flex;gap:10px;align-items:flex-start;">' +
-            '<span style="font-size:1rem;flex-shrink:0;">📍</span>' +
-            '<div><p style="font-size:0.78rem;font-weight:700;color:#aaa;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.6px;">Dónde lo obtuviste</p>' +
-            '<p style="font-size:0.88rem;color:#5c4d43;margin:0;font-weight:600;">' + (c.origen || def.origen || 'Desconocido') + '</p></div>' +
-            '</div>' +
-            (c.fechaObtenido ? '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:1rem;flex-shrink:0;">📅</span><div><p style="font-size:0.78rem;font-weight:700;color:#aaa;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.6px;">Fecha obtenido</p><p style="font-size:0.88rem;color:#5c4d43;margin:0;font-weight:600;">' + c.fechaObtenido + '</p></div></div>' : '') +
-            (esUsado && c.fechaUsado ? '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:1rem;flex-shrink:0;">🗓️</span><div><p style="font-size:0.78rem;font-weight:700;color:#aaa;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.6px;">Fecha utilizado</p><p style="font-size:0.88rem;color:#5c4d43;margin:0;font-weight:600;">' + c.fechaUsado + '</p></div></div>' : '') +
-            '</div>';
-        if (!esUsado) {
-            html += '<button onclick="cerrarDetalleCupon()" style="width:100%;margin-top:20px;background:linear-gradient(135deg,#8c7565,#5c4d43);color:white;border:none;border-radius:999px;padding:13px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:inherit;">Entendido ✓</button>';
-        } else {
-            html += '<div style="margin-top:18px;text-align:center;padding:10px 14px;background:#f9f5f2;border-radius:10px;"><p style="font-size:0.8rem;color:#9a8878;margin:0;font-style:italic;">Este cupón ya fue utilizado, pero lo guardamos como recuerdo 🕯️</p></div>' +
-                    '<button onclick="cerrarDetalleCupon()" style="width:100%;margin-top:14px;background:#e8ddd5;color:#5c4d43;border:none;border-radius:999px;padding:13px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:inherit;">Cerrar</button>';
-        }
-        document.getElementById('detalleCuponContenido').innerHTML = html;
-        _modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-    };
-    window.cerrarDetalleCupon = function() {
-        if (_modal) _modal.style.display = 'none';
-        document.body.style.overflow = '';
-    };
-})();
-
-// ── Reclamar cupón de la Zona Interactiva ──
-function reclamarCuponZonaInteractiva() {
-    var codigo = 'ZONA15';
-    var btnEl  = document.getElementById('btnReclamarCupon15');
-
-    if (_cuponEnCarritoActual(codigo)) { mostrarToast('🎟️ El cupón ZONA15 ya está en tu carrito'); return; }
-    if (_cuponYaUsado(codigo)) { _bloquearBtnCupon15(); mostrarToast('⚠️ Este cupón ya fue reclamado anteriormente'); return; }
-
-    var cupDef = _catalogoCupones[codigo];
-    var fechaHoy = new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
-    _cuponesAplicados.push({
-        codigo:        codigo,
-        descuento:     cupDef.descuento,
-        descripcion:   cupDef.descripcion,
-        tipo:          cupDef.tipo,
-        origen:        cupDef.origen,
-        fechaObtenido: fechaHoy
-    });
-    _marcarCuponUsado(codigo);
-
-    // Guardar en Firestore si hay sesión
-    _guardarCuponFirestore(codigo, cupDef, fechaHoy);
-
-    if (btnEl) {
-        btnEl.disabled = true;
-        btnEl.style.background = 'linear-gradient(135deg,#4caf50,#2e7d32)';
-        btnEl.style.boxShadow   = '0 4px 16px rgba(46,125,50,0.4)';
-        btnEl.innerHTML = '✅ Cupón guardado en tu carrito';
-    }
-    mostrarToast('🎉 ¡Cupón del 15% añadido! Ábrelo en el carrito.');
-    renderizarCarrito();
-}
-
-function _bloquearBtnCupon15() {
-    var btnEl    = document.getElementById('btnReclamarCupon15');
-    var estadoEl = document.getElementById('zonaCupon15Estado');
-    if (btnEl) {
-        btnEl.disabled = true;
-        btnEl.style.background = 'linear-gradient(135deg,#bbb,#999)';
-        btnEl.style.boxShadow  = 'none';
-        btnEl.style.cursor     = 'default';
-        btnEl.innerHTML        = '⛔ Ya has utilizado este cupón';
-    }
-    if (estadoEl && !estadoEl.querySelector('.msg-cupon-usado')) {
-        var msg = document.createElement('p');
-        msg.className = 'msg-cupon-usado';
-        msg.style.cssText = 'font-size:0.78rem;color:#9a8878;margin-top:10px;font-style:italic;';
-        msg.textContent   = 'Este cupón ya fue reclamado desde este dispositivo.';
-        estadoEl.appendChild(msg);
-    }
-}
-
-// Al cargar la página, revisar si el cupón ya fue usado y bloquear botón
-_ready(function() {
-    if (_cuponYaUsado('ZONA15')) {
-        setTimeout(_bloquearBtnCupon15, 400);
-    }
+ntq(".nt-cerrar").addEventListener("click", () => ntCerrar(false));
+ntModal.addEventListener("click", (e) => {
+  if (e.target === ntModal) ntCerrar(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !ntModal.hidden) ntCerrar(false);
+});
+ntEl.guardarDatos.addEventListener("click", ntGuardarDatos);
+ntEl.borrarNotario.addEventListener("click", ntBorrarNotario);
+ntEl.agregar.addEventListener("click", ntAgregarNota);
+ntEl.texto.addEventListener("input", ntActualizarContador);
+ntEl.nombre.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") ntGuardarDatos();
 });
 
-// ── Aplicar cupón manual (por código) ──
-function aplicarCuponManual() {
-    var inputEl = document.getElementById('inputCuponManual');
-    if (!inputEl) return;
-    var codigo  = (inputEl.value || '').trim().toUpperCase();
-    if (!codigo) { mostrarToast('Escribe un código de cupón'); return; }
-
-    var def = _catalogoCupones[codigo];
-    if (!def) { mostrarToast('❌ Código no válido o no reconocido'); return; }
-    if (_cuponEnCarritoActual(codigo)) { mostrarToast('🎟️ Ese cupón ya está aplicado'); return; }
-    if (_cuponYaUsado(codigo)) { mostrarToast('⚠️ Este cupón ya fue usado anteriormente'); return; }
-
-    var fechaHoy = new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
-    _cuponesAplicados.push({
-        codigo:        codigo,
-        descuento:     def.descuento,
-        descripcion:   def.descripcion,
-        tipo:          def.tipo,
-        origen:        def.origen || 'Código manual',
-        fechaObtenido: fechaHoy
-    });
-    _marcarCuponUsado(codigo);
-    _guardarCuponFirestore(codigo, def, fechaHoy);
-    inputEl.value = '';
-    mostrarToast('✅ Cupón ' + codigo + ' aplicado');
-    renderizarCarrito();
+// ----- Botón «Notario» y cuadritos de cada zona -----
+function montarNotario(zona, destino, antes) {
+  const caja = document.createElement("div");
+  caja.className = "nt-zona";
+  caja.innerHTML = `
+    <div class="nt-barra">
+      <button type="button" class="notas-btn nt-nuevo">📒 + Notario</button>
+      <span class="notas-estado nt-estado"></span>
+    </div>
+    <div class="nt-grid"></div>`;
+  destino.insertBefore(caja, antes || null);
+  const m = { zona, caja, grid: caja.querySelector(".nt-grid"), estado: caja.querySelector(".nt-estado") };
+  caja.querySelector(".nt-nuevo").addEventListener("click", () => ntAbrirNuevo(zona));
+  NT.montajes.push(m);
+  return m;
 }
 
-function quitarCupon(codigo) {
-    _cuponesAplicados = _cuponesAplicados.filter(function(c) { return c.codigo !== codigo; });
-    renderizarCarrito();
+function ntCrearCuadro(n) {
+  const largo = ntLargo(n.notas);
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "nt-cuadro nt-" + ntNivel(largo);
+  b.setAttribute("aria-label", "Abrir el notario " + n.nombre);
+  const nombre = document.createElement("span");
+  nombre.className = "nt-cuadro-nombre";
+  nombre.textContent = "📒 " + n.nombre;
+  const desc = document.createElement("span");
+  desc.className = "nt-cuadro-desc";
+  desc.textContent = n.descripcion ? resumenCorto(n.descripcion, 70) : "Sin descripción";
+  const meta = document.createElement("span");
+  meta.className = "nt-cuadro-meta";
+  const k = n.notas.length;
+  meta.textContent =
+    k + (k === 1 ? " nota" : " notas") + " · " + ntFmt(largo) + " / " + ntFmt(NT_LIMITE) +
+    (largo >= NT_AVISO ? " ⚠️" : "");
+  const barra = document.createElement("span");
+  barra.className = "nt-cuadro-barra";
+  const relleno = document.createElement("i");
+  relleno.style.width = Math.min(100, (largo / NT_LIMITE) * 100).toFixed(1) + "%";
+  barra.appendChild(relleno);
+  b.append(nombre, desc, meta, barra);
+  b.addEventListener("click", () => ntAbrir(n));
+  return b;
 }
 
-// ── Renderizar cupones en el carrito (activos + historial usados) ──
-// Este bloque reemplaza la lógica de renderizarCarrito relacionada con cupones.
-// Se llama desde renderizarCarrito() al final del bloque de cupones.
-function _renderizarZonaCupones() {
-    var cuponesZona  = document.getElementById('cartCuponesZona');
-    var cuponesLista = document.getElementById('cartCuponesLista');
-    var cuponDesc    = document.getElementById('cartCuponDesc');
-    if (!cuponesZona || !cuponesLista) return;
-
-    // Mostrar la zona si hay cupones activos O si hay historial de usados
-    var hayAlgo = _cuponesAplicados.length > 0 || _cuponesUsados.length > 0;
-    cuponesZona.style.display = hayAlgo ? 'block' : 'none';
-
-    cuponesLista.innerHTML = '';
-
-    // ── Cupones activos ──
-    if (_cuponesAplicados.length === 0) {
-        var p = document.createElement('p');
-        p.style.cssText = 'font-size:0.8rem;color:#b09080;margin:0 0 8px;';
-        p.textContent   = 'No tienes cupones activos.';
-        cuponesLista.appendChild(p);
-    } else {
-        _cuponesAplicados.forEach(function(c) {
-            var productoInfo = c.productoIdx !== undefined && carrito[c.productoIdx]
-                ? ('→ aplica a 1 pieza de "' + carrito[c.productoIdx].nombre + '"')
-                : (c.productoIdx === undefined ? '→ selecciona un producto abajo' : '→ producto eliminado');
-            var el = document.createElement('div');
-            el.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;background:#fff;border:1.5px solid #e8c89a;border-radius:10px;padding:8px 12px;gap:8px;cursor:pointer;transition:border-color 0.2s;';
-            el.onmouseover = function(){ this.style.borderColor='#c9a98a'; };
-            el.onmouseout  = function(){ this.style.borderColor='#e8c89a'; };
-            el.innerHTML =
-                '<div style="flex:1;min-width:0;" onclick="abrirDetalleCupon(\'' + c.codigo + '\',false)">' +
-                '<span style="font-size:0.85rem;font-weight:800;color:#362a22;">🎟️ ' + c.codigo + '</span>' +
-                '<span style="font-size:0.75rem;color:#8c7565;display:block;margin-top:1px;">' + c.descripcion + ' — ' + c.descuento + (c.tipo==='porcentaje'?'%':' MXN') + '</span>' +
-                '<span style="font-size:0.72rem;color:#a07850;display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + productoInfo + '</span>' +
-                '<span style="font-size:0.68rem;color:#c9a98a;display:block;margin-top:2px;">Toca para ver detalles →</span>' +
-                '</div>' +
-                '<button onclick="event.stopPropagation();quitarCupon(\'' + c.codigo + '\')" style="background:#f5e8e0;border:none;border-radius:50%;width:26px;height:26px;min-width:26px;font-size:12px;cursor:pointer;color:#8c7565;display:flex;align-items:center;justify-content:center;margin-top:2px;flex-shrink:0;">✕</button>';
-            cuponesLista.appendChild(el);
-        });
-    }
-
-    // ── Historial de cupones usados ──
-    if (_cuponesUsados.length > 0) {
-        var sep = document.createElement('div');
-        sep.style.cssText = 'margin:12px 0 8px;display:flex;align-items:center;gap:8px;';
-        sep.innerHTML = '<div style="flex:1;height:1px;background:#e8ddd5;"></div>' +
-            '<span style="font-size:0.72rem;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.7px;white-space:nowrap;">Cupones utilizados</span>' +
-            '<div style="flex:1;height:1px;background:#e8ddd5;"></div>';
-        cuponesLista.appendChild(sep);
-
-        _cuponesUsados.forEach(function(c) {
-            var el = document.createElement('div');
-            el.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#fafafa;border:1.5px solid #eee;border-radius:10px;padding:8px 12px;gap:8px;cursor:pointer;opacity:0.72;transition:opacity 0.2s;';
-            el.onmouseover = function(){ this.style.opacity='1'; };
-            el.onmouseout  = function(){ this.style.opacity='0.72'; };
-            el.onclick = function(){ abrirDetalleCupon(c.codigo, true); };
-            el.innerHTML =
-                '<div style="flex:1;min-width:0;">' +
-                '<span style="font-size:0.83rem;font-weight:800;color:#999;">✅ ' + c.codigo + '</span>' +
-                '<span style="font-size:0.72rem;color:#bbb;display:block;margin-top:1px;">' + c.descripcion + '</span>' +
-                '<span style="font-size:0.68rem;color:#c9a98a;display:block;margin-top:2px;">Toca para ver detalles →</span>' +
-                '</div>';
-            cuponesLista.appendChild(el);
-        });
-    }
-
-    // Descuento total
-    var descuentoTotal = calcularDescuentoCupones(carrito);
-    if (cuponDesc) cuponDesc.textContent = descuentoTotal > 0 ? ('Ahorro: $' + descuentoTotal.toFixed(0) + ' MXN') : '';
+function ntDibujarTodo() {
+  NT.montajes.forEach((m) => {
+    m.grid.innerHTML = "";
+    NT.lista.filter((n) => n.zona === m.zona).forEach((n) => m.grid.appendChild(ntCrearCuadro(n)));
+  });
+  const n = ntPorId(NT.abierto);
+  if (n && !ntModal.hidden && NT.editandoNota === null) ntDibujarNotas();
 }
 
-function asignarCuponAProducto(idx) {
-    if (isNaN(idx) || idx < 0 || idx >= carrito.length) return;
-    // Asignar a todos los cupones sin producto (o reasignar todos si ya tienen)
-    _cuponesAplicados.forEach(function(c) {
-        c.productoIdx = idx;
-    });
-    var preview = document.getElementById('cartCuponSelectorPreview');
-    if (preview && carrito[idx]) {
-        var item = carrito[idx];
-        var precioBase = item.precio || 0;
-        var cupon = _cuponesAplicados[0];
-        var ahorro = cupon
-            ? (cupon.tipo === 'porcentaje'
-                ? (precioBase * cupon.descuento / 100).toFixed(0)
-                : Math.min(cupon.descuento, precioBase).toFixed(0))
-            : 0;
-        preview.style.display = 'block';
-        preview.textContent = '✅ Descuento de $' + ahorro + ' MXN aplicado a 1 pieza de "' + item.nombre + '"';
-    }
-    renderizarCarrito();
+async function ntCargar() {
+  if (NT.cargando) return;
+  NT.cargando = true;
+  NT.montajes.forEach((m) => setEstado(m.estado, "Cargando notarios…"));
+  try {
+    const j = await llamarNotas("notario_listar");
+    NT.lista = (Array.isArray(j.notarios) ? j.notarios : []).map((n) =>
+      Object.assign({}, n, { notas: Array.isArray(n.notas) ? n.notas : [] })
+    );
+    NT.cargados = true;
+    NT.montajes.forEach((m) => setEstado(m.estado, ""));
+    ntDibujarTodo();
+  } catch (e) {
+    NT.montajes.forEach((m) => setEstado(m.estado, "Error: " + e.message, "error"));
+  } finally {
+    NT.cargando = false;
+  }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// SUBMENÚS DE IMAGEN Y TÍTULO
-// ══════════════════════════════════════════════════════════════════════
+// Se llama cuando cambia la sesión o se cambia de página: lee los notarios la primera vez que se ve una zona
+function actualizarNotarios() {
+  if (typeof NT === "undefined" || !NT || !NT.montajes) return;
+  if (!sesionVigente()) {
+    NT.cargados = false;
+    NT.lista = [];
+    ntCerrar(true);
+    ntDibujarTodo();
+    return;
+  }
+  if (!NT.cargados && !NT.cargando && NT.montajes.some((m) => m.caja.offsetParent !== null)) ntCargar();
+  else ntDibujarTodo();
+}
 
-// Animación CSS para submenús
-(function() {
-    var style = document.createElement('style');
-    style.textContent = '@keyframes submenuFadeIn { from { opacity:0; transform:translateX(-50%) translateY(-8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }';
-    document.head.appendChild(style);
+// El botón ↻ de cada zona también vuelve a leer los notarios
+function ntRecargarSiHaySesion() {
+  if (sesionVigente()) {
+    NT.cargados = false;
+    ntCargar();
+  }
+}
+
+// Dónde aparece el botón «+ Notario» en cada zona
+(function montarNotariosEnZonas() {
+  const zonaEt = (clave) => zonas.find((z) => z.cfg.seccion === clave);
+  montarNotario("notas", document.getElementById("notas-contenido"), document.getElementById("notas-lista"));
+  ["actividades", "trabajo", "pedidos-yeso"].forEach((clave) => {
+    const z = zonaEt(clave);
+    montarNotario(clave, z.contenido, z.lista);
+  });
+  [
+    ["ejercicio", "ej-contenido"],
+    ["diario", "di-contenido"],
+    ["deudas", "de-contenido"],
+    ["informacion", "ip-contenido"],
+    ["comandos", "cm-contenido"],
+    ["bazar", "bz-contenido"],
+  ].forEach(([clave, id]) => montarNotario(clave, document.getElementById(id), null));
+  ["notas-actualizar", "ej-actualizar", "di-actualizar", "de-actualizar", "ip-actualizar", "cm-actualizar", "bz-actualizar"].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener("click", ntRecargarSiHaySesion);
+  });
+  document.querySelectorAll(".zona-actualizar").forEach((b) => b.addEventListener("click", ntRecargarSiHaySesion));
 })();
 
-function toggleSubmenuPerfil(tipo) {
-    var ids = { imagen: 'submenuImagen', titulo: 'submenuTitulo' };
-    var otroIds = { imagen: 'submenuTitulo', titulo: 'submenuImagen' };
-    var el = document.getElementById(ids[tipo]);
-    var otro = document.getElementById(otroIds[tipo]);
-    if (!el) return;
-    // Cerrar el otro
-    if (otro) otro.style.display = 'none';
-    el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
-}
-
-function cerrarSubmenus() {
-    ['submenuImagen', 'submenuTitulo'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-}
-
-// Cerrar submenús al hacer clic fuera
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('#imgPerfilBtn') &&
-        !e.target.closest('#submenuImagen') &&
-        !e.target.closest('#tituloVelasKukumita') &&
-        !e.target.closest('#submenuTitulo')) {
-        cerrarSubmenus();
-    }
-});
-
-function irAZonaInteractiva() {
-    // Activa el panel de Biografía y lleva a su inicio (el cupón se descubre explorando)
-    if (typeof activarPill === 'function') activarPill('biografia');
-    setTimeout(function() {
-        var panel = document.getElementById('panelPillBiografia');
-        if (panel) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    }, 120);
-}
-
-// Cerrar modal de cantidad al hacer clic en el fondo
-_ready(function() {
-    var _mc = document.getElementById('modalCantidad');
-    if (_mc) _mc.addEventListener('click', function(e) { if (e.target === this) cerrarModalCantidad(); });
-    actualizarBurbuja();
-});
-
-// ══════════════════════════════════════════════════════
-// LÓGICA DEL SUBMENU DE COMPARTIR
-// ══════════════════════════════════════════════════════
-var _scUrlActual = '';
-var _scNombreActual = '';
-var _scImagenActual = '';
-
-function abrirSubmenuCompartir(url, nombre, imagen) {
-    _scUrlActual = url;
-    _scNombreActual = nombre || 'Producto';
-    _scImagenActual = imagen || '';
-    var linkEl = document.getElementById('scLinkTexto');
-    if (linkEl) linkEl.textContent = url;
-    document.getElementById('submenuCompartir').classList.add('abierto');
-    document.body.style.overflow = 'hidden';
-}
-
-function cerrarSubmenuCompartir() {
-    document.getElementById('submenuCompartir').classList.remove('abierto');
-    document.body.style.overflow = '';
-}
-
-function copiarLinkProducto() {
-    // Usar la URL del Worker (si está configurado) para que al pegar en Facebook
-    // se muestre la imagen del producto en lugar de la imagen genérica del sitio.
-    var urlACopiar = (typeof _urlOG === 'function') ? _urlOG(_scUrlActual) : _scUrlActual;
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(urlACopiar).then(function() {
-            mostrarToast('✅ ¡Link copiado al portapapeles!');
-        }).catch(function() {
-            _copiarFallback(urlACopiar);
-        });
-    } else {
-        _copiarFallback(urlACopiar);
-    }
-}
-
-function _copiarFallback(texto) {
-    var ta = document.createElement('textarea');
-    ta.value = texto;
-    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); mostrarToast('✅ ¡Link copiado!'); } catch(e) {}
-    document.body.removeChild(ta);
-}
-
-// ── Helper: devuelve la URL del Cloudflare Worker si está configurado,
-//    o la URL normal de la página en caso contrario.
-//    El worker sirve las meta tags OG correctas para que Facebook
-//    muestre la imagen del producto al pegar el link.
-function _urlOG(urlPaginaReal) {
-    if (!OG_WORKER_URL || !OG_WORKER_URL.trim()) return urlPaginaReal;
-    try {
-        var urlObj = new URL(urlPaginaReal);
-        var producto = urlObj.searchParams.get('producto');
-        // Red de seguridad: si "producto" no está en el query string real
-        // (por ejemplo, quedó atrapado dentro de un hash tipo #pagina=6?producto=X),
-        // lo buscamos ahí también en vez de rendirnos.
-        if (!producto && urlObj.hash) {
-            var m = urlObj.hash.match(/[?&]producto=([^&]+)/);
-            if (m) producto = decodeURIComponent(m[1]);
-        }
-        if (!producto) return urlPaginaReal;
-        return OG_WORKER_URL.replace(/\/$/, '') + '/?producto=' + encodeURIComponent(producto);
-    } catch(e) {
-        return urlPaginaReal;
-    }
-}
-
-// ── Intenta compartir TEXTO + IMAGEN real usando el menú nativo del celular
-//    (Web Share API). Si no es posible (computadora, navegador sin soporte,
-//    el usuario cancela, etc.), cae automáticamente al método clásico de
-//    abrir un chat de WhatsApp con el número indicado (solo texto).
-//    numeroWhatsApp: opcional, ej. '524431382094'. Si se omite, usa wa.me/?text=
-async function compartirConImagenOFallback(textoPlano, imagenUrl, numeroWhatsApp) {
-    const abrirWaMeFallback = () => {
-        const texto = encodeURIComponent(textoPlano);
-        const base = numeroWhatsApp ? ('https://wa.me/' + numeroWhatsApp) : 'https://wa.me/';
-        window.open(base + '?text=' + texto, '_blank');
-    };
-
-    // Solo intentamos Web Share con archivo si: hay navigator.share,
-    // hay navigator.canShare, y tenemos una URL de imagen.
-    const puedeIntentarShare = !!(navigator.share && navigator.canShare && imagenUrl);
-
-    if (!puedeIntentarShare) {
-        abrirWaMeFallback();
-        return;
-    }
-
-    try {
-        // Descargar la imagen y convertirla en un File para poder adjuntarla.
-        const respuesta = await fetch(imagenUrl, { mode: 'cors' });
-        if (!respuesta.ok) throw new Error('No se pudo descargar la imagen');
-        const blob = await respuesta.blob();
-        const extension = (imagenUrl.split('.').pop() || 'jpg').split(/[?#]/)[0].toLowerCase();
-        const tipoMime = blob.type || ('image/' + (extension === 'jpg' ? 'jpeg' : extension));
-        const archivo = new File([blob], 'producto.' + extension, { type: tipoMime });
-
-        const dataParaCompartir = { text: textoPlano, files: [archivo] };
-
-        if (!navigator.canShare(dataParaCompartir)) {
-            // Este navegador no soporta compartir archivos de este tipo.
-            abrirWaMeFallback();
-            return;
-        }
-
-        await navigator.share(dataParaCompartir);
-        // Si el usuario cancela el menú nativo, navigator.share lanza un
-        // AbortError, lo cual cae al catch — y AHÍ decidimos no forzar el
-        // fallback, porque cancelar fue una decisión consciente del usuario.
-    } catch (err) {
-        if (err && err.name === 'AbortError') {
-            // El usuario cerró el menú de compartir a propósito. No hacemos nada más.
-            return;
-        }
-        // Cualquier otro error (CORS al descargar la imagen, navegador raro, etc.)
-        // recurrimos al método clásico para no dejar al usuario sin poder enviar el mensaje.
-        abrirWaMeFallback();
-    }
-}
-
-// ── Copia texto al portapapeles sin mostrar ningún aviso (uso interno,
-//    para dejar el link listo "por si acaso" mientras se abre la app).
-function _copiarAlPortapapelesSilencioso(texto) {
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(texto).catch(function() { /* silencioso */ });
-        return;
-    }
-    try {
-        var ta = document.createElement('textarea');
-        ta.value = texto;
-        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-    } catch (e) { /* silencioso */ }
-}
-
-function compartirEnWhatsApp() {
-    // Usamos la URL del Worker (si está configurado) para que WhatsApp
-    // lea las meta tags OG y muestre la imagen del producto en la vista previa del link.
-    var urlParaWhatsApp = _urlOG(_scUrlActual);
-    var textoPlano = '🕯️ Mira este producto de Yesos Polo Kukúmita: ' + _scNombreActual + '\n' + urlParaWhatsApp;
-
-    // Dejamos el link copiado por si el usuario lo quiere pegar en otro lado.
-    _copiarAlPortapapelesSilencioso(urlParaWhatsApp);
-
-    // Vamos DIRECTO al enlace clásico de WhatsApp (wa.me), sin pasar por el
-    // menú nativo de "compartir archivo" del celular (ese es el que solo
-    // dejaba "copiar imagen"). Con wa.me: se abre la app de WhatsApp, el
-    // usuario elige el contacto, se abre el chat y el texto con el link
-    // YA está escrito en la caja — solo falta presionar enviar.
-    var texto = encodeURIComponent(textoPlano);
-    window.open('https://wa.me/?text=' + texto, '_blank');
-    cerrarSubmenuCompartir();
-}
-
-function compartirEnFacebook() {
-    // Usamos la URL del worker (si está configurado) para que Facebook
-    // lea las meta tags OG y muestre la imagen del producto.
-    var urlReal = _urlOG(_scUrlActual);
-    _copiarAlPortapapelesSilencioso(urlReal);
-    var urlParaFB = encodeURIComponent(urlReal);
-    // Sin width/height: en celular esto abre la app de Facebook (o pestaña
-    // completa) directo a la pantalla de compartir; en escritorio abre un popup.
-    window.open('https://www.facebook.com/sharer/sharer.php?u=' + urlParaFB, '_blank');
-    cerrarSubmenuCompartir();
-}
-
-function compartirEnInstagram() {
-    // Instagram no permite prellenar texto/link en una publicación o mensaje,
-    // así que copiamos el link y abrimos la app directamente para que el
-    // usuario solo tenga que pegarlo (Ctrl+V / mantener presionado > Pegar).
-    var urlReal = _urlOG(_scUrlActual);
-    _copiarAlPortapapelesSilencioso(urlReal);
-    mostrarToast('📸 Link copiado — pégalo en tu historia o mensaje de Instagram');
-
-    var esMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (esMobile) {
-        // Intenta abrir la app de Instagram directamente vía deep link.
-        window.location.href = 'instagram://app';
-    } else {
-        window.open('https://www.instagram.com/', '_blank');
-    }
-    cerrarSubmenuCompartir();
-}
-
-// Cerrar al hacer clic en el fondo
-_ready(function() {
-    var _sc = document.getElementById('submenuCompartir');
-    if (_sc) _sc.addEventListener('click', function(e) { if (e.target === this) cerrarSubmenuCompartir(); });
-});
-
-// ══════════════════════════════════════════════════════════════════════
-// FIRESTORE — cupones y favoritos vinculados al usuario Google
-// Reglas necesarias en Firebase Console (Firestore Rules):
-//
-//   rules_version = '2';
-//   service cloud.firestore {
-//     match /databases/{database}/documents {
-//       match /productos/{document} {
-//         allow read: if true;
-//         allow write: if false;
-//       }
-//       // Cada usuario solo lee y escribe su propio perfil
-//       match /usuarios/{userId}/{document=**} {
-//         allow read, write: if request.auth != null && request.auth.uid == userId;
-//       }
-//     }
-//   }
-//
-// ══════════════════════════════════════════════════════════════════════
-
-var _db = null;
-
-_ready(function() {
-    try {
-        if (typeof firebase !== 'undefined' && firebase.firestore) {
-            _db = firebase.firestore();
-        }
-    } catch(e) { console.warn('Firestore no disponible:', e); }
-});
-
-function _guardarCuponFirestore(codigo, cupDef, fechaObtenido) {
-    if (!_db) return;
-    try {
-        var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
-        if (!user) return;
-        _db.collection('usuarios').doc(user.uid)
-           .collection('cupones').doc(codigo.toUpperCase())
-           .set({
-               codigo:        codigo.toUpperCase(),
-               descuento:     cupDef.descuento,
-               tipo:          cupDef.tipo,
-               descripcion:   cupDef.descripcion,
-               origen:        cupDef.origen || 'desconocido',
-               fechaObtenido: fechaObtenido || new Date().toISOString(),
-               usado:         false
-           }, { merge: true });
-    } catch(e) { console.warn('Error guardando cupón:', e); }
-}
-
-function _cargarCuponesFirestore(uid) {
-    if (!_db || !uid) return;
-    _db.collection('usuarios').doc(uid).collection('cupones').get()
-       .then(function(snap) {
-           snap.forEach(function(doc) {
-               var d = doc.data();
-               if (d.usado) {
-                   // Agregar al historial de usados si no está ya
-                   var yaEsta = _cuponesUsados.some(function(c){ return c.codigo === d.codigo; });
-                   if (!yaEsta) {
-                       _cuponesUsados.push({
-                           codigo:        d.codigo,
-                           descuento:     d.descuento,
-                           tipo:          d.tipo,
-                           descripcion:   d.descripcion,
-                           origen:        d.origen,
-                           fechaObtenido: d.fechaObtenido,
-                           fechaUsado:    d.usadoEn || ''
-                       });
-                       _guardarHistorialUsados();
-                   }
-               } else {
-                   // Agregar a activos si no está ya
-                   var yaEstaA = _cuponesAplicados.some(function(c){ return c.codigo === d.codigo; });
-                   if (!yaEstaA) {
-                       _cuponesAplicados.push({
-                           codigo:        d.codigo,
-                           descuento:     d.descuento,
-                           tipo:          d.tipo,
-                           descripcion:   d.descripcion,
-                           origen:        d.origen,
-                           fechaObtenido: d.fechaObtenido
-                       });
-                   }
-               }
-           });
-           renderizarCarrito();
-       })
-       .catch(function(e){ console.warn('Error cargando cupones Firestore:', e); });
-}
-
-function _cargarFavoritosFirestore(uid) {
-    if (!_db || !uid) return;
-    _db.collection('usuarios').doc(uid).get().then(function(doc) {
-        if (doc.exists) {
-            var d = doc.data();
-            if (d.favoritos && Array.isArray(d.favoritos)) {
-                var localFavs = [];
-                try { localFavs = JSON.parse(localStorage.getItem('velas-favoritos') || '[]'); } catch(e) {}
-                var merged = Array.from(new Set(localFavs.concat(d.favoritos)));
-                localStorage.setItem('velas-favoritos', JSON.stringify(merged));
-                if (typeof syncBotonesLike === 'function') syncBotonesLike();
-            }
-        }
-    }).catch(function(){});
-}
-
-// Hook al onAuthStateChanged existente: cargar datos cuando el usuario inicia sesión
-(function() {
-    _ready(function() {
-        var _intentos = 0;
-        var _esperar = setInterval(function() {
-            _intentos++;
-            if (typeof auth !== 'undefined' && auth.onAuthStateChanged) {
-                clearInterval(_esperar);
-                auth.onAuthStateChanged(function(user) {
-                    if (user) {
-                        setTimeout(function() {
-                            _cargarCuponesFirestore(user.uid);
-                            _cargarFavoritosFirestore(user.uid);
-                        }, 600);
-                    }
-                });
-            }
-            if (_intentos > 40) clearInterval(_esperar);
-        }, 250);
-    });
-})();
-
-
-// ══════════════════════════════════════════════════════════════════════
-// WHATSAPP CARRITO — incluir cupones en el mensaje
-// ══════════════════════════════════════════════════════════════════════
-(function() {
-    var _origWA = window.pedirCotizacionWA;
-    window.pedirCotizacionWA = function() {
-        if (carrito.length === 0) { mostrarToast('Tu carrito está vacío'); return; }
-
-        var ahora = Date.now();
-        if (typeof _cotizacionUltimoEnvio !== 'undefined' && typeof _cotizacionCooldown !== 'undefined') {
-            if (ahora - _cotizacionUltimoEnvio < _cotizacionCooldown) {
-                var segs = Math.ceil((_cotizacionCooldown - (ahora - _cotizacionUltimoEnvio)) / 1000);
-                mostrarToast('⏳ Espera ' + segs + ' segundos antes de volver a enviar');
-                return;
-            }
-            _cotizacionUltimoEnvio = ahora;
-        }
-
-        var baseUrl     = window.location.origin + window.location.pathname;
-        var params      = carrito.map(function(i){ return 'p='+encodeURIComponent(i.nombre)+'&q='+i.cantidad+'&pr='+i.precio; }).join('&');
-        var linkCarrito = baseUrl + '?' + params + '#carrito';
-        var total       = carrito.reduce(function(s,i){ return s+(i.precio||0)*i.cantidad; }, 0);
-        var descuento   = (typeof calcularDescuentoCupones==='function') ? calcularDescuentoCupones(carrito) : 0;
-
-        var lineas = ['Hola, me gustaría pedir una cotización de los siguientes productos de Yesos Polo Kukúmita:\n'];
-        carrito.forEach(function(item, i) {
-            lineas.push((i+1)+'. *'+item.nombre+'*');
-            lineas.push('   Cantidad: '+item.cantidad+' piezas');
-            if (item.precio) lineas.push('   Precio unitario: $'+item.precio+' MXN');
-            if (item.precio) lineas.push('   Subtotal: $'+(item.precio*item.cantidad).toFixed(0)+' MXN');
-        });
-        if (total > 0) lineas.push('\n*Total estimado: $'+total.toFixed(0)+' MXN*');
-
-        if (_cuponesAplicados && _cuponesAplicados.length > 0) {
-            lineas.push('\n🎟️ *Cupones aplicados:*');
-            _cuponesAplicados.forEach(function(c) {
-                var prod = (c.productoIdx!==undefined && carrito[c.productoIdx]) ? ' (en "'+carrito[c.productoIdx].nombre+'")' : '';
-                lineas.push('   • '+c.codigo+' — '+c.descuento+(c.tipo==='porcentaje'?'%':' MXN')+prod);
-            });
-            if (descuento > 0) lineas.push('   _Ahorro: $'+descuento.toFixed(0)+' MXN_');
-            var conDesc = Math.max(0, total - descuento);
-            if (conDesc > 0) lineas.push('*Total con descuento: $'+conDesc.toFixed(0)+' MXN*');
-        }
-        lineas.push('\n🔗 Ver mi selección: '+linkCarrito);
-
-        var mensaje = lineas.join('\n');
-        var btn = document.getElementById('btnPedirCotizacion');
-        if (btn) { btn.disabled=true; btn.textContent='⏳ Enviando...'; }
-        setTimeout(function() {
-            window.open('https://wa.me/524431382094?text='+encodeURIComponent(mensaje), '_blank');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> Pedir Cotización por WhatsApp';
-            }
-        }, 800);
-    };
-})();
-
-// ══════════════════════════════════════════════════════════════════
-// FILTRO RÁPIDO POR EVENTO (carrusel "Busca por Evento")
-// ══════════════════════════════════════════════════════════════════
-(function() {
-    // Normaliza slugs: quita acentos, espacios→guion, todo minúsculas
-    function _normSlug(s) {
-        return (s || '').toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '');
-    }
-
-    window.filtrarPorEventoCarrusel = function(btnPulsado, evento) {
-        // Marcar botón activo
-        document.querySelectorAll('.btn-evento-carrusel').forEach(function(b) {
-            b.classList.remove('activo-evento');
-        });
-        btnPulsado.classList.add('activo-evento');
-
-        // Activar modo "Mostrar Todo" para que todas las cards sean candidatas
-        if (typeof window.cambiarModoVelas === 'function') {
-            window.cambiarModoVelas('mostrar_todo');
-        }
-
-        if (evento === 'todos') {
-            // Sin filtro de evento adicional — el modo mostrar_todo ya muestra todo
-            return;
-        }
-
-        // Pequeño retardo para que cambiarModoVelas termine de mostrar las cards
-        setTimeout(function() {
-            var slugFiltro = _normSlug(evento);
-            var cards = document.querySelectorAll('#gridProductos .card-dinamica');
-            var hay = false;
-            cards.forEach(function(card) {
-                var dataEvento = (card.getAttribute('data-evento') || '').toLowerCase();
-                // data-evento puede ser multi-valor separado por espacios
-                var slugs = dataEvento.split(/\s+/).map(_normSlug).filter(Boolean);
-                var coincide = slugs.includes(slugFiltro);
-                card.classList.toggle('oculto', !coincide);
-                card.classList.remove('paginacion-oculto');
-                if (coincide) hay = true;
-            });
-
-            // Actualizar paginación
-            if (typeof window.actualizarPaginacion === 'function') {
-                window.actualizarPaginacion();
-            }
-        }, 60);
-    };
-
-    // Ocultar/mostrar gradientes y botones según posición del scroll
-    window.actualizarGradienteEvento = function(el) {
-        var gradR = document.getElementById('eventoScrollGradient');
-        var gradL = document.getElementById('eventoScrollGradientL');
-        var btnPrev = document.getElementById('btnEventoPrev');
-        var btnNext = document.getElementById('btnEventoNext');
-        var maxScroll = el.scrollWidth - el.clientWidth;
-        var atEnd   = el.scrollLeft >= maxScroll - 8;
-        var atStart = el.scrollLeft <= 8;
-        if (gradR) gradR.style.opacity  = atEnd   ? '0' : '1';
-        if (gradL) gradL.style.opacity  = atStart ? '0' : '1';
-        if (btnPrev) btnPrev.style.opacity = atStart ? '0.35' : '1';
-        if (btnNext) btnNext.style.opacity = atEnd   ? '0.35' : '1';
-    };
-
-    window.scrollEventos = function(dir) {
-        var el = document.getElementById('eventoCarrusel');
-        if (!el) return;
-        el.scrollBy({ left: dir * 220, behavior: 'smooth' });
-    };
-
-    // Limpiar filtro de evento cuando el usuario cambia de tab manualmente
-    _ready(function() {
-        document.querySelectorAll('.btn-modo-velas').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.btn-evento-carrusel').forEach(function(b) {
-                    b.classList.remove('activo-evento');
-                });
-            });
-        });
-    });
-})();
-
-// ══════════════════════════════════════════════════════════════════
-(function() {
-    var _modoGuardado = null;
-    var _precioExactoGuardado = null;
-    var _precioArreglosGuardado = null;
-
-    window.busquedaGlobal = function(valor) {
-        var query = (valor || '').trim().toLowerCase();
-        var btnLimpiar  = document.getElementById('btnLimpiarGlobal');
-        var infoEl      = document.getElementById('resultadosGlobalInfo');
-        if (btnLimpiar) btnLimpiar.style.display = query ? 'block' : 'none';
-
-        if (!query) {
-            limpiarBusquedaGlobal();
-            return;
-        }
-
-        // Marcar modo búsqueda global activo
-        document.body.classList.add('busqueda-global-activa');
-
-        // Mostrar TODAS las cards que coincidan con el nombre, sin importar tipo ni precio
-        var cards = document.querySelectorAll('#gridProductos .card-dinamica');
-        var total = 0;
-        cards.forEach(function(card) {
-            var nombre = (card.getAttribute('data-nombre') || '');
-            var match  = coincideNombre(nombre, query, card);
-            card.classList.toggle('oculto', !match);
-            card.classList.remove('paginacion-oculto');
-            if (match) total++;
-        });
-
-        // Info de resultados
-        if (infoEl) {
-            infoEl.style.display = 'block';
-            infoEl.textContent = total > 0
-                ? total + ' resultado' + (total !== 1 ? 's' : '') + ' para "' + valor.trim() + '"'
-                : 'Sin resultados para "' + valor.trim() + '"';
-        }
-
-        // Actualizar paginación con resultados globales
-        if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-    };
-
-    window.limpiarBusquedaGlobal = function() {
-        var input    = document.getElementById('inputBusquedaGlobal');
-        var btnLimpiar = document.getElementById('btnLimpiarGlobal');
-        var infoEl   = document.getElementById('resultadosGlobalInfo');
-        if (input) input.value = '';
-        if (btnLimpiar) btnLimpiar.style.display = 'none';
-        if (infoEl) infoEl.style.display = 'none';
-        document.body.classList.remove('busqueda-global-activa');
-
-        // Restaurar el modo activo actual para que sus filtros vuelvan a aplicar
-        var btnActivo = document.querySelector('.btn-modo-velas.activo');
-        if (btnActivo) {
-            var modos = {
-                'btnModoTodosProductos':  'mostrar_todo',
-                'btnModoArreglos':        'arreglos',
-                'btnModoPaquetes':        'paquetes',
-                'btnModoEtiquetas':       'etiquetas'
-            };
-            var modo = modos[btnActivo.id] || 'mostrar_todo';
-            if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas(modo);
-        } else {
-            // Fallback: mostrar todo
-            if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas('mostrar_todo');
-        }
-    };
-
-    // Limpiar búsqueda global cuando el usuario cambia de tab
-    _ready(function() {
-        var tabBtns = document.querySelectorAll('.btn-modo-velas');
-        tabBtns.forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var input = document.getElementById('inputBusquedaGlobal');
-                if (input && input.value.trim()) {
-                    input.value = '';
-                    document.getElementById('btnLimpiarGlobal').style.display = 'none';
-                    var infoEl = document.getElementById('resultadosGlobalInfo');
-                    if (infoEl) infoEl.style.display = 'none';
-                    document.body.classList.remove('busqueda-global-activa');
-                }
-            });
-        });
-
-        // Enter en la barra también ejecuta búsqueda
-        var input = document.getElementById('inputBusquedaGlobal');
-        if (input) {
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') limpiarBusquedaGlobal();
-            });
-        }
-    });
-})();
-
-// ══════════════════════════════════════════════════════════════════
-// PANEL BUSCA POR EVENTO — colapsar / expandir
-// ══════════════════════════════════════════════════════════════════
-window.togglePanelEventos = function() {
-    var panel = document.getElementById('panelEventoCarrusel');
-    var icono = document.getElementById('iconToggleEventos');
-    if (!panel) return;
-    var visible = panel.style.display !== 'none';
-    panel.style.display = visible ? 'none' : 'block';
-    if (icono) icono.textContent = visible ? '▼' : '▲';
-};
-
-window.togglePanelFormas = function() {
-    var panel = document.getElementById('panelFormaCarrusel');
-    var icono = document.getElementById('iconToggleFormas');
-    if (!panel) return;
-    var visible = panel.style.display !== 'none';
-    panel.style.display = visible ? 'none' : 'block';
-    if (icono) icono.textContent = visible ? '▼' : '▲';
-};
-
-// Filtro de forma global usando columna EtiquetaPrincipal (data-tipos, col G)
-var formaCarruselActiva = 'todos';
-
-window.seleccionarFormaCarrusel = function(btn, forma) {
-    formaCarruselActiva = forma;
-    // Marcar activo
-    document.querySelectorAll('.btn-forma-carrusel').forEach(function(b) {
-        b.classList.remove('activo-evento');
-        b.style.background = '';
-        b.style.color = '';
-        b.style.borderColor = '';
-    });
-    btn.classList.add('activo-evento');
-    if (forma === 'todos') {
-        btn.style.background = '#1a1a1a';
-        btn.style.color = '#fff';
-        btn.style.borderColor = '#1a1a1a';
-    }
-    // Aplicar filtro a todas las cards visibles
-    aplicarFiltroFormaCarrusel();
-};
-
-function aplicarFiltroFormaCarrusel() {
-    document.querySelectorAll('.card-dinamica').forEach(function(card) {
-        if (formaCarruselActiva === 'todos') {
-            card.classList.remove('oculto-forma-carrusel');
-        } else {
-            // Usa tieneTipo() para aprovechar las variantes definidas (col G / data-tipos)
-            var coincide = tieneTipo(card, formaCarruselActiva);
-            card.classList.toggle('oculto-forma-carrusel', !coincide);
-        }
-    });
-    // Limpiar hash de página para que actualizarPaginacion arranque siempre desde la 1
-    if (window.history && window.history.replaceState) {
-        var hashLimpio = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '');
-        window.history.replaceState(null, '', hashLimpio ? '#' + hashLimpio : window.location.pathname);
-    }
-    if (typeof window.actualizarPaginacion === 'function') window.actualizarPaginacion();
-}
-
-
-
-// ══════════════════════════════════════════════════════════════════
-// _reordenarBuscadorArreglos eliminada — el orden se mantiene directamente en cambiarModoVelas.
-
-// ══════════════════════════════════════════════════════════════════
-// AVISO DE PRIVACIDAD Y COOKIES
-// ══════════════════════════════════════════════════════════════════
-
-var _COOKIE_KEY = 'yesosfer-cookies-aceptadas';
-
-/**
- * Inicializa la barra de cookies al cargar la página.
- * Si el usuario ya aceptó antes, la oculta de inmediato sin animación.
- */
-function _initBarraCookies() {
-    var barra = document.getElementById('barraCookies');
-    if (!barra) return;
-    if (localStorage.getItem(_COOKIE_KEY) === '1') {
-        barra.classList.add('oculta');
-    }
-    // Desplaza hacia abajo el botón del drawer para que no quede tapado
-    _ajustarOffsetDrawer();
-}
-
-/**
- * El usuario presionó "Aceptar" — guarda en localStorage y oculta la barra.
- */
-function aceptarCookies() {
-    localStorage.setItem(_COOKIE_KEY, '1');
-    var barra = document.getElementById('barraCookies');
-    if (barra) barra.classList.add('oculta');
-}
-
-/**
- * Abre la pantalla de aviso de privacidad (desliza desde la derecha).
- */
-function abrirPantallaPrivacidad() {
-    var pantalla = document.getElementById('pantallaPrivacidad');
-    if (!pantalla) return;
-    // Mostrar primero (quita el display:none), luego en el siguiente frame agregar la clase
-    // para que la transición CSS se ejecute correctamente
-    pantalla.style.display = 'flex';
-    requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-            pantalla.classList.add('abierta');
-        });
-    });
-    history.pushState({ kukumitaModal: 'privacidad' }, '');
-}
-
-/**
- * Cierra la pantalla de aviso de privacidad.
- */
-function cerrarPantallaPrivacidad() {
-    var pantalla = document.getElementById('pantallaPrivacidad');
-    if (!pantalla) return;
-    pantalla.classList.remove('abierta');
-    // Esperar a que termine la transición (280ms) antes de volver a ocultar
-    setTimeout(function() {
-        if (!pantalla.classList.contains('abierta')) {
-            pantalla.style.display = 'none';
-        }
-    }, 300);
-}
-
-/**
- * Ajusta el top del btn-abrir-drawer para que no quede debajo de la barra de cookies
- * cuando esta está visible. En móvil la barra mide ~38px, en desktop ~32px.
- */
-function _ajustarOffsetDrawer() {
-    var barra   = document.getElementById('barraCookies');
-    var btnMenu = document.querySelector('.btn-abrir-drawer');
-    if (!barra || !btnMenu) return;
-    if (barra.classList.contains('oculta')) {
-        btnMenu.style.top = '';   // valor CSS por defecto
-    } else {
-        var altoBarra = barra.offsetHeight || 38;
-        btnMenu.style.top = (altoBarra + 8) + 'px';
-    }
-}
-
-// Conectar cierre con el botón Atrás del navegador/móvil
-(function _patchPopstatePrivacidad() {
-    var _popOriginal = window.onpopstate;
-    window.addEventListener('popstate', function(e) {
-        // Si la pantalla de privacidad está abierta, cerrarla primero
-        var pantalla = document.getElementById('pantallaPrivacidad');
-        if (pantalla && pantalla.classList.contains('abierta')) {
-            pantalla.classList.remove('abierta');
-            setTimeout(function() {
-                if (!pantalla.classList.contains('abierta')) {
-                    pantalla.style.display = 'none';
-                }
-            }, 300);
-        }
-    });
-})();
-
-// Inicializar barra de cookies cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', _initBarraCookies);
+dibujarCuenta();
+programarCaducidad();
+iniciarGoogle();
+
+// ---------- Inicio ----------
+// Al abrir o recargar la página (F5) el calendario ya aparece en la fecha actual
+mostrarSeccion("calendario");
+cargarDatos();
