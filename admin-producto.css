@@ -1,0 +1,142 @@
+/* ══════════════════════════════════════════════════════════════
+   Yesos Polo Kukúmita — Agregar producto (solo administradores)
+   Estilos propios del formulario; todo va acotado a #submenuAgregarProducto
+   para no tocar el resto del sitio. Versión: paso 2 (formulario básico).
+   ══════════════════════════════════════════════════════════════ */
+#submenuAgregarProducto,
+#submenuAgregarProducto * {
+    box-sizing: border-box;
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#submenuAgregarProducto {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 30000;
+    background: #fdfaf7;
+    overflow-y: auto; overscroll-behavior: contain;
+}
+#submenuAgregarProducto.abierto { display: block; }
+
+/* Encabezado: flecha a la izquierda, título centrado */
+#submenuAgregarProducto .sap-header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    height: 70px; padding: 0 16px;
+    background: #fdfaf7; border-bottom: 1px solid #ebe3db;
+}
+#submenuAgregarProducto .sap-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: #362a22; }
+#submenuAgregarProducto .sap-cerrar {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border: none; border-radius: 50%;
+    background: transparent; color: #362a22; cursor: pointer;
+    font-size: 30px; line-height: 1; padding-bottom: 4px;
+}
+#submenuAgregarProducto .sap-cerrar:hover { background: rgba(0,0,0,0.06); }
+
+/* Tarjeta central */
+#submenuAgregarProducto .sap-cuerpo {
+    width: calc(100% - 24px); max-width: 860px; margin: 22px auto 40px;
+    padding: 18px; display: flex; flex-direction: column; gap: 12px;
+    background: #fffcf9; border: 1px solid #e8dfd6; border-radius: 16px;
+}
+.sap-seccion-titulo { font-size: 12px; font-weight: 700; color: #8c7565; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 10px; }
+.sap-nota { font-size: 12px; color: #a89080; margin: 0; }
+.sap-estado { font-size: 13px; color: #8c7565; min-height: 18px; }
+.sap-estado.error { color: #c0392b; }
+.sap-dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sap-dos-col .panel-nombre-label { display: block; margin-bottom: 6px; }
+
+/* Campos (mismas clases que usa Fer, para poder reutilizar su HTML en los siguientes pasos) */
+#submenuAgregarProducto .panel-nombre-label { display: block; font-size: 13px; font-weight: 600; color: #5c4d43; }
+#submenuAgregarProducto .panel-nombre-input {
+    width: 100%; padding: 11px 12px; font-size: 15px; color: #362a22;
+    background: #fff; border: 1.5px solid #e0d5cc; border-radius: 10px; outline: none;
+}
+#submenuAgregarProducto .panel-nombre-input:focus { border-color: #e8607a; }
+#submenuAgregarProducto textarea.panel-nombre-input { resize: vertical; min-height: 70px; }
+
+/* Botones de acción */
+#submenuAgregarProducto .panel-nombre-acciones { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+#submenuAgregarProducto .panel-nombre-btn {
+    padding: 11px 20px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+#submenuAgregarProducto .panel-nombre-btn.cancelar { background: #f0eae4; color: #5c4d43; }
+#submenuAgregarProducto .panel-nombre-btn.guardar { background: #e8607a; color: #fff; }
+#submenuAgregarProducto .panel-nombre-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Tarjeta "Agregar imagen" */
+.sap-agregar-imagen {
+    display: flex; align-items: center; gap: 14px; width: 100%;
+    padding: 14px 16px; background: #fff; border: 1.5px solid #e6ddd4; border-radius: 14px;
+    cursor: pointer; text-align: left; color: #362a22;
+}
+.sap-agregar-imagen:active { background: #f8f4f0; }
+.sap-agregar-imagen-icono { font-size: 30px; line-height: 1; flex-shrink: 0; }
+.sap-agregar-imagen strong { display: block; font-size: 16px; font-weight: 700; }
+.sap-agregar-imagen small { display: block; font-size: 12px; color: #a89080; margin-top: 2px; }
+.sap-link-imagen { display: flex; flex-direction: column; gap: 6px; }
+#previewImagenProducto, #previewUrlImagenProducto {
+    width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: #f3ede7;
+}
+
+/* Medidas / existencia con botones − / + */
+.sap-medida { display: flex; align-items: stretch; gap: 6px; }
+.sap-medida .panel-nombre-input { flex: 1; min-width: 0; text-align: center; }
+.sap-medida-btn {
+    width: 40px; flex-shrink: 0; border: 1.5px solid #e0d5cc; background: #f8f4f0; color: #6b5548;
+    border-radius: 10px; font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; font-family: inherit;
+}
+.sap-medida-btn:active { background: #e8607a; border-color: #e8607a; color: #fff; }
+
+/* Chips y botones Sí/No */
+.sap-zona { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid #c3dbf3; background: #e8f2fc; }
+.sap-zona .sap-seccion-titulo { margin-top: 0; }
+.sap-chips {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0;
+    background: #fff; border: 1px solid #e3d9d0; border-radius: 12px; overflow: hidden;
+}
+.sap-chip {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 44px; padding: 10px 6px; line-height: 1.25;
+    font-size: 12.5px; font-weight: 500; color: #6b5548; cursor: pointer; font-family: inherit;
+    background: transparent; border: 0; border-radius: 0;
+    border-right: 1px solid #eee5dc; border-bottom: 1px solid #eee5dc;
+}
+.sap-chips .sap-chip:nth-child(3n) { border-right: 0; }
+.sap-chip.activo { background: #e8607a; color: #fff; }
+.sap-toggle { border: 1.5px solid #e0d5cc; background: #f8f4f0; border-radius: 12px; padding: 12px 10px; text-align: center; font-size: 13px; font-weight: 600; color: #6b5548; cursor: pointer; font-family: inherit; }
+.sap-toggle.activo { background: #e8607a; border-color: #e8607a; color: #fff; }
+.sap-toggle .sap-toggle-estado { font-weight: 800; }
+@media (max-width: 420px) {
+    .sap-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sap-chips .sap-chip:nth-child(3n) { border-right: 1px solid #eee5dc; }
+    .sap-chips .sap-chip:nth-child(2n) { border-right: 0; }
+}
+
+/* Dos columnas en pantallas grandes: imagen y datos a la izquierda, etiquetas a la derecha */
+.sap-col-img, .sap-col-datos { display: contents; }
+@media (min-width: 900px) {
+    #submenuAgregarProducto .sap-cuerpo {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        column-gap: 28px; row-gap: 12px; align-items: start;
+    }
+    .sap-col-img, .sap-col-datos { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    #submenuAgregarProducto .sap-cuerpo > .panel-nombre-acciones { grid-column: 1 / -1; }
+}
+
+/* Modo oscuro */
+body.modo-oscuro #submenuAgregarProducto { background: #1a1410; }
+body.modo-oscuro #submenuAgregarProducto .sap-header { background: #1a1410; border-color: #3a3028; }
+body.modo-oscuro #submenuAgregarProducto .sap-header h3,
+body.modo-oscuro #submenuAgregarProducto .sap-cerrar { color: #e0d5cc; }
+body.modo-oscuro #submenuAgregarProducto .sap-cuerpo { background: #211a14; border-color: #3a3028; }
+body.modo-oscuro #submenuAgregarProducto .panel-nombre-label { color: #d8c9bd; }
+body.modo-oscuro #submenuAgregarProducto .panel-nombre-input { background: #2a2218; border-color: #4a3a2e; color: #f0e8e0; }
+body.modo-oscuro .sap-agregar-imagen { background: #2a2218; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro .sap-medida-btn, body.modo-oscuro .sap-toggle { background: #2a2218; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro .sap-toggle.activo { background: #e8607a; border-color: #e8607a; color: #fff; }
+body.modo-oscuro .sap-chips { background: #2a2218; border-color: #4a3a2e; }
+body.modo-oscuro .sap-chip { color: #e0d5cc; border-color: #3a3028; }
+body.modo-oscuro .sap-chip.activo { background: #e8607a; color: #fff; }
+body.modo-oscuro .sap-zona { background: #1f2a36; border-color: #34506b; }
+body.modo-oscuro #submenuAgregarProducto .panel-nombre-btn.cancelar { background: #33291f; color: #e0d5cc; }

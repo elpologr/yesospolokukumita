@@ -80,6 +80,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="admin-producto.css?v=1">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -404,6 +405,15 @@
                 <div>
                     Contraseña
                     <span class="op-sub" id="subContrasenaInfo">Actualiza tu contraseña de acceso</span>
+                </div>
+            </button>
+
+            <!-- ══ BOTÓN OCULTO SOLO PARA ADMINISTRADORES ══ -->
+            <button class="btn-opcion-perfil" id="btnAgregarProducto" style="display:none;" onclick="abrirSubmenuAgregarProducto()">
+                <span class="op-icono">➕</span>
+                <div>
+                    Agregar producto
+                    <span class="op-sub">Agrega un producto nuevo a la hoja de Polo</span>
                 </div>
             </button>
 
@@ -1675,6 +1685,112 @@
     </div>
 </div>
 
+<!-- ══ AGREGAR PRODUCTO (solo administradores) — admin-producto.js / admin-producto.css ══ -->
+<div id="submenuAgregarProducto">
+    <div class="sap-header">
+        <button class="sap-cerrar" type="button" aria-label="Volver" onclick="cerrarSubmenuAgregarProducto()">‹</button>
+        <h3 id="sapTitulo">Agregar producto</h3>
+    </div>
+
+    <div class="sap-cuerpo">
+      <div class="sap-col-img">
+        <div class="sap-seccion-titulo">Imagen principal *</div>
+        <button class="sap-agregar-imagen" type="button" onclick="elegirImagenProducto()">
+            <span class="sap-agregar-imagen-icono">🖼️</span>
+            <span><strong id="sapBtnImagenTitulo">Agregar imagen</strong><small id="sapBtnImagenSub">Se reduce y se sube a ImgBB al guardar</small></span>
+        </button>
+        <input type="file" id="inputImagenProducto" accept="image/*" style="display:none" onchange="previsualizarImagenProducto(event)">
+        <img id="previewImagenProducto" src="" alt="Vista previa" style="display:none;">
+        <div class="sap-estado" id="sapImagenEstado"></div>
+
+        <div class="sap-link-imagen">
+            <label class="panel-nombre-label" for="inputUrlImagenProducto">…o pega un link de imgbb que ya tengas</label>
+            <input id="inputUrlImagenProducto" class="panel-nombre-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://i.ibb.co/..." oninput="alCambiarUrlImagen()">
+            <div id="sapUrlImagenEstado" class="sap-estado"></div>
+            <img id="previewUrlImagenProducto" src="" alt="Vista previa del link" style="display:none;">
+            <p class="sap-nota">Usa el <strong>enlace directo</strong> de imgbb (empieza con https://i.ibb.co/). En Polo la imagen principal es la pieza sobre el fondo azul.</p>
+        </div>
+
+        <label class="panel-nombre-label" for="inputNombreProducto">Nombre *</label>
+        <input id="inputNombreProducto" class="panel-nombre-input" type="text" maxlength="80" placeholder="Ej. Maceta de Flor" oninput="validarFormularioProducto()">
+
+        <div class="sap-dos-col">
+            <div>
+                <label class="panel-nombre-label" for="inputPrecioOriginal">Precio original *</label>
+                <input id="inputPrecioOriginal" class="panel-nombre-input" type="number" inputmode="decimal" min="0" step="any" placeholder="0" oninput="validarFormularioProducto()">
+            </div>
+            <div>
+                <label class="panel-nombre-label" for="inputPrecioBazar">Precio mayoreo</label>
+                <input id="inputPrecioBazar" class="panel-nombre-input" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+            </div>
+        </div>
+
+        <div class="sap-dos-col">
+            <div>
+                <label class="panel-nombre-label" for="inputAltoProducto">📏 Alto (cm)</label>
+                <div class="sap-medida">
+                    <button type="button" class="sap-medida-btn" aria-label="Disminuir alto" onclick="ajustarMedidaProducto('inputAltoProducto', -1)">−</button>
+                    <input id="inputAltoProducto" class="panel-nombre-input" type="number" inputmode="decimal" min="0" max="1000" step="any" placeholder="0">
+                    <button type="button" class="sap-medida-btn" aria-label="Aumentar alto" onclick="ajustarMedidaProducto('inputAltoProducto', 1)">+</button>
+                </div>
+            </div>
+            <div>
+                <label class="panel-nombre-label" for="inputAnchoProducto">📐 Ancho (cm)</label>
+                <div class="sap-medida">
+                    <button type="button" class="sap-medida-btn" aria-label="Disminuir ancho" onclick="ajustarMedidaProducto('inputAnchoProducto', -1)">−</button>
+                    <input id="inputAnchoProducto" class="panel-nombre-input" type="number" inputmode="decimal" min="0" max="1000" step="any" placeholder="0">
+                    <button type="button" class="sap-medida-btn" aria-label="Aumentar ancho" onclick="ajustarMedidaProducto('inputAnchoProducto', 1)">+</button>
+                </div>
+            </div>
+        </div>
+        <p class="sap-nota">Opcional. Se guarda en la columna I como <strong>alto/ancho</strong> (ej. 12/8).</p>
+
+        <label class="panel-nombre-label" for="inputDescripcionProducto">Descripción</label>
+        <textarea id="inputDescripcionProducto" class="panel-nombre-input" rows="3" maxlength="500" placeholder="Opcional"></textarea>
+
+        <div class="sap-seccion-titulo">Video</div>
+        <label class="panel-nombre-label" for="inputVideoProducto">▶ Link de YouTube (opcional)</label>
+        <input id="inputVideoProducto" class="panel-nombre-input" type="text" inputmode="url" maxlength="400" placeholder="https://www.youtube.com/watch?v=… o código embed">
+        <p class="sap-nota">Puedes pegar el link normal, el link embed o el código &lt;iframe&gt; de YouTube. Se guarda en la columna F como link embed.</p>
+
+        <div class="sap-seccion-titulo">Existencia, oferta y más vendido</div>
+        <label class="panel-nombre-label" for="inputExistenciaProducto">📦 Existencia (piezas ya fabricadas)</label>
+        <div class="sap-medida">
+            <button type="button" class="sap-medida-btn" aria-label="Disminuir existencia" onclick="ajustarExistenciaProducto(-1)">−</button>
+            <input id="inputExistenciaProducto" class="panel-nombre-input" type="number" inputmode="numeric" min="0" max="100000" step="1" placeholder="0">
+            <button type="button" class="sap-medida-btn" aria-label="Aumentar existencia" onclick="ajustarExistenciaProducto(1)">+</button>
+        </div>
+        <div class="sap-dos-col">
+            <button type="button" class="sap-toggle" id="btnEnOfertaProducto" aria-pressed="false" onclick="alternarToggleProducto(this)">🔥 En Oferta: <span class="sap-toggle-estado">No</span></button>
+            <button type="button" class="sap-toggle" id="btnMasVendidoProducto" aria-pressed="false" onclick="alternarToggleProducto(this)">🏆 Más Vendido: <span class="sap-toggle-estado">No</span></button>
+        </div>
+        <p class="sap-nota">Existencia va en la columna J, En Oferta en la K y Más Vendido en la L (se escribe "si" o "no"). El producto se agrega al final de la hoja.</p>
+      </div><!-- /sap-col-img -->
+
+      <div class="sap-col-datos">
+        <div class="sap-zona">
+            <div class="sap-seccion-titulo">Etiqueta principal *</div>
+            <div class="sap-chips" id="chipsEtiquetaPrincipal">
+                <button type="button" class="sap-chip" data-valor="arreglos" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🕯️ Arreglos</button>
+                <button type="button" class="sap-chip" data-valor="productos" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">📦 Productos</button>
+                <button type="button" class="sap-chip" data-valor="decoraciones" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🎀 Decoraciones</button>
+                <button type="button" class="sap-chip" data-valor="aditamentos" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">✨ Aditamentos</button>
+                <button type="button" class="sap-chip" data-valor="etiquetas" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🏷️ Etiquetas</button>
+                <button type="button" class="sap-chip" data-valor="centro de mesa" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🌸 Centros de mesa</button>
+                <button type="button" class="sap-chip" data-valor="figuras" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🗿 Figuras</button>
+                <button type="button" class="sap-chip" data-valor="religioso" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">⛪ Religioso</button>
+            </div>
+            <p class="sap-nota">Puedes elegir más de una. Se guarda en la columna G de la hoja.</p>
+        </div>
+      </div><!-- /sap-col-datos -->
+
+      <div class="panel-nombre-acciones">
+          <button class="panel-nombre-btn cancelar" type="button" onclick="cerrarSubmenuAgregarProducto()">Cancelar</button>
+          <button class="panel-nombre-btn guardar" id="btnGuardarProducto" type="button" disabled onclick="guardarProductoAdmin()">Guardar</button>
+      </div>
+    </div>
+</div>
+
 <!-- Firebase SDK (versión compat para uso directo en HTML) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1999,6 +2115,7 @@
     <!-- JavaScript externo -->
     <script src="config.js?v=7"></script>
     <script src="app.js?v=4"></script>
+    <script src="admin-producto.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
     <script>
