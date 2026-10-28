@@ -515,6 +515,9 @@ function renderizarCatalogoEnGrid(gridId, productos) {
         card.setAttribute('data-evento',          p.eventos || '');
         card.setAttribute('data-precio',          String(parseInt(p.precioNormal, 10) || 0));
         card.setAttribute('data-precio-bazar',    String(parseInt(p.precioBazar,  10) || ''));
+        // Precios con decimales tal como están en la hoja (los usa "Configurar producto" de los administradores)
+        card.setAttribute('data-precio-exacto',        p.precioNormal ? String(p.precioNormal) : '');
+        card.setAttribute('data-precio-bazar-exacto',  p.precioBazar  ? String(p.precioBazar)  : '');
         card.setAttribute('data-tipo',            p.tipo  || 'arreglo');
         card.setAttribute('data-tipos',           (p.tipos || [p.tipo || 'arreglo']).join('|'));
         card.setAttribute('data-subtags',         p.subtags || '');
@@ -3286,6 +3289,8 @@ function _datosProductoEliminable() {
     var card = window._cardModalActual;
     if (!card) return null;
     if ((card.getAttribute('data-origen-externo') || '') !== '') return null;
+    // Solo las tarjetas del catálogo de Polo (#gridProductos): las del botón "Etiquetas" vienen de la hoja de Velas
+    if (!card.closest('#gridProductos')) return null;
     var fila = parseInt(card.getAttribute('data-sheet-row'), 10);
     var nombre = (card.getAttribute('data-nombre') || '').trim();
     if (!isFinite(fila) || fila < 2 || !nombre) return null;
@@ -3318,6 +3323,7 @@ function abrirEliminarProducto() {
     var user = auth.currentUser;
     var datos = _datosProductoEliminable();
     if (!esCorreoAdmin(user) || !datos) return; // por si acaso; el servidor vuelve a verificar
+    if (typeof _adminBloqueado === 'function' && _adminBloqueado(0)) return; // se movió un producto: las filas cambiaron
     _eliminarProducto = datos;
     var info = document.getElementById('mepProducto');
     if (info) info.textContent = '¿Seguro que quieres eliminar «' + datos.nombre + '» (fila ' + datos.fila + ')?';

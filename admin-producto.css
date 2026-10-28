@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
    Yesos Polo Kukúmita — Agregar producto (solo administradores)
    Estilos propios del formulario; todo va acotado a #submenuAgregarProducto
-   para no tocar el resto del sitio. Versión: paso 4a (formulario + fotos adicionales + editor de imagen + sub-etiquetas).
+   para no tocar el resto del sitio. Versión: paso 4b (formulario + fotos adicionales + editor de imagen + sub-etiquetas + modo edición).
    ══════════════════════════════════════════════════════════════ */
 #submenuAgregarProducto,
 #submenuAgregarProducto * {
@@ -169,3 +169,8 @@ body.modo-oscuro .sap-previa-img figcaption { color: #a89080; }
 .sap-subtag button { width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; background: #c3dbf3; color: #3b5b78; font-size: 11px; line-height: 20px; cursor: pointer; }
 body.modo-oscuro .sap-subtag { background: #2a2218; border-color: #34506b; color: #cfe3f7; }
 body.modo-oscuro .sap-subtag button { background: #34506b; color: #cfe3f7; }
+
+/* ── Modo edición: imágenes que el producto ya tiene ── */
+.sap-extra.reemplazada { opacity: 0.35; }
+.sap-extra.reemplazada::after { content: 'se reemplaza'; position: absolute; inset: auto 0 0 0; font-size: 8px; font-weight: 800; text-align: center; color: #fff; background: rgba(192,57,43,0.85); padding: 1px 0; }
+#sapExistentesLista { max-height: none; }

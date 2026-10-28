@@ -9,7 +9,10 @@
 // arma sobre el fondo azul de Polo con título; esa imagen final es la que se sube a imgbb.
 // Paso 4a: sub-etiquetas (columna H). Polo no tiene columnas de evento ni de forma como Fer: sus
 // "sub etiquetas" (cirio, tazón, stich…) van todas juntas en la columna H.
-// Todavía NO incluye: configurar (editar) ni mover producto (vienen en los siguientes pasos).
+// Paso 4b: configurar (editar) y mover producto, solo administradores. Desde el modal de un producto del
+// catálogo de Polo: "⚙️ Editar" abre este mismo formulario con los datos del producto (modo edición) y
+// "↕️ Mover" abre un diálogo para cambiar su lugar en la hoja. El servidor (CodePolo.gs) comprueba por nombre
+// que la fila siga siendo ese producto; si la hoja cambió, no toca nada.
 //
 // La seguridad real está en el servidor (CodePolo.gs): vuelve a verificar el idToken de Firebase
 // y el correo contra CORREOS_ADMIN. Aquí solo se muestra u oculta el botón.
@@ -20,6 +23,12 @@ var _principalElegida = false;
 var _subEtiquetasProducto = [];         // sub-etiquetas elegidas (columna H), en minúsculas y sin repetir
 var MAX_SUBETIQUETAS = 15;          // true desde que se elige una foto, aunque el editor aún la esté armando
 var _guardandoProducto = false;
+
+// Modo edición (paso 4b)
+var _edicionProducto = null;       // null = agregando; { fila, nombre, etiquetasExtra: [], medidasTexto: '' } = editando
+var _imagenesExistentes = [];      // links de imgbb que el producto ya tiene en la hoja (la 1ª es la principal)
+var _filasEditadas = {};           // filas que ya se guardaron en esta sesión (hay que recargar antes de volver a editarlas)
+var _catalogoMovido = false;       // true si se movió un producto: los números de fila de la página ya no valen
 
 // Fotos adicionales (galería): la principal es la 1ª imagen del producto; el resto se suben tal cual (reducidas)
 var MAX_IMAGENES_PRODUCTO = 50;
@@ -50,6 +59,7 @@ function abrirSubmenuAgregarProducto() {
     if (!esCorreoAdmin(user)) return; // por si acaso; el servidor vuelve a verificar
     var sub = document.getElementById('submenuAgregarProducto');
     if (!sub) return;
+    if (_edicionProducto) { limpiarFormularioProducto(); _salirModoEdicion(); } // venía de editar: empezar limpio
     sub.classList.add('abierto');
     sub.scrollTop = 0;
     _llenarSugerenciasSubEtiquetas();
@@ -60,10 +70,15 @@ function abrirSubmenuAgregarProducto() {
 function cerrarSubmenuAgregarProducto() {
     var sub = document.getElementById('submenuAgregarProducto');
     if (!sub || !sub.classList.contains('abierto')) return;
+    if (_edicionProducto && _guardandoProducto) { mostrarToast('Espera a que termine de guardar.'); return; }
     sub.classList.remove('abierto');
-    // La pantalla de perfil sigue abierta debajo: mantener el scroll de fondo bloqueado
+    // Al cerrar una edición sin guardar se descartan los cambios (lo escrito en "Agregar" sí se conserva)
+    if (_edicionProducto) { limpiarFormularioProducto(); _salirModoEdicion(); }
+    // La pantalla de perfil o el modal del producto siguen abiertos debajo: mantener el scroll de fondo bloqueado
     var perfil = document.getElementById('pantallaPerfil');
-    if (!(perfil && perfil.classList.contains('activo'))) document.body.style.overflow = '';
+    var modalProd = document.getElementById('modalProducto');
+    var hayDebajo = (perfil && perfil.classList.contains('activo')) || (modalProd && modalProd.classList.contains('abierto'));
+    if (!hayDebajo) document.body.style.overflow = '';
 }
 
 // ── Utilidades del formulario ──
@@ -90,6 +105,8 @@ function obtenerEtiquetasPrincipales() {
     document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip.activo').forEach(function (b) {
         lista.push(b.getAttribute('data-valor'));
     });
+    // Al editar: etiquetas que ya tenía la hoja y que no tienen botón aquí (ej. "arreglo") se conservan
+    if (_edicionProducto) _edicionProducto.etiquetasExtra.forEach(function (t) { if (lista.indexOf(t) === -1) lista.push(t); });
     return lista;
 }
 
@@ -128,7 +145,7 @@ function ajustarMedidaProducto(idInput, delta) {
 
 // "Guardar" se habilita solo con nombre, precio original, imagen y al menos una etiqueta principal
 function validarFormularioProducto() {
-    var hayImagen = !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
+    var hayImagen = _imagenPrincipalLista();
     var ok = _campoProducto('inputNombreProducto') !== '' && _campoProducto('inputPrecioOriginal') !== ''
              && hayImagen && obtenerEtiquetasPrincipales().length > 0 && !_guardandoProducto && !_procesandoFotosProducto;
     var btn = document.getElementById('btnGuardarProducto');
@@ -148,6 +165,7 @@ function limpiarFormularioProducto() {
     _subEtiquetasProducto = [];
     _renderSubEtiquetas();
     _imagenesExtraProducto = [];
+    _imagenesExistentes = [];
     var pf = document.getElementById('previewImagenProducto');
     if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
     var pu = document.getElementById('previewUrlImagenProducto');
@@ -264,7 +282,19 @@ function elegirImagenProducto() {
 
 // ¿Ya se eligió la imagen principal (foto o link de imgbb)?
 function _hayImagenPrincipal() {
+    return _hayPrincipalNueva() || _imagenesExistentes.length > 0;
+}
+
+// ¿Se eligió una imagen principal NUEVA en este formulario (foto o link de imgbb)?
+function _hayPrincipalNueva() {
     return _principalElegida || !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
+}
+
+// ¿La imagen principal ya está lista para guardarse? (link pegado, imagen del editor ya armada o, al editar, la que ya tenía)
+function _imagenPrincipalLista() {
+    if (_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'))) return true;
+    if (_principalElegida) return !!_imagenProductoSeleccionada;
+    return !!_imagenProductoSeleccionada || _imagenesExistentes.length > 0;
 }
 
 // Con imagen principal el botón pasa a "Elegir otra imagen principal"
@@ -371,7 +401,8 @@ async function previsualizarImagenProducto(event) {
 // ── Fotos adicionales (galería) ──
 // Imágenes que tendría el producto al guardar: la principal (si hay) + las adicionales
 function _totalImagenesProducto() {
-    return (_hayImagenPrincipal() ? 1 : 0) + _imagenesExtraProducto.length;
+    // Una principal nueva reemplaza a la ★ que ya tenía (si la tenía); si no tenía, suma una
+    return _imagenesExistentes.length + _imagenesExtraProducto.length + ((_hayPrincipalNueva() && !_imagenesExistentes.length) ? 1 : 0);
 }
 
 function _estadoExtrasProducto(t) {
@@ -381,6 +412,7 @@ function _estadoExtrasProducto(t) {
 
 function _renderExtrasProducto() {
     _pintarBotonImagen();
+    _renderExistentesProducto();
     var lista = document.getElementById('sapExtrasLista');
     if (lista) {
         lista.innerHTML = '';
@@ -623,7 +655,8 @@ async function guardarProductoAdmin() {
         urlImagen = _extraerUrlImgbb(urlImagen);
         if (!urlImagen) { mostrarToast('El link de la imagen debe ser de imgbb (https://i.ibb.co/...).'); return; }
     }
-    if (!_imagenProductoSeleccionada && !urlImagen) { mostrarToast('Agrega la imagen principal del producto.'); return; }
+    if (_principalElegida && !_imagenProductoSeleccionada && !urlImagen) { mostrarToast('Espera a que termine de armarse la imagen principal.'); return; }
+    if (!_imagenProductoSeleccionada && !urlImagen && !(_edicionProducto && _imagenesExistentes.length)) { mostrarToast('Agrega la imagen principal del producto.'); return; }
 
     var precioBazar = _campoProducto('inputPrecioBazar');
     if (precioBazar !== '' && (isNaN(Number(precioBazar)) || Number(precioBazar) < 0)) {
@@ -647,6 +680,15 @@ async function guardarProductoAdmin() {
     if (ed && ed.ocupado()) { mostrarToast('Espera a que termine de quitar el fondo.'); return; }
     if (ed && !urlImagen && ed.tituloPendiente()) { mostrarToast('Presiona "Aplicar" para actualizar el título en la imagen.'); return; }
     if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
+
+    // Modo edición: se actualiza la fila existente en vez de agregar una nueva
+    if (_edicionProducto) {
+        await _guardarEdicionProducto(user, {
+            nombre: nombre, precioOriginal: precioOriginal, precioBazar: precioBazar, alto: alto, ancho: ancho,
+            video: video, existencia: existencia, etiquetas: etiquetas, urlImagen: urlImagen
+        });
+        return;
+    }
 
     var btn = document.getElementById('btnGuardarProducto');
     _guardandoProducto = true;
@@ -703,8 +745,417 @@ async function guardarProductoAdmin() {
         mostrarToast('❌ Error al guardar: ' + (err && err.message ? err.message : 'conexión'), 6000);
     } finally {
         _guardandoProducto = false;
-        if (btn) btn.textContent = 'Guardar';
+        if (btn) btn.textContent = _textoBtnGuardar();
         validarFormularioProducto();
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PASO 4b — CONFIGURAR (EDITAR) Y MOVER PRODUCTO
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _textoBtnGuardar() { return _edicionProducto ? 'Guardar cambios' : 'Guardar'; }
+
+// Avisa (y devuelve true) si la página ya no tiene filas confiables hasta recargar
+function _adminBloqueado(fila) {
+    if (_catalogoMovido) {
+        mostrarToast('Moviste un producto: recarga la página antes de seguir (los números de fila cambiaron).', 5000);
+        return true;
+    }
+    if (fila && _filasEditadas[fila]) {
+        mostrarToast('Ya guardaste cambios en este producto. Recarga la página para ver los datos nuevos antes de volver a editarlo.', 5000);
+        return true;
+    }
+    return false;
+}
+
+// Tras editar o mover: la copia guardada del catálogo (caché de 3 min) ya no sirve
+function _limpiarCacheCatalogo() {
+    try {
+        Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('kukumita_csv') === 0) sessionStorage.removeItem(k); });
+    } catch (e) {}
+}
+
+// Título y textos del formulario según agregue o edite
+function _pintarModoEdicion() {
+    var editando = !!_edicionProducto;
+    var t = document.getElementById('sapTitulo');
+    if (t) t.textContent = editando ? 'Configurar producto' : 'Agregar producto';
+    var g = document.getElementById('btnGuardarProducto');
+    if (g && !_guardandoProducto) g.textContent = _textoBtnGuardar();
+    var bloque = document.getElementById('sapExistentesBloque');
+    if (bloque) bloque.style.display = (editando && _imagenesExistentes.length) ? '' : 'none';
+    var notaE = document.getElementById('sapEtiquetasExtraNota');
+    if (notaE) {
+        var extra = editando ? _edicionProducto.etiquetasExtra : [];
+        notaE.style.display = extra.length ? '' : 'none';
+        notaE.textContent = extra.length ? 'Además conserva estas etiquetas que ya tenía en la hoja: ' + extra.join(', ') + '.' : '';
+    }
+    var notaM = document.getElementById('sapMedidasTextoNota');
+    if (notaM) {
+        var mt = editando ? _edicionProducto.medidasTexto : '';
+        notaM.style.display = mt ? '' : 'none';
+        notaM.textContent = mt ? 'En la hoja las medidas dicen «' + mt + '». Déjalas vacías aquí para conservarlas tal cual, o llena alto/ancho para reemplazarlas.' : '';
+    }
+}
+
+function _salirModoEdicion() {
+    _edicionProducto = null;
+    _imagenesExistentes = [];
+    _pintarModoEdicion();
+    _renderExtrasProducto();
+    validarFormularioProducto();
+}
+
+// Miniaturas de las imágenes que el producto ya tiene (modo edición)
+function _renderExistentesProducto() {
+    var lista = document.getElementById('sapExistentesLista');
+    var bloque = document.getElementById('sapExistentesBloque');
+    if (bloque) bloque.style.display = (_edicionProducto && _imagenesExistentes.length) ? '' : 'none';
+    if (!lista) return;
+    lista.innerHTML = '';
+    var reemplazada = _hayPrincipalNueva();
+    _imagenesExistentes.forEach(function (url, i) {
+        var caja = document.createElement('div');
+        caja.className = 'sap-extra' + ((i === 0 && reemplazada) ? ' reemplazada' : '');
+        var img = document.createElement('img');
+        img.src = url;
+        img.alt = i === 0 ? 'Imagen principal' : 'Foto ' + (i + 1);
+        img.loading = 'lazy';
+        var num = document.createElement('span');
+        num.textContent = i === 0 ? '★' : String(i + 1);
+        var quitar = document.createElement('button');
+        quitar.type = 'button';
+        quitar.setAttribute('aria-label', 'Quitar imagen ' + (i + 1));
+        quitar.textContent = '✕';
+        quitar.addEventListener('click', function () {
+            if (_guardandoProducto) return;
+            _imagenesExistentes.splice(i, 1);
+            _renderExtrasProducto();
+            validarFormularioProducto();
+        });
+        caja.appendChild(img); caja.appendChild(num); caja.appendChild(quitar);
+        lista.appendChild(caja);
+    });
+}
+
+// "12/8" → alto 12, ancho 8. Texto que no tiene ese formato (ej. "20 cm") se conserva aparte.
+function _separarMedidasProducto(txt) {
+    var m = String(txt || '').trim();
+    if (!m) return { alto: '', ancho: '', texto: '' };
+    var mm = m.match(/^(\d+(?:\.\d+)?)?\s*\/\s*(\d+(?:\.\d+)?)?$/);
+    if (mm) return { alto: mm[1] || '', ancho: mm[2] || '', texto: '' };
+    return { alto: '', ancho: '', texto: m };
+}
+
+function _atributoCard(card, nombre) { return card.getAttribute(nombre) || ''; }
+
+// Abre el formulario con los datos del producto que está abierto en el modal
+function abrirSubmenuEditarProducto() {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) return; // por si acaso; el servidor vuelve a verificar
+    var datos = (typeof _datosProductoEliminable === 'function') ? _datosProductoEliminable() : null;
+    var card = window._cardModalActual;
+    if (!datos || !card) { mostrarToast('Este producto no se puede editar desde aquí.'); return; }
+    if (_adminBloqueado(datos.fila)) return;
+    if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
+
+    limpiarFormularioProducto(); // parte de un formulario limpio (descarta lo que hubiera escrito en "Agregar")
+
+    // ── Datos de la tarjeta ──
+    var imgs = [];
+    try { imgs = JSON.parse(_atributoCard(card, 'data-imagenes') || '[]'); } catch (e) { imgs = []; }
+    imgs = (Array.isArray(imgs) ? imgs : []).map(function (u) { return String(u).trim(); }).filter(Boolean);
+
+    var tipos = _atributoCard(card, 'data-tipos').split('|').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
+    var chips = {};
+    document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip').forEach(function (b) { chips[b.getAttribute('data-valor')] = b; });
+    var extra = [];
+    tipos.forEach(function (t) {
+        if (chips[t]) { chips[t].classList.add('activo'); chips[t].setAttribute('aria-pressed', 'true'); }
+        else if (extra.indexOf(t) === -1) extra.push(t);
+    });
+
+    var med = _separarMedidasProducto(_atributoCard(card, 'data-alto'));
+    _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, medidasTexto: med.texto };
+    _imagenesExistentes = imgs;
+
+    function poner(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
+    poner('inputNombreProducto', datos.nombre);
+    poner('inputPrecioOriginal', _atributoCard(card, 'data-precio-exacto') || _atributoCard(card, 'data-precio'));
+    poner('inputPrecioBazar', _atributoCard(card, 'data-precio-bazar-exacto') || _atributoCard(card, 'data-precio-bazar'));
+    poner('inputDescripcionProducto', _atributoCard(card, 'data-descripcion'));
+    poner('inputAltoProducto', med.alto);
+    poner('inputAnchoProducto', med.ancho);
+    poner('inputVideoProducto', _atributoCard(card, 'data-video'));
+    var ex = parseInt(_atributoCard(card, 'data-existencia'), 10);
+    poner('inputExistenciaProducto', (isFinite(ex) && ex > 0) ? String(ex) : '');
+
+    [['btnEnOfertaProducto', 'data-oferta'], ['btnMasVendidoProducto', 'data-mas-vendido']].forEach(function (par) {
+        var b = document.getElementById(par[0]);
+        if (b && _atributoCard(card, par[1]) === '1') {
+            b.classList.add('activo'); b.setAttribute('aria-pressed', 'true');
+            var t = b.querySelector('.sap-toggle-estado'); if (t) t.textContent = 'Sí';
+        }
+    });
+
+    _subEtiquetasProducto = [];
+    _atributoCard(card, 'data-subtags').split('|').forEach(function (t) {
+        t = _normalizarSubEtiqueta(t);
+        if (t && _subEtiquetasProducto.indexOf(t) === -1 && _subEtiquetasProducto.length < MAX_SUBETIQUETAS) _subEtiquetasProducto.push(t);
+    });
+    _renderSubEtiquetas();
+
+    _pintarModoEdicion();
+    _renderExtrasProducto();
+    _estadoImagen(imgs.length ? 'Estas son las imágenes actuales. Si no eliges otra imagen principal, se conserva la ★.' : '');
+
+    var sub = document.getElementById('submenuAgregarProducto');
+    if (!sub) return;
+    sub.classList.add('abierto');
+    sub.scrollTop = 0;
+    _llenarSugerenciasSubEtiquetas();
+    document.body.style.overflow = 'hidden';
+    validarFormularioProducto();
+}
+
+// Sube UNA imagen a imgbb (vía Apps Script) con un reintento si fue fallo de red / 5xx. Devuelve el link.
+async function _subirUnaImagenProducto(idToken, dataUrl, nombreArchivo, etiqueta) {
+    var intento = 0;
+    while (true) {
+        try {
+            var j = await _postAppsScript({ idToken: idToken, accion: 'subirImagen', imagenBase64: dataUrl, nombreArchivo: nombreArchivo });
+            if (j && j.ok && j.url) return j.url;
+            throw new Error((j && j.error) || 'imgbb no aceptó la imagen.');
+        } catch (e) {
+            intento++;
+            if (e && e.reintentable && intento < 2) continue;
+            throw new Error(etiqueta + ': ' + (e && e.message ? e.message : 'error desconocido.'));
+        }
+    }
+}
+
+// Guarda los cambios de un producto existente
+async function _guardarEdicionProducto(user, v) {
+    var edicion = _edicionProducto;
+    if (!edicion) return;
+    var btn = document.getElementById('btnGuardarProducto');
+    _guardandoProducto = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+    try {
+        var idToken = await user.getIdToken(true); // token recién renovado: evita "sesión expirada"
+
+        // 1) Imagen principal nueva: link pegado o imagen armada en el editor (se sube a imgbb)
+        var principalNueva = '';
+        if (v.urlImagen) {
+            principalNueva = v.urlImagen;
+        } else if (_imagenProductoSeleccionada) {
+            if (btn) btn.textContent = 'Subiendo imagen principal…';
+            try {
+                principalNueva = await _subirUnaImagenProducto(idToken, _imagenProductoSeleccionada, 'producto_' + Date.now() + '.webp', 'Imagen principal');
+            } catch (errP) {
+                mostrarToast('❌ ' + errP.message + ' No se guardó nada.', 6000);
+                return;
+            }
+        }
+
+        // 2) Fotos adicionales nuevas (una por una)
+        var extrasUrls = [];
+        if (_imagenesExtraProducto.length) {
+            try {
+                extrasUrls = await _subirImagenesExtraProducto(idToken, function (n, total) {
+                    if (btn) btn.textContent = 'Subiendo fotos ' + n + '/' + total + '…';
+                });
+            } catch (errSub) {
+                mostrarToast('❌ ' + (errSub && errSub.message ? errSub.message : 'No se pudieron subir las fotos adicionales.') + ' No se guardó nada.', 6000);
+                return;
+            }
+        }
+        if (btn) btn.textContent = 'Guardando...';
+
+        // 3) Lista final: la principal nueva reemplaza a la ★ actual; las demás actuales se conservan; luego las nuevas
+        var imagenes = principalNueva
+            ? [principalNueva].concat(_imagenesExistentes.slice(1))
+            : _imagenesExistentes.slice();
+        imagenes = imagenes.concat(extrasUrls);
+        if (!imagenes.length) { mostrarToast('El producto necesita al menos una imagen.'); return; }
+        if (imagenes.length > MAX_IMAGENES_PRODUCTO) { mostrarToast('Máximo ' + MAX_IMAGENES_PRODUCTO + ' imágenes por producto.'); return; }
+
+        var resultado = await _postAppsScript({
+            idToken: idToken,
+            accion: 'editar',
+            fila: edicion.fila,
+            nombreOriginal: edicion.nombre, // el servidor comprueba que la fila siga siendo este producto
+            nombre: v.nombre,
+            precioOriginal: v.precioOriginal,
+            precioBazar: v.precioBazar,
+            descripcion: _campoProducto('inputDescripcionProducto'),
+            etiquetas: v.etiquetas,
+            subEtiquetas: _subEtiquetasProducto.slice(),
+            alto: v.alto,
+            ancho: v.ancho,
+            medidasTexto: edicion.medidasTexto,
+            video: v.video,
+            existencia: v.existencia,
+            enOferta: _toggleProductoActivo('btnEnOfertaProducto'),
+            masVendido: _toggleProductoActivo('btnMasVendidoProducto'),
+            imagenes: imagenes
+        });
+
+        if (resultado.ok) {
+            _filasEditadas[edicion.fila] = true;
+            _limpiarCacheCatalogo();
+            mostrarToast('✅ «' + (resultado.nombre || v.nombre) + '» actualizado en la fila ' + edicion.fila + '. Recarga la página en unos segundos para ver los cambios.', 6000);
+            limpiarFormularioProducto();
+            _salirModoEdicion();
+            cerrarSubmenuAgregarProducto();
+            if (typeof cerrarModalProducto === 'function') cerrarModalProducto();
+        } else {
+            mostrarToast('❌ ' + (resultado.error || 'No se pudieron guardar los cambios.'), 7000);
+        }
+    } catch (err) {
+        console.error('[editar producto polo]', err);
+        mostrarToast('❌ Error al guardar: ' + (err && err.message ? err.message : 'conexión'), 6000);
+    } finally {
+        _guardandoProducto = false;
+        if (btn) btn.textContent = _textoBtnGuardar();
+        validarFormularioProducto();
+    }
+}
+
+// ── Mover producto ──
+var _moverProducto = null;   // { fila, nombre } del producto que se está por mover
+var _moviendoProducto = false;
+
+// Productos del catálogo de Polo, en el orden en que están en la hoja (una sola vez cada uno)
+function _productosPoloOrdenados() {
+    var vistos = {}, lista = [];
+    document.querySelectorAll('#gridProductos .card-dinamica[data-sheet-row]').forEach(function (c) {
+        if ((c.getAttribute('data-origen-externo') || '') !== '') return;
+        var fila = parseInt(c.getAttribute('data-sheet-row'), 10);
+        var nombre = (c.getAttribute('data-nombre') || '').trim();
+        if (!isFinite(fila) || fila < 2 || !nombre || vistos[fila]) return;
+        vistos[fila] = true;
+        lista.push({ fila: fila, nombre: nombre });
+    });
+    lista.sort(function (a, b) { return a.fila - b.fila; });
+    return lista;
+}
+
+function abrirMoverProducto() {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) return; // por si acaso; el servidor vuelve a verificar
+    var datos = (typeof _datosProductoEliminable === 'function') ? _datosProductoEliminable() : null;
+    if (!datos) { mostrarToast('Este producto no se puede mover desde aquí.'); return; }
+    if (_adminBloqueado(datos.fila)) return;
+    if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
+
+    var lista = _productosPoloOrdenados();
+    var pos = -1;
+    lista.forEach(function (p, i) { if (p.fila === datos.fila) pos = i; });
+    _moverProducto = datos;
+
+    var info = document.getElementById('mmpProducto');
+    if (info) info.textContent = '«' + datos.nombre + '» está en la fila ' + datos.fila + (pos >= 0 ? ' (lugar ' + (pos + 1) + ' de ' + lista.length + ')' : '') + '. ¿Dónde lo quieres?';
+
+    var sel = document.getElementById('mmpSelectDestino');
+    if (sel) {
+        sel.innerHTML = '';
+        lista.forEach(function (p) {
+            if (p.fila === datos.fila) return;
+            var o = document.createElement('option');
+            o.value = String(p.fila);
+            o.textContent = 'Fila ' + p.fila + ' · ' + p.nombre;
+            o.setAttribute('data-nombre', p.nombre);
+            sel.appendChild(o);
+        });
+    }
+    _pintarBotonesMover(false, pos, lista.length);
+    document.getElementById('modalMoverProducto').classList.add('abierto');
+}
+
+function cerrarMoverProducto() {
+    if (_moviendoProducto) return;
+    var m = document.getElementById('modalMoverProducto');
+    if (m) m.classList.remove('abierto');
+    _moverProducto = null;
+}
+
+// Habilita/deshabilita los botones según el lugar actual (no tiene sentido "Subir" si ya es el primero)
+function _pintarBotonesMover(ocupado, pos, total) {
+    var sel = document.getElementById('mmpSelectDestino');
+    var hayDestinos = !!(sel && sel.options.length);
+    var estado = {
+        mmpBtnInicio: pos !== 0, mmpBtnSubir: pos > 0,
+        mmpBtnBajar: pos >= 0 && pos < total - 1, mmpBtnFinal: pos >= 0 && pos < total - 1,
+        mmpBtnColocar: hayDestinos
+    };
+    Object.keys(estado).forEach(function (id) {
+        var b = document.getElementById(id);
+        if (b) b.disabled = ocupado || !estado[id];
+    });
+    if (sel) sel.disabled = ocupado;
+}
+
+// posicion: 'inicio' | 'final' | 'subir' | 'bajar' | 'antes' (usa el producto elegido en la lista)
+async function moverProductoA(posicion) {
+    if (_moviendoProducto || !_moverProducto) return;
+    var user = auth.currentUser;
+    if (!esCorreoAdmin(user)) { mostrarToast('No tienes permisos de administrador.'); return; }
+    if (_adminBloqueado(_moverProducto.fila)) return;
+
+    var lista = _productosPoloOrdenados();
+    var pos = -1;
+    lista.forEach(function (p, i) { if (p.fila === _moverProducto.fila) pos = i; });
+    if (pos < 0) { mostrarToast('No se encontró el producto en el catálogo. Recarga la página.'); return; }
+
+    // "Subir/Bajar un lugar" se calculan con los productos del catálogo (no con filas sueltas de la hoja)
+    var envio = { posicion: posicion };
+    if (posicion === 'subir') {
+        if (pos === 0) { mostrarToast('Ya está en el primer lugar.'); return; }
+        envio = { posicion: 'antes', filaDestino: lista[pos - 1].fila, nombreDestino: lista[pos - 1].nombre };
+    } else if (posicion === 'bajar') {
+        if (pos >= lista.length - 1) { mostrarToast('Ya está en el último lugar.'); return; }
+        envio = (pos + 2 < lista.length)
+            ? { posicion: 'antes', filaDestino: lista[pos + 2].fila, nombreDestino: lista[pos + 2].nombre }
+            : { posicion: 'final' };
+    } else if (posicion === 'antes') {
+        var sel = document.getElementById('mmpSelectDestino');
+        var op = sel && sel.options[sel.selectedIndex];
+        if (!op) { mostrarToast('Elige el producto antes del cual lo quieres.'); return; }
+        envio = { posicion: 'antes', filaDestino: parseInt(op.value, 10), nombreDestino: op.getAttribute('data-nombre') || '' };
+    } else if (posicion === 'inicio') {
+        if (pos === 0) { mostrarToast('Ya está en el primer lugar.'); return; }
+    } else if (posicion === 'final') {
+        if (pos === lista.length - 1) { mostrarToast('Ya está en el último lugar.'); return; }
+    }
+
+    _moviendoProducto = true;
+    _pintarBotonesMover(true, pos, lista.length);
+    var producto = _moverProducto;
+    try {
+        var idToken = await user.getIdToken(true);
+        var r = await _postAppsScript(Object.assign({
+            idToken: idToken, accion: 'mover', fila: producto.fila, nombreOriginal: producto.nombre
+        }, envio));
+        if (r.ok) {
+            _catalogoMovido = true; // los números de fila de la página ya no valen hasta recargar
+            _limpiarCacheCatalogo();
+            _moviendoProducto = false;
+            cerrarMoverProducto();
+            if (typeof cerrarModalProducto === 'function') cerrarModalProducto();
+            mostrarToast('✅ «' + (r.nombre || producto.nombre) + '» movido a la fila ' + r.fila + '. Recarga la página en unos segundos para ver el nuevo orden.', 6000);
+        } else {
+            mostrarToast('❌ ' + (r.error || 'No se pudo mover el producto.'), 7000);
+        }
+    } catch (err) {
+        console.error('[mover producto polo]', err);
+        mostrarToast('❌ Error al mover: ' + (err && err.message ? err.message : 'conexión'), 6000);
+    } finally {
+        _moviendoProducto = false;
+        if (_moverProducto) _pintarBotonesMover(false, pos, lista.length);
     }
 }
 

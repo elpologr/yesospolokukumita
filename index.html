@@ -81,8 +81,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     <!-- Fredoka: tipografía del título que el editor de imagen pone sobre la foto del producto -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=4">
-    <link rel="stylesheet" href="admin-producto.css?v=4">
+    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="admin-producto.css?v=5">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1537,6 +1537,8 @@
 
         <!-- ── Solo administradores: eliminar este producto de la hoja (lo muestra app.js) ── -->
         <div id="mpFilaAdminEliminar" style="display:none;">
+            <button class="mp-btn-admin" id="mpBtnEditarAdmin" type="button" onclick="abrirSubmenuEditarProducto()" title="Configurar producto">⚙️ Editar</button>
+            <button class="mp-btn-admin" id="mpBtnMoverAdmin" type="button" onclick="abrirMoverProducto()" title="Mover producto de lugar">↕️ Mover</button>
             <button class="mp-btn-eliminar-admin" id="mpBtnEliminarAdmin" type="button" onclick="abrirEliminarProducto()" title="Eliminar producto">🗑️ Eliminar</button>
         </div>
 
@@ -1687,6 +1689,25 @@
     </div>
 </div>
 
+<!-- Mover producto de lugar en la hoja (solo administradores) — admin-producto.js -->
+<div id="modalMoverProducto" onclick="if(event.target===this) cerrarMoverProducto()">
+    <div class="mmp-caja">
+        <h3>↕️ Mover producto</h3>
+        <p id="mmpProducto"></p>
+        <div class="mmp-botones">
+            <button type="button" id="mmpBtnInicio" onclick="moverProductoA('inicio')">⏫ Al inicio</button>
+            <button type="button" id="mmpBtnSubir" onclick="moverProductoA('subir')">⬆️ Subir un lugar</button>
+            <button type="button" id="mmpBtnBajar" onclick="moverProductoA('bajar')">⬇️ Bajar un lugar</button>
+            <button type="button" id="mmpBtnFinal" onclick="moverProductoA('final')">⏬ Al final</button>
+        </div>
+        <label class="mmp-label" for="mmpSelectDestino">…o colócalo justo antes de:</label>
+        <select id="mmpSelectDestino"></select>
+        <button type="button" class="mmp-colocar" id="mmpBtnColocar" onclick="moverProductoA('antes')">Mover aquí</button>
+        <p class="mmp-nota">Se mueve su fila en Google Sheets; los demás productos se recorren. Después recarga la página para ver el nuevo orden.</p>
+        <div class="mep-acciones"><button class="mep-cancelar" type="button" onclick="cerrarMoverProducto()">Cerrar</button></div>
+    </div>
+</div>
+
 <!-- ══ AGREGAR PRODUCTO (solo administradores) — admin-producto.js / admin-producto.css ══ -->
 <div id="submenuAgregarProducto">
     <div class="sap-header">
@@ -1696,6 +1717,11 @@
 
     <div class="sap-cuerpo">
       <div class="sap-col-img">
+        <div id="sapExistentesBloque" style="display:none;">
+            <div class="sap-seccion-titulo">Imágenes actuales del producto</div>
+            <p class="sap-nota">La 1ª (★) es la principal. Quita con ✕ las que ya no quieras. Abajo puedes elegir otra imagen principal (reemplaza la ★) o agregar más fotos.</p>
+            <div id="sapExistentesLista" class="sap-extras-lista"></div>
+        </div>
         <div class="sap-seccion-titulo">Imagen principal *</div>
         <button class="sap-agregar-imagen" type="button" onclick="elegirImagenProducto()">
             <span class="sap-agregar-imagen-icono">🖼️</span>
@@ -1780,6 +1806,7 @@
             </div>
         </div>
         <p class="sap-nota">Opcional. Se guarda en la columna I como <strong>alto/ancho</strong> (ej. 12/8).</p>
+        <p class="sap-nota" id="sapMedidasTextoNota" style="display:none;"></p>
 
         <label class="panel-nombre-label" for="inputDescripcionProducto">Descripción</label>
         <textarea id="inputDescripcionProducto" class="panel-nombre-input" rows="3" maxlength="500" placeholder="Opcional"></textarea>
@@ -1817,6 +1844,7 @@
                 <button type="button" class="sap-chip" data-valor="religioso" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">⛪ Religioso</button>
             </div>
             <p class="sap-nota">Puedes elegir más de una. Se guarda en la columna G de la hoja.</p>
+            <p class="sap-nota" id="sapEtiquetasExtraNota" style="display:none;"></p>
         </div>
 
         <div class="sap-zona">
@@ -2160,9 +2188,9 @@
 </div>
 
     <!-- JavaScript externo -->
-    <script src="config.js?v=8"></script>
-    <script src="app.js?v=4"></script>
-    <script src="admin-producto.js?v=4"></script>
+    <script src="config.js?v=9"></script>
+    <script src="app.js?v=5"></script>
+    <script src="admin-producto.js?v=5"></script>
     <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->

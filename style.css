@@ -2742,7 +2742,55 @@ body.modo-oscuro .btn-google-auth:hover { background: #3a2e26; }
 }
 .mp-btn-eliminar-admin:hover { background: #c0392b; color: #fff; }
 /* Botón eliminar (solo admins): esquina superior derecha de la imagen, a la izquierda del ✕ */
-#mpFilaAdminEliminar { position: absolute; top: 12px; right: 54px; z-index: 21; display: block; }
+#mpFilaAdminEliminar { position: absolute; top: 12px; right: 54px; z-index: 21; display: flex; gap: 6px; }
+.mp-btn-admin {
+    width: auto; height: 34px; padding: 0 11px; border: 1.5px solid #8c7565; border-radius: 17px;
+    background: rgba(255,255,255,0.95); color: #362a22; font-weight: 700; font-size: 13px; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;
+}
+.mp-btn-admin:hover { background: #362a22; color: #fff; }
+#mpFilaAdminEliminar .mp-btn-eliminar-admin { white-space: nowrap; }
+@media (max-width: 420px) {
+    #mpFilaAdminEliminar { gap: 4px; right: 50px; }
+    .mp-btn-admin, #mpFilaAdminEliminar .mp-btn-eliminar-admin { padding: 0 8px; font-size: 12px; }
+}
+
+/* ── Mover producto (solo administradores) ── */
+#modalMoverProducto {
+    display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center; padding: 16px;
+}
+#modalMoverProducto.abierto { display: flex; }
+#modalMoverProducto .mmp-caja {
+    background: #fff; border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 400px; max-height: 92vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35); color: #362a22;
+}
+#modalMoverProducto h3 { margin: 0 0 10px; font-size: 1.15rem; }
+#modalMoverProducto p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.45; }
+#modalMoverProducto .mmp-nota { font-size: 0.8rem; color: #8c7565; margin-top: 10px; }
+#modalMoverProducto .mmp-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+#modalMoverProducto .mmp-botones button, #modalMoverProducto .mmp-colocar {
+    padding: 11px 8px; border-radius: 10px; border: 1.5px solid #e0d5cc; background: #f8f4f0; color: #362a22;
+    font-weight: 700; font-size: 0.88rem; cursor: pointer;
+}
+#modalMoverProducto .mmp-botones button:hover:not(:disabled), #modalMoverProducto .mmp-colocar:hover:not(:disabled) { background: #e8607a; border-color: #e8607a; color: #fff; }
+#modalMoverProducto button:disabled { opacity: 0.5; cursor: default; }
+#modalMoverProducto .mmp-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+#modalMoverProducto select {
+    width: 100%; padding: 11px 10px; font-size: 0.92rem; border: 1.5px solid #e0d5cc; border-radius: 10px;
+    background: #fff; color: #362a22; margin-bottom: 8px;
+}
+#modalMoverProducto .mmp-colocar { width: 100%; background: #e8607a; border-color: #e8607a; color: #fff; }
+#modalMoverProducto .mep-acciones { display: flex; gap: 10px; margin-top: 14px; }
+#modalMoverProducto .mep-acciones button {
+    flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    background: #eee; color: #362a22;
+}
+body.modo-oscuro #modalMoverProducto .mep-acciones button { background: #3a3028; color: #e0d0c0; }
+body.modo-oscuro #modalMoverProducto .mmp-caja { background: #2a2218; color: #e0d5cc; }
+body.modo-oscuro #modalMoverProducto .mmp-botones button { background: #33291f; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro #modalMoverProducto select { background: #33291f; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro .mp-btn-admin { background: rgba(42,34,24,0.95); color: #e0d5cc; border-color: #8c7565; }
 #mpFilaAdminEliminar .mp-btn-eliminar-admin {
     width: auto; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 13px;
     background: rgba(255,245,244,0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.3);
