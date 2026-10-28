@@ -174,3 +174,24 @@ body.modo-oscuro .sap-subtag button { background: #34506b; color: #cfe3f7; }
 .sap-extra.reemplazada { opacity: 0.35; }
 .sap-extra.reemplazada::after { content: 'se reemplaza'; position: absolute; inset: auto 0 0 0; font-size: 8px; font-weight: 800; text-align: center; color: #fff; background: rgba(192,57,43,0.85); padding: 1px 0; }
 #sapExistentesLista { max-height: none; }
+
+/* ── Etiquetas nuevas (botón "Agregar etiqueta nueva" + diálogo) ── */
+.sap-btn-etiqueta-nueva {
+    width: 100%; padding: 10px 12px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+    color: #3b5b78; background: rgba(255,255,255,0.55); border: 1.5px dashed #8fb6dc; border-radius: 12px;
+}
+.sap-btn-etiqueta-nueva:active { background: #fff; }
+.sap-modal-etiqueta {
+    display: none; position: fixed; inset: 0; z-index: 20;
+    align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,0.5);
+}
+.sap-modal-etiqueta.abierto { display: flex; }
+.sap-modal-etiqueta-caja {
+    width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px;
+    padding: 18px; background: #fffcf9; border: 1px solid #e8dfd6; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+}
+.sap-modal-etiqueta-caja h4 { margin: 0; font-size: 17px; font-weight: 700; color: #362a22; }
+.sap-emoji-input { flex: 0 0 64px !important; width: 64px; text-align: center; font-size: 22px; padding: 6px; }
+body.modo-oscuro .sap-btn-etiqueta-nueva { color: #cfe3f7; background: rgba(0,0,0,0.2); border-color: #34506b; }
+body.modo-oscuro .sap-modal-etiqueta-caja { background: #211a14; border-color: #3a3028; }
+body.modo-oscuro .sap-modal-etiqueta-caja h4 { color: #e0d5cc; }

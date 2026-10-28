@@ -10,6 +10,7 @@
 // Paso 4a: sub-etiquetas (columna H): "cirio, tazón, stich…".
 // Paso 4c: zonas "Etiqueta de evento" (columna M, NUEVA: encabezado "Etiqueta de Evento") y "Etiquetas de forma"
 // (se guardan en la columna G junto a la etiqueta principal, que es de donde las lee el filtro de formas de Polo).
+// Etiquetas nuevas: botón "Agregar etiqueta nueva" en las zonas principal, evento y forma (ver el bloque al final).
 // Paso 4b: configurar (editar) y mover producto, solo administradores. Desde el modal de un producto del
 // catálogo de Polo: "⚙️ Editar" abre este mismo formulario con los datos del producto (modo edición) y
 // "↕️ Mover" abre un diálogo para cambiar su lugar en la hoja. El servidor (CodePolo.gs) comprueba por nombre
@@ -31,6 +32,15 @@ var _imagenesExistentes = [];      // links de imgbb que el producto ya tiene en
 var _filasEditadas = {};           // filas que ya se guardaron en esta sesión (hay que recargar antes de volver a editarlas)
 var _catalogoMovido = false;       // true si se movió un producto: los números de fila de la página ya no valen
 
+// Etiquetas nuevas creadas por el administrador (se guardan en el Apps Script y quedan para siempre)
+var _etiquetasPersonalizadas = { principal: [], evento: [], forma: [] };   // [{ v: valor, e: emoji, t: texto }]
+var _CLAVE_CACHE_ETIQUETAS = 'polo_etiquetas_nuevas_v1';
+var _tipoEtiquetaNueva = null;          // 'principal' | 'evento' | 'forma' mientras el diálogo está abierto
+var _guardandoEtiquetaNueva = false;
+var _emojiEtiquetaEditadoAMano = false;
+var _cargandoEtiquetasNuevas = false;
+var _etiquetasNuevasCargadas = false;
+
 // Fotos adicionales (galería): la principal es la 1ª imagen del producto; el resto se suben tal cual (reducidas)
 var MAX_IMAGENES_PRODUCTO = 50;
 var _imagenesExtraProducto = [];   // [{ dataUrl, miniatura }] en el orden en que se subirán
@@ -43,6 +53,7 @@ function actualizarBotonAgregarProducto() {
     var btn = document.getElementById('btnAgregarProducto');
     if (btn) btn.style.display = admin ? 'flex' : 'none';
     if (!admin) cerrarSubmenuAgregarProducto();
+    if (admin && typeof _cargarEtiquetasPersonalizadas === 'function') _cargarEtiquetasPersonalizadas();
 }
 
 (function engancharAuthAgregarProducto() {
@@ -149,6 +160,11 @@ function _formaDeEtiqueta(t) {
     var n = _normalizarFormaProducto(t);
     for (var k in _FORMAS_VARIANTES_PRODUCTO) {
         if (_FORMAS_VARIANTES_PRODUCTO[k].indexOf(n) !== -1) return k;
+    }
+    // Formas nuevas creadas por el administrador: su valor es el texto tal cual se guardó en la columna G
+    var nuevas = _etiquetasPersonalizadas.forma || [];
+    for (var i = 0; i < nuevas.length; i++) {
+        if (_normalizarFormaProducto(nuevas[i].v) === n) return nuevas[i].v;
     }
     return '';
 }
@@ -1247,6 +1263,325 @@ async function confirmarMoverProducto() {
         actualizarAvisoMover();
     }
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Etiquetas nuevas (principal, evento y forma)
+// Debajo de cada zona hay un botón "Agregar etiqueta nueva". La etiqueta se guarda en el Apps Script
+// (CodePolo.gs, acción "etiquetaAgregar") y desde entonces aparece como un botón más en su zona,
+// en cualquier dispositivo. El emoji se sugiere solo según el nombre y se puede cambiar.
+// ══════════════════════════════════════════════════════════════════════════════
+var _TIPOS_ETIQUETA_NUEVA = {
+    principal: { gridId: 'chipsEtiquetaPrincipal', alternar: alternarEtiquetaPrincipal, titulo: 'Nueva etiqueta principal', emojiBase: '🏷️', ejemplo: 'Ej. Recuerdos' },
+    evento:    { gridId: 'chipsEtiquetaEvento',    alternar: alternarEtiquetaEvento,    titulo: 'Nuevo evento',             emojiBase: '🎉', ejemplo: 'Ej. Día de la secretaria' },
+    forma:     { gridId: 'chipsEtiquetaForma',     alternar: alternarEtiquetaForma,     titulo: 'Nueva forma',              emojiBase: '🔷', ejemplo: 'Ej. Portarretratos' }
+};
+
+// Palabras clave → emoji. Se usa el primero que coincida (por eso lo más específico va antes).
+// Las palabras de 3 letras o menos deben coincidir completas; las demás coinciden si están dentro del nombre.
+var _EMOJIS_POR_PALABRA = [
+    // Eventos
+    [['luctuoso', 'novenario', 'funeral', 'velorio', 'difunto', 'defuncion'], '🕯️'],
+    [['muerto', 'catrina', 'calavera', 'ofrenda'], '💀'],
+    [['condolen', 'pesame', 'duelo'], '🤍'],
+    [['ano nuevo', 'fin de ano', 'nochevieja'], '🎆'],
+    [['navid', 'nochebuena'], '🎄'],
+    [['posada', 'farol'], '🏮'],
+    [['aniversario', 'bodas de'], '💞'],
+    [['despedida de soltera', 'soltera'], '🥂'],
+    [['soltero'], '🍻'],
+    [['boda', 'novia', 'novio', 'matrimonio'], '💍'],
+    [['compromiso', 'pedida de mano'], '💑'],
+    [['quince', 'xv', 'rey'], '👑'],
+    [['bautizo'], '🕊️'],
+    [['comunion'], '🙏'],
+    [['confirmacion'], '✝️'],
+    [['sacerdo', 'ordenacion', 'rosario'], '📿'],
+    [['baby', 'bebe', 'nacimiento', 'recien nacido'], '🍼'],
+    [['revelacion', 'genero'], '💙'],
+    [['gradua', 'titulacion', 'diploma'], '🎓'],
+    [['maestro', 'maestra', 'profesor', 'docente'], '📚'],
+    [['estudiante', 'escuela'], '🎒'],
+    [['madre', 'mama'], '🌷'],
+    [['padre', 'papa'], '👔'],
+    [['valentin', 'amor', 'enamorados', 'pareja'], '❤️'],
+    [['nino', 'infantil', 'infancia'], '🧸'],
+    [['cumple', 'pastel'], '🎂'],
+    [['halloween', 'brujas', 'bruja'], '🎃'],
+    [['pascua', 'semana santa'], '🐣'],
+    [['independencia', 'patria', 'mexican'], '🇲🇽'],
+    [['jubila', 'retiro'], '🏖️'],
+    [['negocio', 'apertura', 'inaugura', 'tienda'], '🏪'],
+    [['agradec', 'gracias'], '🙌'],
+    [['bienvenida'], '👋'],
+    [['fiesta', 'celebra', 'evento', 'festejo'], '🎉'],
+    [['regalo', 'obsequio', 'recuerdo', 'detalle', 'souvenir'], '🎁'],
+    // Formas y objetos
+    [['unicornio'], '🦄'], [['dragon'], '🐉'], [['mariposa'], '🦋'], [['elefante'], '🐘'], [['tortuga'], '🐢'],
+    [['perro', 'perrito', 'cachorro'], '🐶'], [['gato', 'gatito'], '🐱'], [['conejo'], '🐰'], [['oso', 'osito'], '🐻'],
+    [['pajaro', 'ave', 'paloma', 'buho'], '🐦'], [['pez', 'pescado', 'delfin'], '🐟'], [['cerdo', 'cochinito'], '🐷'],
+    [['vaca', 'toro'], '🐮'], [['leon'], '🦁'], [['caballo'], '🐴'], [['abeja'], '🐝'], [['animal', 'mascota'], '🐾'],
+    [['angel', 'angelito', 'querubin'], '👼'], [['virgen', 'guadalupe', 'santo', 'santa', 'religios', 'cristo'], '⛪'],
+    [['cruz'], '✝️'], [['corazon'], '❤️'], [['estrella'], '⭐'], [['luna'], '🌙'], [['sol'], '☀️'],
+    [['personaje', 'caricatura', 'disney', 'muneco'], '🎭'],
+    [['suculenta'], '🪴'], [['cactus'], '🌵'], [['arbol'], '🌳'], [['hoja', 'hojas'], '🍃'],
+    [['maceta', 'planta', 'jardin'], '🌱'], [['rosa'], '🌹'], [['flor', 'flores', 'ramo'], '🌸'],
+    [['centro de mesa'], '🌸'],
+    [['tazon', 'taza', 'vaso', 'jarra'], '🥣'], [['copa'], '🍷'], [['plato', 'charola', 'bandeja'], '🍽️'],
+    [['canasta', 'cesta'], '🧺'], [['caja', 'paquete', 'empaque'], '📦'],
+    [['portarretrato', 'marco', 'cuadro', 'foto'], '🖼️'], [['espejo'], '🪞'], [['llavero'], '🔑'], [['iman'], '🧲'],
+    [['jabon'], '🧼'], [['incienso', 'sahumerio', 'copal'], '🪔'], [['aroma', 'esencia', 'perfume', 'fragancia'], '🌺'],
+    [['porta vela', 'portavela', 'vela', 'cirio'], '🕯️'],
+    [['alhajero', 'alajero', 'joyero', 'anillo'], '💍'], [['collar', 'joya', 'diamante'], '💎'],
+    [['lampara', 'luz', 'foco'], '💡'], [['reloj'], '⏰'], [['libro', 'biblia'], '📖'],
+    [['musica', 'guitarra', 'piano'], '🎵'], [['futbol', 'balon', 'deporte'], '⚽'], [['carro', 'auto', 'coche'], '🚗'],
+    [['casa', 'hogar'], '🏠'], [['cocina'], '🍳'],
+    [['lazo', 'liston'], '🎀'], [['brillo', 'glitter', 'diamantina', 'aditamento'], '✨'],
+    [['pintura', 'pincel', 'color', 'pintado'], '🎨'], [['figura', 'escultura', 'estatua'], '🗿'],
+    [['base', 'pedestal', 'yeso', 'piedra'], '🪨'], [['etiqueta'], '🏷️'],
+    [['oferta', 'promo', 'descuento', 'rebaja'], '🔥'], [['nuevo', 'novedad'], '🆕'],
+    [['decora', 'adorno'], '🎀'], [['arreglo'], '🕯️']
+];
+
+function _normalizarTextoEtiqueta(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n').replace(/\s+/g, ' ').trim();
+}
+
+// Sugiere un emoji parecido a lo que dice el nombre; si no reconoce nada usa uno genérico del tipo.
+function _sugerirEmojiEtiqueta(texto, tipo) {
+    var n = _normalizarTextoEtiqueta(texto);
+    var base = (_TIPOS_ETIQUETA_NUEVA[tipo] || _TIPOS_ETIQUETA_NUEVA.principal).emojiBase;
+    if (!n) return base;
+    var palabras = n.split(/[^a-z0-9]+/).filter(Boolean);
+    for (var i = 0; i < _EMOJIS_POR_PALABRA.length; i++) {
+        var claves = _EMOJIS_POR_PALABRA[i][0];
+        for (var j = 0; j < claves.length; j++) {
+            var c = _normalizarTextoEtiqueta(claves[j]);
+            if (c.length <= 3 ? palabras.indexOf(c) !== -1 : n.indexOf(c) !== -1) return _EMOJIS_POR_PALABRA[i][1];
+        }
+    }
+    return base;
+}
+
+// Mismas reglas que CodePolo.gs para convertir el nombre en el valor que se guarda en la hoja
+function _valorEtiquetaNueva(tipo, texto) {
+    var t = String(texto || '');
+    if (tipo === 'evento') {
+        return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '').substring(0, 40);
+    }
+    return t.replace(/[|,]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase().substring(0, 40);
+}
+
+function _leerCacheEtiquetasNuevas() {
+    try {
+        var o = JSON.parse(localStorage.getItem(_CLAVE_CACHE_ETIQUETAS) || 'null');
+        if (o) _fijarEtiquetasPersonalizadas(o, false);
+    } catch (e) { /* sin caché: se pedirán al servidor */ }
+}
+
+function _fijarEtiquetasPersonalizadas(o, guardarCache) {
+    var limpio = { principal: [], evento: [], forma: [] };
+    ['principal', 'evento', 'forma'].forEach(function (tipo) {
+        (o && Array.isArray(o[tipo]) ? o[tipo] : []).forEach(function (it) {
+            if (it && it.v && it.t) limpio[tipo].push({ v: String(it.v), e: String(it.e || ''), t: String(it.t) });
+        });
+    });
+    _etiquetasPersonalizadas = limpio;
+    if (guardarCache) { try { localStorage.setItem(_CLAVE_CACHE_ETIQUETAS, JSON.stringify(limpio)); } catch (e) {} }
+}
+
+function _chipDeValor(grid, valor) {
+    var chips = grid.querySelectorAll('.sap-chip');
+    for (var i = 0; i < chips.length; i++) if (chips[i].getAttribute('data-valor') === valor) return chips[i];
+    return null;
+}
+
+// Agrega al final de cada zona los botones de las etiquetas nuevas que todavía no estén dibujados
+function _dibujarEtiquetasPersonalizadas() {
+    Object.keys(_TIPOS_ETIQUETA_NUEVA).forEach(function (tipo) {
+        var cfg = _TIPOS_ETIQUETA_NUEVA[tipo];
+        var grid = document.getElementById(cfg.gridId);
+        if (!grid) return;
+        (_etiquetasPersonalizadas[tipo] || []).forEach(function (it) {
+            if (_chipDeValor(grid, it.v)) return;
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'sap-chip';
+            b.setAttribute('data-valor', it.v);
+            b.setAttribute('data-nueva', '1');
+            b.setAttribute('aria-pressed', 'false');
+            b.textContent = (it.e ? it.e + ' ' : '') + it.t;
+            b.addEventListener('click', function () { cfg.alternar(b); });
+            grid.appendChild(b);
+        });
+    });
+}
+
+// Pide al servidor la lista completa (solo administradores) y la dibuja
+async function _cargarEtiquetasPersonalizadas() {
+    if (_etiquetasNuevasCargadas || _cargandoEtiquetasNuevas) return;
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user) || !CONFIG.APPS_SCRIPT_URL) return;
+    _cargandoEtiquetasNuevas = true;
+    try {
+        var idToken = await user.getIdToken();
+        var r = await _postAppsScript({ idToken: idToken, accion: 'etiquetasLeer' });
+        if (r && r.ok && r.etiquetas) {
+            _fijarEtiquetasPersonalizadas(r.etiquetas, true);
+            _dibujarEtiquetasPersonalizadas();
+            _etiquetasNuevasCargadas = true;
+        } else {
+            console.warn('[etiquetas nuevas polo]', r && r.error);
+        }
+    } catch (e) {
+        console.warn('[etiquetas nuevas polo] no se pudieron cargar:', e);
+    } finally {
+        _cargandoEtiquetasNuevas = false;
+    }
+}
+
+function _estadoEtiquetaNueva(txt, error) {
+    var e = document.getElementById('sapEtiquetaNuevaEstado');
+    if (!e) return;
+    e.textContent = txt || '';
+    e.classList.toggle('error', !!error);
+}
+
+function abrirEtiquetaNueva(tipo) {
+    var cfg = _TIPOS_ETIQUETA_NUEVA[tipo];
+    var modal = document.getElementById('sapModalEtiquetaNueva');
+    if (!cfg || !modal) return;
+    _tipoEtiquetaNueva = tipo;
+    _emojiEtiquetaEditadoAMano = false;
+    document.getElementById('sapEtiquetaNuevaTitulo').textContent = cfg.titulo;
+    var nombre = document.getElementById('inputEtiquetaNuevaNombre');
+    var emoji = document.getElementById('inputEtiquetaNuevaEmoji');
+    nombre.value = '';
+    nombre.placeholder = cfg.ejemplo;
+    emoji.value = cfg.emojiBase;
+    _estadoEtiquetaNueva('');
+    var g = document.getElementById('btnGuardarEtiquetaNueva');
+    if (g) { g.disabled = true; g.textContent = 'Agregar'; }
+    modal.classList.add('abierto');
+    setTimeout(function () { nombre.focus(); }, 50);
+}
+
+function cerrarEtiquetaNueva() {
+    if (_guardandoEtiquetaNueva) return;
+    var modal = document.getElementById('sapModalEtiquetaNueva');
+    if (modal) modal.classList.remove('abierto');
+    _tipoEtiquetaNueva = null;
+}
+
+function _alEscribirEtiquetaNueva() {
+    var nombre = document.getElementById('inputEtiquetaNuevaNombre');
+    var emoji = document.getElementById('inputEtiquetaNuevaEmoji');
+    if (!_emojiEtiquetaEditadoAMano) emoji.value = _sugerirEmojiEtiqueta(nombre.value, _tipoEtiquetaNueva);
+    var g = document.getElementById('btnGuardarEtiquetaNueva');
+    if (g && !_guardandoEtiquetaNueva) g.disabled = _valorEtiquetaNueva(_tipoEtiquetaNueva, nombre.value) === '';
+    _estadoEtiquetaNueva('');
+}
+
+async function guardarEtiquetaNueva() {
+    if (_guardandoEtiquetaNueva || !_tipoEtiquetaNueva) return;
+    var tipo = _tipoEtiquetaNueva;
+    var cfg = _TIPOS_ETIQUETA_NUEVA[tipo];
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) { _estadoEtiquetaNueva('No tienes permisos de administrador.', true); return; }
+    if (!CONFIG.APPS_SCRIPT_URL) { _estadoEtiquetaNueva('Falta configurar APPS_SCRIPT_URL en config.js.', true); return; }
+
+    var texto = document.getElementById('inputEtiquetaNuevaNombre').value.replace(/\s+/g, ' ').trim().substring(0, 28);
+    var valor = _valorEtiquetaNueva(tipo, texto);
+    if (!texto || !valor) { _estadoEtiquetaNueva('Escribe un nombre con letras o números.', true); return; }
+    var grid = document.getElementById(cfg.gridId);
+    if (grid && _chipDeValor(grid, valor)) { _estadoEtiquetaNueva('Ya existe una etiqueta con ese nombre en esta zona.', true); return; }
+    var emoji = document.getElementById('inputEtiquetaNuevaEmoji').value.trim() || _sugerirEmojiEtiqueta(texto, tipo);
+
+    var btn = document.getElementById('btnGuardarEtiquetaNueva');
+    _guardandoEtiquetaNueva = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    _estadoEtiquetaNueva('');
+    try {
+        var idToken = await user.getIdToken(true);
+        var r = await _postAppsScript({ idToken: idToken, accion: 'etiquetaAgregar', tipo: tipo, texto: texto, emoji: emoji });
+        if (r && r.ok && r.etiquetas) {
+            _fijarEtiquetasPersonalizadas(r.etiquetas, true);
+            _etiquetasNuevasCargadas = true;
+            _dibujarEtiquetasPersonalizadas();
+            // La etiqueta recién creada queda seleccionada para el producto que se está llenando
+            var chip = grid ? _chipDeValor(grid, r.valor || valor) : null;
+            if (chip && !chip.classList.contains('activo')) cfg.alternar(chip);
+            _guardandoEtiquetaNueva = false;
+            cerrarEtiquetaNueva();
+            mostrarToast(r.existente ? 'Esa etiqueta ya existía.' : '✅ Etiqueta «' + texto + '» agregada.');
+        } else {
+            var err = (r && r.error) || 'No se pudo guardar la etiqueta.';
+            if (/no reconocida/i.test(err)) err += ' Implementa la última versión de CodePolo.gs.';
+            _estadoEtiquetaNueva(err, true);
+        }
+    } catch (e) {
+        console.error('[etiqueta nueva polo]', e);
+        _estadoEtiquetaNueva('Error al guardar: ' + (e && e.message ? e.message : 'conexión'), true);
+    } finally {
+        _guardandoEtiquetaNueva = false;
+        if (btn) { btn.textContent = 'Agregar'; btn.disabled = _valorEtiquetaNueva(_tipoEtiquetaNueva, document.getElementById('inputEtiquetaNuevaNombre').value) === ''; }
+    }
+}
+
+// Crea los botones "Agregar etiqueta nueva" y el diálogo (no hace falta tocar index.html)
+function _prepararEtiquetasNuevas() {
+    var sub = document.getElementById('submenuAgregarProducto');
+    if (!sub) { setTimeout(_prepararEtiquetasNuevas, 300); return; }
+    if (document.getElementById('sapModalEtiquetaNueva')) return;
+
+    Object.keys(_TIPOS_ETIQUETA_NUEVA).forEach(function (tipo) {
+        var grid = document.getElementById(_TIPOS_ETIQUETA_NUEVA[tipo].gridId);
+        if (!grid) return;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sap-btn-etiqueta-nueva';
+        b.textContent = '➕ Agregar etiqueta nueva';
+        b.addEventListener('click', function () { abrirEtiquetaNueva(tipo); });
+        grid.insertAdjacentElement('afterend', b);
+    });
+
+    var modal = document.createElement('div');
+    modal.id = 'sapModalEtiquetaNueva';
+    modal.className = 'sap-modal-etiqueta';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML =
+        '<div class="sap-modal-etiqueta-caja">' +
+            '<h4 id="sapEtiquetaNuevaTitulo">Nueva etiqueta</h4>' +
+            '<label class="panel-nombre-label" for="inputEtiquetaNuevaNombre">Nombre</label>' +
+            '<div class="sap-fila-titulo">' +
+                '<input id="inputEtiquetaNuevaEmoji" class="panel-nombre-input sap-emoji-input" type="text" maxlength="8" autocomplete="off" aria-label="Emoji">' +
+                '<input id="inputEtiquetaNuevaNombre" class="panel-nombre-input" type="text" maxlength="28" autocomplete="off" enterkeyhint="done">' +
+            '</div>' +
+            '<p class="sap-nota">El emoji se elige solo según el nombre; si quieres otro, escríbelo en el cuadro de la izquierda. La etiqueta queda guardada para usarla siempre.</p>' +
+            '<p class="sap-estado" id="sapEtiquetaNuevaEstado"></p>' +
+            '<div class="panel-nombre-acciones">' +
+                '<button type="button" class="panel-nombre-btn cancelar" id="btnCancelarEtiquetaNueva">Cancelar</button>' +
+                '<button type="button" class="panel-nombre-btn guardar" id="btnGuardarEtiquetaNueva" disabled>Agregar</button>' +
+            '</div>' +
+        '</div>';
+    sub.appendChild(modal);
+
+    document.getElementById('btnCancelarEtiquetaNueva').addEventListener('click', cerrarEtiquetaNueva);
+    document.getElementById('btnGuardarEtiquetaNueva').addEventListener('click', guardarEtiquetaNueva);
+    modal.addEventListener('click', function (ev) { if (ev.target === modal) cerrarEtiquetaNueva(); });
+    document.getElementById('inputEtiquetaNuevaNombre').addEventListener('input', _alEscribirEtiquetaNueva);
+    document.getElementById('inputEtiquetaNuevaNombre').addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); var g = document.getElementById('btnGuardarEtiquetaNueva'); if (g && !g.disabled) guardarEtiquetaNueva(); }
+    });
+    document.getElementById('inputEtiquetaNuevaEmoji').addEventListener('input', function () { _emojiEtiquetaEditadoAMano = true; });
+
+    _leerCacheEtiquetasNuevas();
+    _dibujarEtiquetasPersonalizadas();
+    _cargarEtiquetasPersonalizadas();
+}
+_prepararEtiquetasNuevas();
 
 // El editor de imagen terminó de (re)dibujar o se reinició: se actualiza el botón de imagen y "Guardar"
 document.addEventListener('editorImagenCambio', function () {
