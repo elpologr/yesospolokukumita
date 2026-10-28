@@ -5,14 +5,17 @@
 // Paso 2 (formulario básico): imagen principal (archivo o link de imgbb), nombre, precios,
 // medidas, descripción, video, existencia, oferta, más vendido y etiqueta principal.
 // Paso 3a: fotos adicionales (galería, hasta 50 imágenes por producto, subidas una por una).
-// Todavía NO incluye: editor de imagen, configurar/mover producto,
+// Paso 3b: editor de imagen (editor-imagen.js): la foto principal pasa por el quitafondos y se
+// arma sobre el fondo azul de Polo con título; esa imagen final es la que se sube a imgbb.
+// Todavía NO incluye: configurar/mover producto,
 // ni etiquetas de evento / forma / etiquetas nuevas (vienen en los siguientes pasos).
 //
 // La seguridad real está en el servidor (CodePolo.gs): vuelve a verificar el idToken de Firebase
 // y el correo contra CORREOS_ADMIN. Aquí solo se muestra u oculta el botón.
 // ══════════════════════════════════════════════════════════════════════════════
 
-var _imagenProductoSeleccionada = null; // dataURL (JPEG) de la foto elegida
+var _imagenProductoSeleccionada = null; // dataURL de la imagen principal final (la arma editor-imagen.js)
+var _principalElegida = false;          // true desde que se elige una foto, aunque el editor aún la esté armando
 var _guardandoProducto = false;
 
 // Fotos adicionales (galería): la principal es la 1ª imagen del producto; el resto se suben tal cual (reducidas)
@@ -136,6 +139,8 @@ function limpiarFormularioProducto() {
         if (el) el.value = '';
     });
     _imagenProductoSeleccionada = null;
+    _principalElegida = false;
+    if (window.editorImagenProducto) window.editorImagenProducto.reset();
     _imagenesExtraProducto = [];
     var pf = document.getElementById('previewImagenProducto');
     if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
@@ -169,7 +174,7 @@ function elegirImagenProducto() {
 
 // ¿Ya se eligió la imagen principal (foto o link de imgbb)?
 function _hayImagenPrincipal() {
-    return !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
+    return _principalElegida || !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
 }
 
 // Con imagen principal el botón pasa a "Elegir otra imagen principal"
@@ -232,13 +237,28 @@ async function previsualizarImagenProducto(event) {
     _estadoImagen('Preparando la imagen…');
     try {
         // 1ª foto = imagen principal
-        var r = await _leerImagenProducto(archivos[0], 1200, 0.88, 0);
-        _imagenProductoSeleccionada = r.full;
+        var r = await _leerImagenProducto(archivos[0], 1200, 0.9, 0);
         // La foto reemplaza cualquier link pegado (para no subir las dos)
         _limpiarUrlImagen();
-        var pf = document.getElementById('previewImagenProducto');
-        if (pf) { pf.src = r.full; pf.style.display = 'block'; }
-        _estadoImagen('✔ Imagen lista. Se subirá a imgbb al guardar.');
+        _principalElegida = true;
+        if (window.editorImagenProducto) {
+            // editor-imagen.js quita el fondo y arma la imagen final con el fondo azul; cuando termina de
+            // dibujar deja el resultado en _imagenProductoSeleccionada y avisa con 'editorImagenCambio'
+            _imagenProductoSeleccionada = null;
+            window.editorImagenProducto.cargarFoto(r.full).catch(function () {
+                _principalElegida = false;
+                _estadoImagen('No se pudo preparar esa imagen. Prueba con otra.', true);
+                _renderExtrasProducto();
+                validarFormularioProducto();
+            });
+            _estadoImagen('✔ Foto cargada. Ajusta la imagen en el editor de abajo; se subirá a imgbb al guardar.');
+        } else {
+            // Sin editor (no cargó editor-imagen.js): se usa la foto tal cual
+            _imagenProductoSeleccionada = r.full;
+            var pf = document.getElementById('previewImagenProducto');
+            if (pf) { pf.src = r.full; pf.style.display = 'block'; }
+            _estadoImagen('✔ Imagen lista. Se subirá a imgbb al guardar.');
+        }
     } catch (e) {
         _estadoImagen('No se pudo leer esa imagen. Prueba con otra.', true);
         _procesandoFotosProducto = false;
@@ -406,9 +426,11 @@ function alCambiarUrlImagen() {
     // Si pegó código embed, se deja solo el link limpio
     if (url !== crudo) input.value = url;
 
-    // El link reemplaza cualquier foto elegida del dispositivo
-    if (_imagenProductoSeleccionada) {
+    // El link reemplaza cualquier foto elegida del dispositivo (y su edición)
+    if (_principalElegida || _imagenProductoSeleccionada) {
+        if (window.editorImagenProducto) window.editorImagenProducto.reset();
         _imagenProductoSeleccionada = null;
+        _principalElegida = false;
         var pf = document.getElementById('previewImagenProducto');
         if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
         _estadoImagen('');
@@ -530,6 +552,9 @@ async function guardarProductoAdmin() {
         return;
     }
     if (_procesandoFotosProducto) { mostrarToast('Espera a que termine de preparar las fotos.'); return; }
+    var ed = window.editorImagenProducto;
+    if (ed && ed.ocupado()) { mostrarToast('Espera a que termine de quitar el fondo.'); return; }
+    if (ed && !urlImagen && ed.tituloPendiente()) { mostrarToast('Presiona "Aplicar" para actualizar el título en la imagen.'); return; }
     if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
 
     var btn = document.getElementById('btnGuardarProducto');
@@ -571,7 +596,7 @@ async function guardarProductoAdmin() {
             imagenUrl: urlImagen,
             imagenBase64: urlImagen ? '' : (_imagenProductoSeleccionada || ''),
             imagenesExtra: imagenesExtraUrls,
-            nombreArchivo: 'producto_' + Date.now() + '.jpg'
+            nombreArchivo: 'producto_' + Date.now() + '.webp'
         });
 
         if (resultado.ok) {
@@ -590,3 +615,9 @@ async function guardarProductoAdmin() {
         validarFormularioProducto();
     }
 }
+
+// El editor de imagen terminó de (re)dibujar o se reinició: se actualiza el botón de imagen y "Guardar"
+document.addEventListener('editorImagenCambio', function () {
+    _renderExtrasProducto();
+    validarFormularioProducto();
+});

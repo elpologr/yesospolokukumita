@@ -79,8 +79,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+    <!-- Fredoka: tipografía del título que el editor de imagen pone sobre la foto del producto -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=4">
-    <link rel="stylesheet" href="admin-producto.css?v=2">
+    <link rel="stylesheet" href="admin-producto.css?v=3">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1721,6 +1723,30 @@
             <div id="sapExtrasContador" class="sap-nota">0 / 50 imágenes en el producto</div>
         </div>
 
+        <!-- Editor de imagen (editor-imagen.js): quita el fondo y arma la imagen final sobre el fondo azul de Polo -->
+        <div id="editorImagenProducto" style="display:none;">
+            <figure class="sap-previa-img">
+                <canvas id="canvasImagenProducto" width="1024" height="1024"></canvas>
+                <figcaption>🔵 Yesos Polo (fondo azul) — esta es la imagen principal que se sube</figcaption>
+            </figure>
+            <div id="estadoEditorImagen" class="sap-estado"></div>
+            <label class="panel-nombre-label" for="inputTituloImagen">Título en la imagen</label>
+            <div class="sap-fila-titulo">
+                <input id="inputTituloImagen" class="panel-nombre-input" type="text" maxlength="60" placeholder="¡ Porta Flores de Yeso !" enterkeyhint="done">
+                <button class="panel-nombre-btn guardar" id="btnAplicarTitulo" type="button">✔ Aplicar</button>
+            </div>
+            <p class="sap-nota">Escribe el título y presiona Enter o "Aplicar" para verlo en la imagen.</p>
+            <label class="panel-nombre-label" for="rangoTamImagen">Tamaño de la pieza</label>
+            <input type="range" id="rangoTamImagen" min="40" max="140" value="100">
+            <label class="panel-nombre-label" for="rangoXImagen">Mover izquierda / derecha</label>
+            <input type="range" id="rangoXImagen" min="-300" max="300" value="0">
+            <label class="panel-nombre-label" for="rangoYImagen">Mover arriba / abajo</label>
+            <input type="range" id="rangoYImagen" min="-300" max="300" value="0">
+            <button class="panel-nombre-btn guardar" id="btnDescargarImagen" type="button">⬇️ Descargar imagen</button>
+            <button class="panel-nombre-btn cancelar" id="btnQuitarFondo" type="button">✂️ Volver a quitar el fondo</button>
+            <p class="sap-nota">El título arranca con el nombre del producto. La imagen se arma sola al elegir la foto.</p>
+        </div>
+
         <label class="panel-nombre-label" for="inputNombreProducto">Nombre *</label>
         <input id="inputNombreProducto" class="panel-nombre-input" type="text" maxlength="80" placeholder="Ej. Maceta de Flor" oninput="validarFormularioProducto()">
 
@@ -2125,7 +2151,8 @@
     <!-- JavaScript externo -->
     <script src="config.js?v=8"></script>
     <script src="app.js?v=4"></script>
-    <script src="admin-producto.js?v=2"></script>
+    <script src="admin-producto.js?v=3"></script>
+    <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
     <script>

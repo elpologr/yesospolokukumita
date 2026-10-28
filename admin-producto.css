@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
    Yesos Polo Kukúmita — Agregar producto (solo administradores)
    Estilos propios del formulario; todo va acotado a #submenuAgregarProducto
-   para no tocar el resto del sitio. Versión: paso 2 (formulario básico).
+   para no tocar el resto del sitio. Versión: paso 3b (formulario + fotos adicionales + editor de imagen).
    ══════════════════════════════════════════════════════════════ */
 #submenuAgregarProducto,
 #submenuAgregarProducto * {
@@ -149,3 +149,15 @@ body.modo-oscuro #submenuAgregarProducto .panel-nombre-btn.cancelar { background
 .sap-extra button { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; line-height: 20px; cursor: pointer; }
 .sap-extra span { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 800; color: #fff; background: rgba(0,0,0,0.55); border-radius: 6px; padding: 0 5px; }
 body.modo-oscuro .sap-extra { border-color: #4a3a2e; background: #2a2218; }
+
+/* ── Editor de imagen del producto (editor-imagen.js) ── */
+#editorImagenProducto { display: flex; flex-direction: column; gap: 10px; }
+#editorImagenProducto[style*="none"] { display: none !important; }
+.sap-previa-img { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sap-previa-img figcaption { font-size: 11px; font-weight: 700; color: #8c7565; text-align: center; }
+#canvasImagenProducto { width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 12px; background: #2f6a9a; }
+#editorImagenProducto input[type="range"] { width: 100%; accent-color: #2f6a9a; }
+.sap-fila-titulo { display: flex; gap: 8px; align-items: stretch; }
+.sap-fila-titulo input { flex: 1; min-width: 0; }
+.sap-fila-titulo button { white-space: nowrap; }
+body.modo-oscuro .sap-previa-img figcaption { color: #a89080; }
