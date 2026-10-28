@@ -7,15 +7,18 @@
 // Paso 3a: fotos adicionales (galería, hasta 50 imágenes por producto, subidas una por una).
 // Paso 3b: editor de imagen (editor-imagen.js): la foto principal pasa por el quitafondos y se
 // arma sobre el fondo azul de Polo con título; esa imagen final es la que se sube a imgbb.
-// Todavía NO incluye: configurar/mover producto,
-// ni etiquetas de evento / forma / etiquetas nuevas (vienen en los siguientes pasos).
+// Paso 4a: sub-etiquetas (columna H). Polo no tiene columnas de evento ni de forma como Fer: sus
+// "sub etiquetas" (cirio, tazón, stich…) van todas juntas en la columna H.
+// Todavía NO incluye: configurar (editar) ni mover producto (vienen en los siguientes pasos).
 //
 // La seguridad real está en el servidor (CodePolo.gs): vuelve a verificar el idToken de Firebase
 // y el correo contra CORREOS_ADMIN. Aquí solo se muestra u oculta el botón.
 // ══════════════════════════════════════════════════════════════════════════════
 
 var _imagenProductoSeleccionada = null; // dataURL de la imagen principal final (la arma editor-imagen.js)
-var _principalElegida = false;          // true desde que se elige una foto, aunque el editor aún la esté armando
+var _principalElegida = false;
+var _subEtiquetasProducto = [];         // sub-etiquetas elegidas (columna H), en minúsculas y sin repetir
+var MAX_SUBETIQUETAS = 15;          // true desde que se elige una foto, aunque el editor aún la esté armando
 var _guardandoProducto = false;
 
 // Fotos adicionales (galería): la principal es la 1ª imagen del producto; el resto se suben tal cual (reducidas)
@@ -49,6 +52,7 @@ function abrirSubmenuAgregarProducto() {
     if (!sub) return;
     sub.classList.add('abierto');
     sub.scrollTop = 0;
+    _llenarSugerenciasSubEtiquetas();
     document.body.style.overflow = 'hidden';
     validarFormularioProducto();
 }
@@ -141,6 +145,8 @@ function limpiarFormularioProducto() {
     _imagenProductoSeleccionada = null;
     _principalElegida = false;
     if (window.editorImagenProducto) window.editorImagenProducto.reset();
+    _subEtiquetasProducto = [];
+    _renderSubEtiquetas();
     _imagenesExtraProducto = [];
     var pf = document.getElementById('previewImagenProducto');
     if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
@@ -161,6 +167,90 @@ function limpiarFormularioProducto() {
     });
     validarFormularioProducto();
 }
+
+// ── Sub-etiquetas (columna H) ──
+// Igual que el servidor: minúsculas, sin comas ni barras, espacios simples y máx. 30 letras.
+function _normalizarSubEtiqueta(t) {
+    return String(t || '').replace(/[|,]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase().substring(0, 30);
+}
+
+// Sugerencias: las sub-etiquetas que ya usan los productos cargados en el catálogo
+function _llenarSugerenciasSubEtiquetas() {
+    var dl = document.getElementById('listaSubEtiquetas');
+    if (!dl) return;
+    var vistas = {}, lista = [];
+    document.querySelectorAll('[data-subtags]').forEach(function (el) {
+        (el.getAttribute('data-subtags') || '').split('|').forEach(function (t) {
+            t = _normalizarSubEtiqueta(t);
+            if (t && !vistas[t]) { vistas[t] = true; lista.push(t); }
+        });
+    });
+    lista.sort();
+    dl.innerHTML = '';
+    lista.forEach(function (t) {
+        var o = document.createElement('option'); o.value = t; dl.appendChild(o);
+    });
+}
+
+function _renderSubEtiquetas() {
+    var cont = document.getElementById('sapSubEtiquetasLista');
+    if (!cont) return;
+    cont.innerHTML = '';
+    _subEtiquetasProducto.forEach(function (t, i) {
+        var chip = document.createElement('span');
+        chip.className = 'sap-subtag';
+        var txt = document.createElement('span');
+        txt.textContent = t;
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Quitar ' + t);
+        x.textContent = '✕';
+        x.addEventListener('click', function () {
+            if (_guardandoProducto) return;
+            _subEtiquetasProducto.splice(i, 1);
+            _renderSubEtiquetas();
+        });
+        chip.appendChild(txt); chip.appendChild(x);
+        cont.appendChild(chip);
+    });
+}
+
+// Agrega lo escrito en el campo. Acepta varias separadas por coma ("cirio, tazón").
+function agregarSubEtiquetaProducto() {
+    var input = document.getElementById('inputSubEtiqueta');
+    if (!input) return;
+    var partes = String(input.value || '').split(',');
+    var agregadas = 0, llena = false;
+    partes.forEach(function (crudo) {
+        var t = _normalizarSubEtiqueta(crudo);
+        if (!t || _subEtiquetasProducto.indexOf(t) !== -1) return;
+        if (_subEtiquetasProducto.length >= MAX_SUBETIQUETAS) { llena = true; return; }
+        _subEtiquetasProducto.push(t); agregadas++;
+    });
+    if (llena) mostrarToast('Máximo ' + MAX_SUBETIQUETAS + ' sub-etiquetas por producto.');
+    input.value = '';
+    input._ultimoTexto = '';
+    _renderSubEtiquetas();
+}
+
+(function engancharCampoSubEtiqueta() {
+    var input = document.getElementById('inputSubEtiqueta');
+    if (!input) return;
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); agregarSubEtiquetaProducto(); }
+    });
+    // Al elegir una sugerencia de la lista o escribir una coma, se agrega sola
+    input.addEventListener('input', function () {
+        var v = input.value;
+        if (v.indexOf(',') !== -1) { agregarSubEtiquetaProducto(); return; }
+        if (_subEtiquetasProducto.length < MAX_SUBETIQUETAS && v.trim() &&
+            Array.prototype.some.call(document.querySelectorAll('#listaSubEtiquetas option'), function (o) { return o.value === v; }) &&
+            (!input._ultimoTexto || v.length - input._ultimoTexto.length > 1)) {
+            agregarSubEtiquetaProducto(); // se eligió una opción completa de la lista
+        }
+        input._ultimoTexto = v;
+    });
+})();
 
 // ── Imagen principal: foto del dispositivo ──
 // Sin imagen principal se pueden elegir varias (la 1ª es la principal y las demás quedan como adicionales).
@@ -526,6 +616,7 @@ async function guardarProductoAdmin() {
     }
     var etiquetas = obtenerEtiquetasPrincipales();
     if (!etiquetas.length) { mostrarToast('Elige al menos una etiqueta principal.'); return; }
+    agregarSubEtiquetaProducto(); // si dejó una sub-etiqueta escrita sin presionar "Agregar", no se pierde
 
     var urlImagen = _campoProducto('inputUrlImagenProducto');
     if (urlImagen !== '') {
@@ -587,6 +678,7 @@ async function guardarProductoAdmin() {
             precioBazar: precioBazar,
             descripcion: _campoProducto('inputDescripcionProducto'),
             etiquetas: etiquetas,
+            subEtiquetas: _subEtiquetasProducto.slice(),
             alto: alto,
             ancho: ancho,
             video: video,

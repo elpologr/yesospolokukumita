@@ -82,7 +82,7 @@
     <!-- Fredoka: tipografía del título que el editor de imagen pone sobre la foto del producto -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=4">
-    <link rel="stylesheet" href="admin-producto.css?v=3">
+    <link rel="stylesheet" href="admin-producto.css?v=4">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1818,6 +1818,17 @@
             </div>
             <p class="sap-nota">Puedes elegir más de una. Se guarda en la columna G de la hoja.</p>
         </div>
+
+        <div class="sap-zona">
+            <div class="sap-seccion-titulo">Sub-etiquetas (opcional)</div>
+            <div class="sap-fila-titulo">
+                <input id="inputSubEtiqueta" class="panel-nombre-input" type="text" maxlength="60" list="listaSubEtiquetas" autocomplete="off" enterkeyhint="done" placeholder="Ej. cirio, tazón, stich…">
+                <button class="panel-nombre-btn guardar" type="button" onclick="agregarSubEtiquetaProducto()">＋ Agregar</button>
+            </div>
+            <datalist id="listaSubEtiquetas"></datalist>
+            <div id="sapSubEtiquetasLista" class="sap-subtags-lista"></div>
+            <p class="sap-nota">Se guardan en la columna H. Se ven debajo de la imagen del producto y ayudan a que lo encuentren en la búsqueda. Escribe una y presiona Enter o "Agregar" (también puedes separar varias con coma); al escribir salen las que ya usas en otros productos.</p>
+        </div>
       </div><!-- /sap-col-datos -->
 
       <div class="panel-nombre-acciones">
@@ -2151,7 +2162,7 @@
     <!-- JavaScript externo -->
     <script src="config.js?v=8"></script>
     <script src="app.js?v=4"></script>
-    <script src="admin-producto.js?v=3"></script>
+    <script src="admin-producto.js?v=4"></script>
     <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
