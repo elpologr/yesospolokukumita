@@ -7,8 +7,9 @@
 // Paso 3a: fotos adicionales (galería, hasta 50 imágenes por producto, subidas una por una).
 // Paso 3b: editor de imagen (editor-imagen.js): la foto principal pasa por el quitafondos y se
 // arma sobre el fondo azul de Polo con título; esa imagen final es la que se sube a imgbb.
-// Paso 4a: sub-etiquetas (columna H). Polo no tiene columnas de evento ni de forma como Fer: sus
-// "sub etiquetas" (cirio, tazón, stich…) van todas juntas en la columna H.
+// Paso 4a: sub-etiquetas (columna H): "cirio, tazón, stich…".
+// Paso 4c: zonas "Etiqueta de evento" (columna M, NUEVA: encabezado "Etiqueta de Evento") y "Etiquetas de forma"
+// (se guardan en la columna G junto a la etiqueta principal, que es de donde las lee el filtro de formas de Polo).
 // Paso 4b: configurar (editar) y mover producto, solo administradores. Desde el modal de un producto del
 // catálogo de Polo: "⚙️ Editar" abre este mismo formulario con los datos del producto (modo edición) y
 // "↕️ Mover" abre un diálogo para cambiar su lugar en la hoja. El servidor (CodePolo.gs) comprueba por nombre
@@ -25,7 +26,7 @@ var MAX_SUBETIQUETAS = 15;          // true desde que se elige una foto, aunque 
 var _guardandoProducto = false;
 
 // Modo edición (paso 4b)
-var _edicionProducto = null;       // null = agregando; { fila, nombre, etiquetasExtra: [], medidasTexto: '' } = editando
+var _edicionProducto = null;       // null = agregando; { fila, nombre, etiquetasExtra: [], eventosExtra: [], medidasTexto: '' } = editando
 var _imagenesExistentes = [];      // links de imgbb que el producto ya tiene en la hoja (la 1ª es la principal)
 var _filasEditadas = {};           // filas que ya se guardaron en esta sesión (hay que recargar antes de volver a editarlas)
 var _catalogoMovido = false;       // true si se movió un producto: los números de fila de la página ya no valen
@@ -98,6 +99,58 @@ function alternarEtiquetaPrincipal(btn) {
     var activo = btn.classList.toggle('activo');
     btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
     validarFormularioProducto();
+}
+
+// ── Etiquetas de evento (columna M) y de forma (se guardan en G) ──
+function alternarEtiquetaEvento(btn) {
+    var activo = btn.classList.toggle('activo');
+    btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
+}
+
+function alternarEtiquetaForma(btn) {
+    var activo = btn.classList.toggle('activo');
+    btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
+}
+
+function obtenerEtiquetasEvento() {
+    var lista = [];
+    document.querySelectorAll('#chipsEtiquetaEvento .sap-chip.activo').forEach(function (b) {
+        lista.push(b.getAttribute('data-valor'));
+    });
+    // Al editar: eventos que ya tenía la hoja y que no tienen botón aquí se conservan
+    if (_edicionProducto && _edicionProducto.eventosExtra) _edicionProducto.eventosExtra.forEach(function (t) { if (lista.indexOf(t) === -1) lista.push(t); });
+    return lista;
+}
+
+function obtenerEtiquetasForma() {
+    var lista = [];
+    document.querySelectorAll('#chipsEtiquetaForma .sap-chip.activo').forEach(function (b) {
+        lista.push(b.getAttribute('data-valor'));
+    });
+    return lista;
+}
+
+// Variantes de escritura que puede tener una forma en la hoja (para marcar su botón al editar)
+var _FORMAS_VARIANTES_PRODUCTO = {
+    'animales':        ['animal', 'animales'],
+    'personajes':      ['personaje', 'personajes'],
+    'macetas':         ['maceta', 'macetas'],
+    'bases':           ['base', 'bases'],
+    'tazones':         ['tazon', 'tazones'],
+    'alhajeros':       ['alhajero', 'alhajeros', 'alajero', 'alajeros', 'joyero', 'joyeros'],
+    'porta velas':     ['portavela', 'portavelas'],
+    'porta inciensos': ['portaincienso', 'portainciensos']
+};
+function _normalizarFormaProducto(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s_\-]+/g, '');
+}
+// Devuelve el data-valor del botón de forma que corresponde a la etiqueta, o '' si no es una forma conocida
+function _formaDeEtiqueta(t) {
+    var n = _normalizarFormaProducto(t);
+    for (var k in _FORMAS_VARIANTES_PRODUCTO) {
+        if (_FORMAS_VARIANTES_PRODUCTO[k].indexOf(n) !== -1) return k;
+    }
+    return '';
 }
 
 function obtenerEtiquetasPrincipales() {
@@ -174,9 +227,11 @@ function limpiarFormularioProducto() {
     _estadoImagen('');
     _estadoExtrasProducto('');
     _renderExtrasProducto();
-    document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip').forEach(function (b) {
+    document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip, #chipsEtiquetaEvento .sap-chip, #chipsEtiquetaForma .sap-chip').forEach(function (b) {
         b.classList.remove('activo'); b.setAttribute('aria-pressed', 'false');
     });
+    var notaEv = document.getElementById('sapEventosExtraNota');
+    if (notaEv) { notaEv.style.display = 'none'; notaEv.textContent = ''; }
     ['btnEnOfertaProducto', 'btnMasVendidoProducto'].forEach(function (id) {
         var b = document.getElementById(id);
         if (!b) return;
@@ -720,6 +775,8 @@ async function guardarProductoAdmin() {
             precioBazar: precioBazar,
             descripcion: _campoProducto('inputDescripcionProducto'),
             etiquetas: etiquetas,
+            formas: obtenerEtiquetasForma(),
+            eventos: obtenerEtiquetasEvento(),
             subEtiquetas: _subEtiquetasProducto.slice(),
             alto: alto,
             ancho: ancho,
@@ -872,13 +929,33 @@ function abrirSubmenuEditarProducto() {
     var chips = {};
     document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip').forEach(function (b) { chips[b.getAttribute('data-valor')] = b; });
     var extra = [];
+    var chipsForma = {};
+    document.querySelectorAll('#chipsEtiquetaForma .sap-chip').forEach(function (b) { chipsForma[b.getAttribute('data-valor')] = b; });
     tipos.forEach(function (t) {
+        var forma = _formaDeEtiqueta(t);
         if (chips[t]) { chips[t].classList.add('activo'); chips[t].setAttribute('aria-pressed', 'true'); }
+        else if (forma && chipsForma[forma]) { chipsForma[forma].classList.add('activo'); chipsForma[forma].setAttribute('aria-pressed', 'true'); }
         else if (extra.indexOf(t) === -1) extra.push(t);
     });
 
+    // Eventos (columna M → data-evento, separados por espacio)
+    var chipsEvento = {};
+    document.querySelectorAll('#chipsEtiquetaEvento .sap-chip').forEach(function (b) { chipsEvento[b.getAttribute('data-valor')] = b; });
+    var eventosExtra = [];
+    _atributoCard(card, 'data-evento').split(/\s+/).forEach(function (e) {
+        e = e.trim().toLowerCase();
+        if (!e || e === 'sin' || e === 'evento') return;
+        if (chipsEvento[e]) { chipsEvento[e].classList.add('activo'); chipsEvento[e].setAttribute('aria-pressed', 'true'); }
+        else if (eventosExtra.indexOf(e) === -1) eventosExtra.push(e);
+    });
+    var notaEv = document.getElementById('sapEventosExtraNota');
+    if (notaEv) {
+        notaEv.textContent = eventosExtra.length ? 'Este producto también tiene (se conservan al guardar): ' + eventosExtra.join(', ') : '';
+        notaEv.style.display = eventosExtra.length ? '' : 'none';
+    }
+
     var med = _separarMedidasProducto(_atributoCard(card, 'data-alto'));
-    _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, medidasTexto: med.texto };
+    _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, eventosExtra: eventosExtra, medidasTexto: med.texto };
     _imagenesExistentes = imgs;
 
     function poner(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
@@ -993,6 +1070,8 @@ async function _guardarEdicionProducto(user, v) {
             precioBazar: v.precioBazar,
             descripcion: _campoProducto('inputDescripcionProducto'),
             etiquetas: v.etiquetas,
+            formas: obtenerEtiquetasForma(),
+            eventos: obtenerEtiquetasEvento(),
             subEtiquetas: _subEtiquetasProducto.slice(),
             alto: v.alto,
             ancho: v.ancho,

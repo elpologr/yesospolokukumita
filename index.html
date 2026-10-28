@@ -82,7 +82,7 @@
     <!-- Fredoka: tipografía del título que el editor de imagen pone sobre la foto del producto -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=6">
-    <link rel="stylesheet" href="admin-producto.css?v=5">
+    <link rel="stylesheet" href="admin-producto.css?v=6">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1847,6 +1847,58 @@
             <p class="sap-nota" id="sapEtiquetasExtraNota" style="display:none;"></p>
         </div>
 
+        <div class="sap-zona sap-zona-evento">
+            <div class="sap-seccion-titulo">Etiqueta de evento</div>
+            <div class="sap-chips" id="chipsEtiquetaEvento">
+                <button type="button" class="sap-chip" data-valor="primera-comunion" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🙏 Primera comunión</button>
+                <button type="button" class="sap-chip" data-valor="bautizo" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🕊️ Bautizo</button>
+                <button type="button" class="sap-chip" data-valor="boda" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">💍 Boda</button>
+                <button type="button" class="sap-chip" data-valor="quince-anos" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">👑 Quince años</button>
+                <button type="button" class="sap-chip" data-valor="baby-shower" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🍼 Baby shower</button>
+                <button type="button" class="sap-chip" data-valor="graduacion" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🎓 Graduación</button>
+                <button type="button" class="sap-chip" data-valor="aniversario-luctuoso" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🕯️ Aniv. luctuoso</button>
+                <button type="button" class="sap-chip" data-valor="fin-novenario" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🌿 Fin de novenario</button>
+                <button type="button" class="sap-chip" data-valor="despedida-soltera" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🥂 Despedida de soltera</button>
+                <button type="button" class="sap-chip" data-valor="despedida-soltero" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🍻 Despedida de soltero</button>
+                <button type="button" class="sap-chip" data-valor="confirmacion" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">✝️ Confirmación</button>
+                <button type="button" class="sap-chip" data-valor="compromiso" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">💑 Compromiso</button>
+                <button type="button" class="sap-chip" data-valor="cumpleanos" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🎂 Cumpleaños</button>
+                <button type="button" class="sap-chip" data-valor="aniversario-de-bodas" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">💞 Aniversario de bodas</button>
+                <button type="button" class="sap-chip" data-valor="revelacion-de-genero" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">💙 Revelación de género</button>
+                <button type="button" class="sap-chip" data-valor="posada" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🏮 Posada</button>
+                <button type="button" class="sap-chip" data-valor="navidad" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🎄 Navidad</button>
+                <button type="button" class="sap-chip" data-valor="ano-nuevo" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🎆 Año nuevo</button>
+                <button type="button" class="sap-chip" data-valor="dia-de-las-madres" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🌷 Día de las madres</button>
+                <button type="button" class="sap-chip" data-valor="dia-del-padre" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">👔 Día del padre</button>
+                <button type="button" class="sap-chip" data-valor="dia-de-san-valentin" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">❤️ Día de San Valentín</button>
+                <button type="button" class="sap-chip" data-valor="dia-del-nino" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🧸 Día del niño</button>
+                <button type="button" class="sap-chip" data-valor="dia-de-muertos" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">💀 Día de muertos</button>
+                <button type="button" class="sap-chip" data-valor="dia-del-maestro" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">📚 Día del maestro</button>
+                <button type="button" class="sap-chip" data-valor="dia-del-estudiante" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🎓 Día del estudiante</button>
+                <button type="button" class="sap-chip" data-valor="ordenacion-sacerdotal" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">📿 Ordenación sacerdotal</button>
+                <button type="button" class="sap-chip" data-valor="jubilacion" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🏖️ Jubilación</button>
+                <button type="button" class="sap-chip" data-valor="apertura-de-negocio" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🏪 Apertura de negocio</button>
+                <button type="button" class="sap-chip" data-valor="condolencias" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🤍 Condolencias</button>
+            </div>
+            <p class="sap-nota">Opcional. Puedes elegir varias. Se guarda en la columna M de la hoja (agrega el encabezado "Etiqueta de Evento" en M1) y es la que usa el filtro "Busca por Evento".</p>
+            <p class="sap-nota" id="sapEventosExtraNota" style="display:none;"></p>
+        </div>
+
+        <div class="sap-zona sap-zona-forma">
+            <div class="sap-seccion-titulo">Etiquetas de forma</div>
+            <div class="sap-chips" id="chipsEtiquetaForma">
+                <button type="button" class="sap-chip" data-valor="animales" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🐾 Animales</button>
+                <button type="button" class="sap-chip" data-valor="personajes" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🎭 Personajes</button>
+                <button type="button" class="sap-chip" data-valor="macetas" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🌱 Macetas</button>
+                <button type="button" class="sap-chip" data-valor="bases" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🪨 Bases</button>
+                <button type="button" class="sap-chip" data-valor="tazones" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🥣 Tazones</button>
+                <button type="button" class="sap-chip" data-valor="alhajeros" aria-pressed="false" onclick="alternarEtiquetaForma(this)">💍 Alhajeros</button>
+                <button type="button" class="sap-chip" data-valor="porta velas" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🕯️ Porta Velas</button>
+                <button type="button" class="sap-chip" data-valor="porta inciensos" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🪔 Porta Inciensos</button>
+            </div>
+            <p class="sap-nota">Opcional. Puedes elegir varias. Se guardan en la columna G junto a la etiqueta principal, que es de donde las lee el filtro de formas del sitio.</p>
+        </div>
+
         <div class="sap-zona">
             <div class="sap-seccion-titulo">Sub-etiquetas (opcional)</div>
             <div class="sap-fila-titulo">
@@ -2188,9 +2240,9 @@
 </div>
 
     <!-- JavaScript externo -->
-    <script src="config.js?v=10"></script>
-    <script src="app.js?v=6"></script>
-    <script src="admin-producto.js?v=6"></script>
+    <script src="config.js?v=11"></script>
+    <script src="app.js?v=7"></script>
+    <script src="admin-producto.js?v=7"></script>
     <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
