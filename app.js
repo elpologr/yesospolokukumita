@@ -3379,7 +3379,8 @@ async function confirmarEliminarProducto() {
         restaurarBtn();
         return;
     }
-    var filaBorrada = _eliminarProducto.fila, nombreBorrado = _eliminarProducto.nombre;
+    // Si el servidor tuvo que localizar el producto por nombre (la hoja había cambiado), usa la fila real que borró
+    var filaBorrada = (r.fila && isFinite(r.fila)) ? r.fila : _eliminarProducto.fila, nombreBorrado = _eliminarProducto.nombre;
     mostrarToast('✅ «' + (r.nombre || nombreBorrado) + '» eliminado de la hoja. Recarga la página en unos segundos para ver el catálogo actualizado.');
 
     // 3) Limpieza de la pantalla (si algo falla aquí NO es un error: el producto ya se borró)
@@ -3390,7 +3391,7 @@ async function confirmarEliminarProducto() {
         document.querySelectorAll('[data-sheet-row]').forEach(function (c) {
             if ((c.getAttribute('data-origen-externo') || '') !== '') return;
             var f = parseInt(c.getAttribute('data-sheet-row'), 10);
-            if (f === filaBorrada && (c.getAttribute('data-nombre') || '').trim() === nombreBorrado) c.remove();
+            if (c === window._cardModalActual || (f === filaBorrada && (c.getAttribute('data-nombre') || '').trim() === nombreBorrado)) c.remove();
             else if (f > filaBorrada) c.setAttribute('data-sheet-row', String(f - 1));
         });
         cerrarEliminarProducto();

@@ -11,7 +11,7 @@ const CONFIG = {
   // Este sitio la usa para ELIMINAR productos (solo administradores). Además, el Apps Script
   // de Yesos Fer la usa para crear productos aquí: ese link debe estar también guardado en las
   // propiedades del script de Fer con el nombre URL_POLO.
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxHLXfsEUEi4TpbQW5wiyt6QC2dW3E-bNDY1zJdAWUr0BEELDy6gSmf7AEMxugoNv8_Zg/exec",
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbypBaDmQ6LxcR29I6Jt-FlK8lUaI_ni-1hO09mtRR0vhV7_rm_PnzVmd4RyPQ7_QrYt9w/exec",
 
   // Hoja de cálculo del catálogo de Yesos Polo (pública, se lee como CSV vía gviz).
   SHEET_ID: "1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA",
