@@ -2729,9 +2729,40 @@ body.modo-oscuro .btn-google-auth:hover { background: #3a2e26; }
     background: #362a22; color: white; padding: 12px 24px;
     border-radius: 24px; font-size: 14px; font-weight: 600;
     box-shadow: 0 4px 16px rgba(0,0,0,0.3); z-index: 99999;
-    opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    white-space: normal; text-align: center; line-height: 1.4;
+    width: max-content; max-width: min(92vw, 520px);
 }
-.toast-notif.visible { opacity: 1; }
+.toast-notif.visible { opacity: 1; pointer-events: auto; cursor: pointer; } /* toca el aviso para cerrarlo */
+
+/* ── Eliminar producto (solo administradores) ── */
+.mp-btn-eliminar-admin {
+    width: 100%; padding: 12px; border: 1.5px solid #c0392b; border-radius: 12px;
+    background: #fff5f4; color: #c0392b; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+}
+.mp-btn-eliminar-admin:hover { background: #c0392b; color: #fff; }
+/* La fila del botón ocupa todo el ancho (la clase .mp-botones-accion es una cuadrícula de 2 columnas) */
+#mpFilaAdminEliminar { grid-template-columns: 1fr; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e8c9c5; }
+#modalEliminarProducto {
+    display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center; padding: 16px;
+}
+#modalEliminarProducto.abierto { display: flex; }
+#modalEliminarProducto .mep-caja {
+    background: #fff; border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 380px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35); color: #362a22;
+}
+#modalEliminarProducto h3 { margin: 0 0 10px; font-size: 1.15rem; }
+#modalEliminarProducto p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.45; }
+#modalEliminarProducto .mep-acciones { display: flex; gap: 10px; margin-top: 14px; }
+#modalEliminarProducto .mep-acciones button {
+    flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+}
+#modalEliminarProducto .mep-cancelar { background: #eee; color: #362a22; }
+#modalEliminarProducto .mep-eliminar { background: #c0392b; color: #fff; }
+#modalEliminarProducto .mep-eliminar:disabled { opacity: 0.6; cursor: default; }
+body.modo-oscuro #modalEliminarProducto .mep-caja { background: #2a2218; color: #e0d5cc; }
+body.modo-oscuro #modalEliminarProducto .mep-cancelar { background: #3a3028; color: #e0d0c0; }
 
 
 

@@ -79,7 +79,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=3">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1621,6 +1621,11 @@
                 <button class="mp-btn-compartir" id="mpBtnCompartir">🔗 Compartir</button>
                 <button class="mp-btn-compartir" id="mpBtnVisitarVelas" style="display:none;">🕯️ Visitar Velas Kukúmita</button>
             </div>
+
+            <!-- 9c. Solo administradores: eliminar este producto de la hoja (lo muestra app.js) -->
+            <div class="mp-botones-accion" id="mpFilaAdminEliminar" style="display:none; margin-top:6px;">
+                <button class="mp-btn-eliminar-admin" id="mpBtnEliminarAdmin" type="button" onclick="abrirEliminarProducto()">🗑️ Eliminar producto</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1655,6 +1660,19 @@
 
 <!-- Toast -->
 <div class="toast-notif" id="toastNotif"></div>
+
+<!-- Confirmar eliminación de producto (solo administradores) -->
+<div id="modalEliminarProducto" onclick="if(event.target===this) cerrarEliminarProducto()">
+    <div class="mep-caja">
+        <h3>🗑️ Eliminar producto</h3>
+        <p id="mepProducto"></p>
+        <p>Se borrará su fila en Google Sheets y los productos de abajo subirán una fila. Esta acción no se puede deshacer.</p>
+        <div class="mep-acciones">
+            <button class="mep-cancelar" type="button" onclick="cerrarEliminarProducto()">Cancelar</button>
+            <button class="mep-eliminar" id="btnConfirmarEliminar" type="button" onclick="confirmarEliminarProducto()">Eliminar</button>
+        </div>
+    </div>
+</div>
 
 <!-- Firebase SDK (versión compat para uso directo en HTML) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1978,8 +1996,8 @@
 </div>
 
     <!-- JavaScript externo -->
-    <script src="config.js?v=1"></script>
-    <script src="app.js"></script>
+    <script src="config.js?v=3"></script>
+    <script src="app.js?v=2"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
     <script>

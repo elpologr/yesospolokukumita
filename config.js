@@ -8,10 +8,10 @@
 // ══════════════════════════════════════════════════════════════
 const CONFIG = {
   // URL de despliegue del Apps Script de Polo (CodePolo.gs). Termina en /exec.
-  // OJO: hoy este sitio no la usa; quien llama a este script es el Apps Script de
-  // Yesos Fer. Ese link debe estar también guardado en las propiedades del script
-  // de Fer con el nombre URL_POLO.
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyvyuML8DwV2O_IK-CLKGA1ow7aJDrunfVCWtGw0B3fER5pCw4NR3lgxkR4jykjyXyU_g/exec",
+  // Este sitio la usa para ELIMINAR productos (solo administradores). Además, el Apps Script
+  // de Yesos Fer la usa para crear productos aquí: ese link debe estar también guardado en las
+  // propiedades del script de Fer con el nombre URL_POLO.
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzeeabV4HJVLAwb5OSeRMr7JlktjuIpX0S3AFfV5W3599tBY9JGmam-QDlUus08U_Rf8w/exec",
 
   // Hoja de cálculo del catálogo de Yesos Polo (pública, se lee como CSV vía gviz).
   SHEET_ID: "1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA",
@@ -39,4 +39,16 @@ const CONFIG = {
     appId: "1:76727611900:web:d0f8b3c2a04e6fb340c279",
     measurementId: "G-RWNN074LVT",
   },
+
+  // Correos con permiso de administrador (solo para MOSTRAR u ocultar el botón "Eliminar producto";
+  // la verificación real la repite el servidor con CORREOS_ADMIN en CodePolo.gs, así que
+  // si agregas uno aquí, agrégalo también allá).
+  CORREOS_ADMIN: [
+    "dulceprincesa086@gmail.com",
+    "dulcefernandaguzmanrodriguez@gmail.com",
+    "celvaguzman72@gmail.com",
+    "celvapreciosa27@gmail.com",
+    "velaskuku@gmail.com",
+    "yesosferkukumita@gmail.com",
+  ],
 };
