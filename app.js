@@ -1383,6 +1383,8 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
     let galeriaIndice = 0;
 
     function abrirModalProducto(card) {
+        window._cardModalActual = card; // lo usa "Eliminar producto" (solo administradores)
+        if (typeof actualizarBotonEliminarPolo === 'function') actualizarBotonEliminarPolo();
         const nombre = card.getAttribute('data-nombre') || card.querySelector('h3')?.textContent || 'Producto';
         const descripcion = card.getAttribute('data-descripcion') || '';
         const alto = card.getAttribute('data-alto') || '';
@@ -3149,11 +3151,18 @@ const auth = firebase.auth();
 const providerGoogle = new firebase.auth.GoogleAuthProvider();
 
 // ─── TOAST ───
-function mostrarToast(msg) {
+var _toastTimer = null;
+function mostrarToast(msg, duracionMs) {
     const t = document.getElementById('toastNotif');
     t.textContent = msg;
     t.classList.add('visible');
-    setTimeout(() => t.classList.remove('visible'), 2800);
+    clearTimeout(_toastTimer); // un aviso nuevo no debe ser cerrado por el temporizador del anterior
+    // Avisos normales: 2.8 s. Errores/advertencias o mensajes largos: de 10 a 25 s según el largo.
+    var largo = String(msg || '').length;
+    var esLargo = /[❌⚠]/.test(String(msg)) || largo > 90;
+    var ms = duracionMs || (esLargo ? Math.min(25000, Math.max(10000, largo * 100)) : 2800);
+    t.onclick = function () { clearTimeout(_toastTimer); t.classList.remove('visible'); };
+    _toastTimer = setTimeout(() => t.classList.remove('visible'), ms);
 }
 
 // ─── MODAL GOOGLE ───
@@ -3254,7 +3263,142 @@ auth.onAuthStateChanged(user => {
     }
     actualizarEstadoSesionDrawer();
     actualizarPantallaPerfil();
+    actualizarBotonEliminarPolo();
 });
+
+// ═══════════════════════════════════════════
+//  ELIMINAR PRODUCTO (solo administradores)
+// ═══════════════════════════════════════════
+// El botón solo se muestra a los correos de CONFIG.CORREOS_ADMIN, pero la seguridad real está en el
+// servidor (CodePolo.gs): verifica el idToken de Firebase y el correo antes de borrar nada.
+// Solo se pueden borrar productos de la hoja de Polo: los "prestados" de Velas/Etiquetas
+// (data-origen-externo) pertenecen a otras hojas y quedan fuera.
+var _eliminarProducto = null; // { fila, nombre } del producto que se está por eliminar
+
+function esCorreoAdmin(user) {
+    if (!user || !user.email) return false;
+    if (user.emailVerified === false) return false;
+    return (CONFIG.CORREOS_ADMIN || []).indexOf(user.email.toLowerCase()) !== -1;
+}
+
+// Datos de la tarjeta abierta en el modal, o null si ese producto no se puede eliminar desde aquí
+function _datosProductoEliminable() {
+    var card = window._cardModalActual;
+    if (!card) return null;
+    if ((card.getAttribute('data-origen-externo') || '') !== '') return null;
+    var fila = parseInt(card.getAttribute('data-sheet-row'), 10);
+    var nombre = (card.getAttribute('data-nombre') || '').trim();
+    if (!isFinite(fila) || fila < 2 || !nombre) return null;
+    return { fila: fila, nombre: nombre };
+}
+
+function actualizarBotonEliminarPolo() {
+    var fila = document.getElementById('mpFilaAdminEliminar');
+    if (!fila) return;
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    var esAdmin = esCorreoAdmin(user);
+    var eliminable = _datosProductoEliminable();
+    fila.style.display = (esAdmin && eliminable) ? '' : 'none';
+
+    // Diagnóstico en pantalla (útil en celular): abre la página con ?debug=eliminar al final del link
+    // y, al abrir un producto, un aviso dirá por qué se muestra u oculta el botón.
+    if (/[?&]debug=eliminar\b/.test(location.search) && window._cardModalActual && typeof mostrarToast === 'function') {
+        var motivo;
+        if (!user) motivo = 'No hay sesión iniciada. Inicia sesión primero.';
+        else if (!user.email) motivo = 'La sesión no tiene correo.';
+        else if (user.emailVerified === false) motivo = 'Tu correo (' + user.email + ') no está verificado en Firebase.';
+        else if (!esAdmin) motivo = 'Tu correo (' + user.email + ') NO está en CORREOS_ADMIN de config.js.';
+        else if (!eliminable) motivo = 'Este producto no se puede eliminar aquí (es de Velas/Etiquetas o no tiene fila/nombre).';
+        else motivo = 'Todo bien: el botón debe verse (' + user.email + ').';
+        mostrarToast('🛠️ Eliminar: ' + motivo, 6000);
+    }
+}
+
+function abrirEliminarProducto() {
+    var user = auth.currentUser;
+    var datos = _datosProductoEliminable();
+    if (!esCorreoAdmin(user) || !datos) return; // por si acaso; el servidor vuelve a verificar
+    _eliminarProducto = datos;
+    var info = document.getElementById('mepProducto');
+    if (info) info.textContent = '¿Seguro que quieres eliminar «' + datos.nombre + '» (fila ' + datos.fila + ')?';
+    var btn = document.getElementById('btnConfirmarEliminar');
+    if (btn) { btn.disabled = false; btn.textContent = 'Eliminar'; }
+    document.getElementById('modalEliminarProducto').classList.add('abierto');
+}
+
+function cerrarEliminarProducto() {
+    var m = document.getElementById('modalEliminarProducto');
+    if (m) m.classList.remove('abierto');
+    _eliminarProducto = null;
+}
+
+async function confirmarEliminarProducto() {
+    var user = auth.currentUser;
+    if (!esCorreoAdmin(user)) { mostrarToast('No tienes permisos de administrador.'); return; }
+    if (!_eliminarProducto) return;
+    var url = CONFIG.APPS_SCRIPT_URL;
+    if (!url) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
+
+    var btn = document.getElementById('btnConfirmarEliminar');
+    var restaurarBtn = function () { if (btn) { btn.disabled = false; btn.textContent = 'Eliminar'; } };
+    if (btn) { btn.disabled = true; btn.textContent = 'Eliminando...'; }
+
+    // 1) Petición al servidor
+    var r = null;
+    try {
+        var idToken = await user.getIdToken(true); // token recién renovado: evita "sesión expirada"
+        var respuesta = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS con Apps Script
+            body: JSON.stringify({
+                idToken: idToken,
+                accion: 'eliminar',
+                fila: _eliminarProducto.fila,
+                nombreOriginal: _eliminarProducto.nombre // el servidor comprueba que la fila siga siendo este producto
+            })
+        });
+        var textoResp = await respuesta.text();
+        try {
+            r = JSON.parse(textoResp);
+        } catch (eJson) {
+            console.error('[eliminar] La respuesta no es JSON (HTTP ' + respuesta.status + '):', textoResp.slice(0, 600));
+            mostrarToast('❌ El servidor respondió algo inesperado. Revisa que el Apps Script de Polo tenga la última versión implementada y acceso "Cualquier usuario".');
+            restaurarBtn();
+            return;
+        }
+    } catch (e) {
+        console.error('[eliminar] Falló la conexión o la sesión:', e);
+        mostrarToast('❌ Error de conexión al eliminar el producto' + (e && e.message ? ' (' + e.message + ')' : '.'));
+        restaurarBtn();
+        return;
+    }
+
+    // 2) Resultado
+    if (!r.ok) {
+        mostrarToast('❌ ' + (r.error || 'No se pudo eliminar el producto.'));
+        restaurarBtn();
+        return;
+    }
+    var filaBorrada = _eliminarProducto.fila, nombreBorrado = _eliminarProducto.nombre;
+    mostrarToast('✅ «' + (r.nombre || nombreBorrado) + '» eliminado de la hoja. Recarga la página en unos segundos para ver el catálogo actualizado.');
+
+    // 3) Limpieza de la pantalla (si algo falla aquí NO es un error: el producto ya se borró)
+    try {
+        // Sin esto, al recargar se mostraría la copia guardada del catálogo (caché de 3 min)
+        Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('kukumita_csv') === 0) sessionStorage.removeItem(k); });
+        // Quitar las tarjetas de ese producto y bajar un número de fila a las que estaban debajo
+        document.querySelectorAll('[data-sheet-row]').forEach(function (c) {
+            if ((c.getAttribute('data-origen-externo') || '') !== '') return;
+            var f = parseInt(c.getAttribute('data-sheet-row'), 10);
+            if (f === filaBorrada && (c.getAttribute('data-nombre') || '').trim() === nombreBorrado) c.remove();
+            else if (f > filaBorrada) c.setAttribute('data-sheet-row', String(f - 1));
+        });
+        cerrarEliminarProducto();
+        if (typeof cerrarModalProducto === 'function') cerrarModalProducto();
+    } catch (e2) {
+        console.error('[eliminar] El producto se eliminó, pero falló al limpiar la pantalla:', e2);
+    }
+}
 
 // ─── ACTUALIZAR PANTALLA PERFIL CON DATOS REALES ───
 function actualizarPantallaPerfil() {
