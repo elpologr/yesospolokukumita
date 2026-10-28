@@ -201,14 +201,14 @@ function _resetBotonesRed() {
 // Para editar productos: abre el link de Google Sheets y modifica las filas.
 //
 // 🔧 CONFIGURACIÓN — cambia solo esta línea si mueves la hoja:
-var SHEET_ID = '1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA';
+var SHEET_ID = CONFIG.SHEET_ID;
 
 // 🔧 URL del Cloudflare Worker para compartir en redes sociales (Facebook, etc.)
 // Cuando instales el worker, reemplaza esta URL con la que te asigne Cloudflare.
 // Ejemplo: 'https://kukumita-og.TU-USUARIO.workers.dev'
 // Mientras no lo tengas configurado, deja el valor vacío ('') y funcionará
 // como antes (sin imagen en Facebook).
-var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers.dev';
+var OG_WORKER_URL = CONFIG.OG_WORKER_URL;
 
 // 🔧 Hoja de cálculo de Velas Kukúmita — se reutiliza en TRES lugares:
 //   1) Botón "Etiquetas" (grid propio)                → Hoja 2 completa
@@ -219,13 +219,13 @@ var OG_WORKER_URL = 'https://yesos-polo-kukumita-linker.dulceprincesa086.workers
 // NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
 // tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
 // La Hoja 1 no necesita nombre: se lee automáticamente como pestaña por defecto.
-var SHEET_ID_ETIQUETAS   = '1jin2wMYingvbPD2csGxIbm5AhulfRvCRvIzAKJTUNMw';
-var SHEET_NOMBRE_ETIQUETAS = 'Hoja 2';
+var SHEET_ID_ETIQUETAS   = CONFIG.SHEET_ID_ETIQUETAS;
+var SHEET_NOMBRE_ETIQUETAS = CONFIG.SHEET_NOMBRE_ETIQUETAS;
 
 // 🔧 Segunda pestaña de ESTA MISMA hoja (SHEET_ID) con la info del modal "Búscanos en Bazar".
 // NOTA: por defecto Google Sheets nombra la segunda pestaña "Hoja 2". Si tu pestaña
 // tiene otro nombre, cámbialo aquí exactamente igual (respetando mayúsculas/espacios).
-var SHEET_NOMBRE_BAZAR = 'Hoja 2';
+var SHEET_NOMBRE_BAZAR = CONFIG.SHEET_NOMBRE_BAZAR;
 // ──────────────────────────────────────────────────────────────────────────────
 // COLUMNAS ESPERADAS EN LA HOJA (fila 1 = encabezados, datos desde fila 2):
 // Hoja exclusiva de Yesos Polo Kukúmita (separada de la de Yesos Fer) — A a L:
@@ -3141,15 +3141,8 @@ function renderizarResultadosDrawer(lista, titulo) {
 // ═══════════════════════════════════════════
 //  FIREBASE CONFIGURACIÓN
 // ═══════════════════════════════════════════
-const firebaseConfig = {
-    apiKey: "AIzaSyBc_AUz1lfgAPFuQd9oKvDYGm1lyrHALGs",
-    authDomain: "velas-kukumita.firebaseapp.com",
-    projectId: "velas-kukumita",
-    storageBucket: "velas-kukumita.firebasestorage.app",
-    messagingSenderId: "76727611900",
-    appId: "1:76727611900:web:d0f8b3c2a04e6fb340c279",
-    measurementId: "G-RWNN074LVT"
-};
+// Los valores viven en config.js
+const firebaseConfig = CONFIG.FIREBASE;
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
