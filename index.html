@@ -79,7 +79,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="style.css?v=4">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1523,6 +1523,11 @@
         <!-- ── Botón cerrar flotante sobre la galería ── -->
         <button class="mp-cerrar-flotante" onclick="cerrarModalProducto()">✕</button>
 
+        <!-- ── Solo administradores: eliminar este producto de la hoja (lo muestra app.js) ── -->
+        <div id="mpFilaAdminEliminar" style="display:none;">
+            <button class="mp-btn-eliminar-admin" id="mpBtnEliminarAdmin" type="button" onclick="abrirEliminarProducto()" title="Eliminar producto">🗑️ Eliminar</button>
+        </div>
+
         <!-- ── GALERÍA (primero, sin scroll para verla) ── -->
         <div class="mp-galeria-superior">
             <button class="modal-btn-nav modal-btn-prev" id="btnGalPrev" onclick="moverGaleria(-1)">&#8249;</button>
@@ -1622,10 +1627,6 @@
                 <button class="mp-btn-compartir" id="mpBtnVisitarVelas" style="display:none;">🕯️ Visitar Velas Kukúmita</button>
             </div>
 
-            <!-- 9c. Solo administradores: eliminar este producto de la hoja (lo muestra app.js) -->
-            <div class="mp-botones-accion" id="mpFilaAdminEliminar" style="display:none; margin-top:6px;">
-                <button class="mp-btn-eliminar-admin" id="mpBtnEliminarAdmin" type="button" onclick="abrirEliminarProducto()">🗑️ Eliminar producto</button>
-            </div>
         </div>
     </div>
 </div>

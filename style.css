@@ -2741,8 +2741,12 @@ body.modo-oscuro .btn-google-auth:hover { background: #3a2e26; }
     background: #fff5f4; color: #c0392b; font-weight: 700; font-size: 0.95rem; cursor: pointer;
 }
 .mp-btn-eliminar-admin:hover { background: #c0392b; color: #fff; }
-/* La fila del botón ocupa todo el ancho (la clase .mp-botones-accion es una cuadrícula de 2 columnas) */
-#mpFilaAdminEliminar { grid-template-columns: 1fr; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e8c9c5; }
+/* Botón eliminar (solo admins): esquina superior derecha de la imagen, a la izquierda del ✕ */
+#mpFilaAdminEliminar { position: absolute; top: 12px; right: 54px; z-index: 21; display: block; }
+#mpFilaAdminEliminar .mp-btn-eliminar-admin {
+    width: auto; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 13px;
+    background: rgba(255,245,244,0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
 #modalEliminarProducto {
     display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.6);
     align-items: center; justify-content: center; padding: 16px;
