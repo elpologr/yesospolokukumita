@@ -1025,23 +1025,49 @@ async function _guardarEdicionProducto(user, v) {
     }
 }
 
-// ── Mover producto ──
+// ── Mover / intercambiar producto de fila (mismo sistema que Yesos Fer) ──
+// El número "# N" de cada producto es su fila en la hoja. Para mover un producto se escribe la fila destino:
+//  • si esa fila está ocupada, los dos productos se INTERCAMBIAN;
+//  • si está libre, el producto se mueve ahí y su fila anterior queda vacía;
+//  • si se deja vacía, pasa a la última fila disponible.
+var FILA_MIN_DESTINO = 2;         // la fila 1 son los encabezados
+var FILA_MAX_DESTINO = 1000;      // igual que FILA_MAX en CodePolo.gs
+var FILA_RESERVADA_INI = 26;      // filas 26-31: productos "prestados" de Etiquetas y Velas
+var FILA_RESERVADA_FIN_ = 31;     // igual que FILA_RESERVADA_FIN en CodePolo.gs
+
 var _moverProducto = null;   // { fila, nombre } del producto que se está por mover
 var _moviendoProducto = false;
 
-// Productos del catálogo de Polo, en el orden en que están en la hoja (una sola vez cada uno)
-function _productosPoloOrdenados() {
-    var vistos = {}, lista = [];
-    document.querySelectorAll('#gridProductos .card-dinamica[data-sheet-row]').forEach(function (c) {
-        if ((c.getAttribute('data-origen-externo') || '') !== '') return;
-        var fila = parseInt(c.getAttribute('data-sheet-row'), 10);
-        var nombre = (c.getAttribute('data-nombre') || '').trim();
-        if (!isFinite(fila) || fila < 2 || !nombre || vistos[fila]) return;
-        vistos[fila] = true;
-        lista.push({ fila: fila, nombre: nombre });
-    });
-    lista.sort(function (a, b) { return a.fila - b.fila; });
-    return lista;
+// Devuelve un texto de error si la fila no se puede usar, o '' si está bien.
+function _errorFilaDestino(n) {
+    if (!isFinite(n) || Math.floor(n) !== n) return 'Escribe un número de fila entero.';
+    if (n < FILA_MIN_DESTINO) return 'La fila 1 son los encabezados. Elige la fila 2 o una mayor.';
+    if (n > FILA_MAX_DESTINO) return 'La fila máxima permitida es la ' + FILA_MAX_DESTINO + '.';
+    if (n >= FILA_RESERVADA_INI && n <= FILA_RESERVADA_FIN_) {
+        return 'Las filas ' + FILA_RESERVADA_INI + ' a ' + FILA_RESERVADA_FIN_ + ' están reservadas (Etiquetas y Velas). Elige otra.';
+    }
+    return '';
+}
+
+// Producto de Polo que está ahora en la fila n de la hoja (o undefined si está libre)
+function _productoEnFila(n) {
+    return (typeof listaProductos !== 'undefined' ? listaProductos : []).filter(function (p) {
+        return !p._origenExterno && (p.id + 1) === n;
+    })[0];
+}
+
+// Botones − / + del campo de fila. Vacío = "última fila disponible".
+function ajustarFilaMover(delta) {
+    var el = document.getElementById('inputMoverFila');
+    if (!el) return;
+    var actual = parseInt(el.value, 10);
+    if (isNaN(actual)) {
+        if (delta > 0) el.value = String(FILA_MIN_DESTINO);
+    } else {
+        var nuevo = actual + delta;
+        el.value = nuevo < FILA_MIN_DESTINO ? '' : String(Math.min(FILA_MAX_DESTINO, nuevo));
+    }
+    actualizarAvisoMover();
 }
 
 function abrirMoverProducto() {
@@ -1052,28 +1078,14 @@ function abrirMoverProducto() {
     if (_adminBloqueado(datos.fila)) return;
     if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
 
-    var lista = _productosPoloOrdenados();
-    var pos = -1;
-    lista.forEach(function (p, i) { if (p.fila === datos.fila) pos = i; });
     _moverProducto = datos;
-
     var info = document.getElementById('mmpProducto');
-    if (info) info.textContent = '«' + datos.nombre + '» está en la fila ' + datos.fila + (pos >= 0 ? ' (lugar ' + (pos + 1) + ' de ' + lista.length + ')' : '') + '. ¿Dónde lo quieres?';
-
-    var sel = document.getElementById('mmpSelectDestino');
-    if (sel) {
-        sel.innerHTML = '';
-        lista.forEach(function (p) {
-            if (p.fila === datos.fila) return;
-            var o = document.createElement('option');
-            o.value = String(p.fila);
-            o.textContent = 'Fila ' + p.fila + ' · ' + p.nombre;
-            o.setAttribute('data-nombre', p.nombre);
-            sel.appendChild(o);
-        });
-    }
-    _pintarBotonesMover(false, pos, lista.length);
+    if (info) info.textContent = '«' + datos.nombre + '» está en la fila ' + datos.fila + '.';
+    var input = document.getElementById('inputMoverFila');
+    if (input) input.value = '';
+    actualizarAvisoMover();
     document.getElementById('modalMoverProducto').classList.add('abierto');
+    if (input) setTimeout(function () { input.focus(); }, 50);
 }
 
 function cerrarMoverProducto() {
@@ -1083,79 +1095,77 @@ function cerrarMoverProducto() {
     _moverProducto = null;
 }
 
-// Habilita/deshabilita los botones según el lugar actual (no tiene sentido "Subir" si ya es el primero)
-function _pintarBotonesMover(ocupado, pos, total) {
-    var sel = document.getElementById('mmpSelectDestino');
-    var hayDestinos = !!(sel && sel.options.length);
-    var estado = {
-        mmpBtnInicio: pos !== 0, mmpBtnSubir: pos > 0,
-        mmpBtnBajar: pos >= 0 && pos < total - 1, mmpBtnFinal: pos >= 0 && pos < total - 1,
-        mmpBtnColocar: hayDestinos
-    };
-    Object.keys(estado).forEach(function (id) {
-        var b = document.getElementById(id);
-        if (b) b.disabled = ocupado || !estado[id];
-    });
-    if (sel) sel.disabled = ocupado;
+// Explica en vivo qué va a pasar con la fila escrita y habilita/deshabilita "Mover"
+function actualizarAvisoMover() {
+    var aviso = document.getElementById('mmpAviso');
+    var btn = document.getElementById('btnConfirmarMover');
+    if (!aviso || !_moverProducto) return;
+    var texto = _campoProducto('inputMoverFila');
+    var msg = '', error = false;
+    if (texto === '') {
+        msg = 'Sin fila elegida: el producto pasará a la última fila disponible de la hoja.';
+    } else {
+        var n = Number(texto);
+        var err = _errorFilaDestino(n);
+        if (err) { msg = err; error = true; }
+        else if (n === _moverProducto.fila) { msg = 'El producto ya está en esa fila.'; error = true; }
+        else {
+            var ocupante = _productoEnFila(n);
+            msg = ocupante
+                ? 'La fila ' + n + ' está ocupada por «' + ocupante.nombre + '»: se intercambiarán (ese producto pasará a la fila ' + _moverProducto.fila + ').'
+                : 'La fila ' + n + ' está libre: el producto se moverá ahí y la fila ' + _moverProducto.fila + ' quedará vacía.';
+        }
+    }
+    aviso.textContent = msg;
+    aviso.classList.toggle('error', error);
+    if (btn) btn.disabled = error || _moviendoProducto;
 }
 
-// posicion: 'inicio' | 'final' | 'subir' | 'bajar' | 'antes' (usa el producto elegido en la lista)
-async function moverProductoA(posicion) {
+async function confirmarMoverProducto() {
     if (_moviendoProducto || !_moverProducto) return;
-    var user = auth.currentUser;
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
     if (!esCorreoAdmin(user)) { mostrarToast('No tienes permisos de administrador.'); return; }
     if (_adminBloqueado(_moverProducto.fila)) return;
 
-    var lista = _productosPoloOrdenados();
-    var pos = -1;
-    lista.forEach(function (p, i) { if (p.fila === _moverProducto.fila) pos = i; });
-    if (pos < 0) { mostrarToast('No se encontró el producto en el catálogo. Recarga la página.'); return; }
-
-    // "Subir/Bajar un lugar" se calculan con los productos del catálogo (no con filas sueltas de la hoja)
-    var envio = { posicion: posicion };
-    if (posicion === 'subir') {
-        if (pos === 0) { mostrarToast('Ya está en el primer lugar.'); return; }
-        envio = { posicion: 'antes', filaDestino: lista[pos - 1].fila, nombreDestino: lista[pos - 1].nombre };
-    } else if (posicion === 'bajar') {
-        if (pos >= lista.length - 1) { mostrarToast('Ya está en el último lugar.'); return; }
-        envio = (pos + 2 < lista.length)
-            ? { posicion: 'antes', filaDestino: lista[pos + 2].fila, nombreDestino: lista[pos + 2].nombre }
-            : { posicion: 'final' };
-    } else if (posicion === 'antes') {
-        var sel = document.getElementById('mmpSelectDestino');
-        var op = sel && sel.options[sel.selectedIndex];
-        if (!op) { mostrarToast('Elige el producto antes del cual lo quieres.'); return; }
-        envio = { posicion: 'antes', filaDestino: parseInt(op.value, 10), nombreDestino: op.getAttribute('data-nombre') || '' };
-    } else if (posicion === 'inicio') {
-        if (pos === 0) { mostrarToast('Ya está en el primer lugar.'); return; }
-    } else if (posicion === 'final') {
-        if (pos === lista.length - 1) { mostrarToast('Ya está en el último lugar.'); return; }
+    var texto = _campoProducto('inputMoverFila');
+    var cuerpo = { accion: 'mover', fila: _moverProducto.fila, nombreOriginal: _moverProducto.nombre, filaDestino: texto };
+    if (texto !== '') {
+        var n = Number(texto);
+        var err = _errorFilaDestino(n);
+        if (err) { mostrarToast(err); return; }
+        if (n === _moverProducto.fila) { mostrarToast('El producto ya está en esa fila.'); return; }
+        // El servidor comprueba que en el destino siga lo mismo que ve esta página ('' = esperaba que estuviera libre)
+        var ocupante = _productoEnFila(n);
+        cuerpo.nombreDestino = ocupante ? String(ocupante.nombre || '').trim() : '';
     }
+    if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
 
+    var btn = document.getElementById('btnConfirmarMover');
     _moviendoProducto = true;
-    _pintarBotonesMover(true, pos, lista.length);
+    if (btn) { btn.disabled = true; btn.textContent = 'Moviendo...'; }
     var producto = _moverProducto;
     try {
-        var idToken = await user.getIdToken(true);
-        var r = await _postAppsScript(Object.assign({
-            idToken: idToken, accion: 'mover', fila: producto.fila, nombreOriginal: producto.nombre
-        }, envio));
+        cuerpo.idToken = await user.getIdToken(true);
+        var r = await _postAppsScript(cuerpo);
         if (r.ok) {
             _catalogoMovido = true; // los números de fila de la página ya no valen hasta recargar
             _limpiarCacheCatalogo();
             _moviendoProducto = false;
             cerrarMoverProducto();
             if (typeof cerrarModalProducto === 'function') cerrarModalProducto();
-            mostrarToast('✅ «' + (r.nombre || producto.nombre) + '» movido a la fila ' + r.fila + '. Recarga la página en unos segundos para ver el nuevo orden.', 6000);
+            mostrarToast(r.intercambio
+                ? '✅ Intercambiados: fila ' + r.filaOrigen + ' ↔ fila ' + r.filaDestino + '. Recarga la página en unos segundos.'
+                : '✅ «' + (r.nombre || producto.nombre) + '» movido a la fila ' + r.filaDestino + '. Recarga la página en unos segundos.', 6000);
         } else {
             mostrarToast('❌ ' + (r.error || 'No se pudo mover el producto.'), 7000);
         }
-    } catch (err) {
-        console.error('[mover producto polo]', err);
-        mostrarToast('❌ Error al mover: ' + (err && err.message ? err.message : 'conexión'), 6000);
+    } catch (e) {
+        console.error('[mover producto polo]', e);
+        mostrarToast('❌ Error al mover: ' + (e && e.message ? e.message : 'conexión'), 6000);
     } finally {
         _moviendoProducto = false;
-        if (_moverProducto) _pintarBotonesMover(false, pos, lista.length);
+        if (btn) btn.textContent = 'Mover';
+        actualizarAvisoMover();
     }
 }
 

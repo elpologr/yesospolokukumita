@@ -577,6 +577,14 @@ function renderizarCatalogoEnGrid(gridId, productos) {
         });
         imgContenedor.appendChild(btnCartCard);
 
+        // ── Badge: número de fila en Google Sheets (esquina superior izquierda) ──
+        var badgeFila = document.createElement('span');
+        badgeFila.className = 'card-badge-fila';
+        badgeFila.textContent = '#' + (p.id + 1);
+        badgeFila.title = 'Fila ' + (p.id + 1) + ' en Google Sheets';
+        badgeFila.style.cssText = 'position:absolute; top:6px; left:6px; z-index:2; font-size:10px; font-weight:800; color:#9a8878; background:rgba(245,240,235,0.92); border:1.5px solid #e0d5cc; border-radius:8px; padding:2px 7px; letter-spacing:0.3px; line-height:1.4; pointer-events:none; user-select:none;';
+        imgContenedor.appendChild(badgeFila);
+
         // ── Título ──
         var infoDiv = document.createElement('div');
         infoDiv.style.cssText = 'margin-top:10px; flex-grow:1;';
@@ -4171,9 +4179,17 @@ function inyectarEtiquetasModal(card) {
     var filaSheets = card.getAttribute('data-sheet-row') || '';
     var badge = document.getElementById('mpSheetRowBadge');
     if (badge) {
+        // Para administradores (y solo en productos del catálogo de Polo) el número es un botón
+        // que abre el diálogo de mover / intercambiar de fila.
+        var puedeMover = !!filaSheets && esCorreoAdmin((typeof auth !== 'undefined') ? auth.currentUser : null)
+            && !card.getAttribute('data-origen-externo') && !!card.closest('#gridProductos')
+            && typeof abrirMoverProducto === 'function';
+        badge.classList.toggle('badge-fila-admin', puedeMover);
+        badge.onclick = puedeMover ? function(e) { e.stopPropagation(); abrirMoverProducto(); } : null;
+        badge.style.cursor = puedeMover ? 'pointer' : 'default';
         if (filaSheets) {
-            badge.textContent = '# ' + filaSheets;
-            badge.title = 'Fila ' + filaSheets + ' en Google Sheets';
+            badge.textContent = '# ' + filaSheets + (puedeMover ? ' ↕' : '');
+            badge.title = puedeMover ? 'Fila ' + filaSheets + ' — toca para moverla o intercambiarla' : 'Fila ' + filaSheets + ' en Google Sheets';
             badge.style.display = 'inline-block';
         } else {
             badge.style.display = 'none';

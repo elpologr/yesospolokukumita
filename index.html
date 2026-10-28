@@ -81,7 +81,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     <!-- Fredoka: tipografía del título que el editor de imagen pone sobre la foto del producto -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
     <link rel="stylesheet" href="admin-producto.css?v=5">
 
     <!-- Estilos botones de modo catálogo -->
@@ -1689,22 +1689,22 @@
     </div>
 </div>
 
-<!-- Mover producto de lugar en la hoja (solo administradores) — admin-producto.js -->
+<!-- Mover / intercambiar producto de fila en la hoja (solo administradores) — admin-producto.js -->
 <div id="modalMoverProducto" onclick="if(event.target===this) cerrarMoverProducto()">
     <div class="mmp-caja">
-        <h3>↕️ Mover producto</h3>
+        <h3>↕️ Mover producto de fila</h3>
         <p id="mmpProducto"></p>
-        <div class="mmp-botones">
-            <button type="button" id="mmpBtnInicio" onclick="moverProductoA('inicio')">⏫ Al inicio</button>
-            <button type="button" id="mmpBtnSubir" onclick="moverProductoA('subir')">⬆️ Subir un lugar</button>
-            <button type="button" id="mmpBtnBajar" onclick="moverProductoA('bajar')">⬇️ Bajar un lugar</button>
-            <button type="button" id="mmpBtnFinal" onclick="moverProductoA('final')">⏬ Al final</button>
+        <label class="mmp-label" for="inputMoverFila">Nueva fila en la hoja (2 en adelante)</label>
+        <div class="mmp-fila">
+            <button type="button" class="mmp-menos-mas" aria-label="Fila anterior" onclick="ajustarFilaMover(-1)">−</button>
+            <input id="inputMoverFila" type="number" inputmode="numeric" min="2" step="1" placeholder="Última fila" oninput="actualizarAvisoMover()" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmarMoverProducto();}">
+            <button type="button" class="mmp-menos-mas" aria-label="Fila siguiente" onclick="ajustarFilaMover(1)">+</button>
         </div>
-        <label class="mmp-label" for="mmpSelectDestino">…o colócalo justo antes de:</label>
-        <select id="mmpSelectDestino"></select>
-        <button type="button" class="mmp-colocar" id="mmpBtnColocar" onclick="moverProductoA('antes')">Mover aquí</button>
-        <p class="mmp-nota">Se mueve su fila en Google Sheets; los demás productos se recorren. Después recarga la página para ver el nuevo orden.</p>
-        <div class="mep-acciones"><button class="mep-cancelar" type="button" onclick="cerrarMoverProducto()">Cerrar</button></div>
+        <p class="mmp-nota" id="mmpAviso"></p>
+        <div class="mep-acciones">
+            <button class="mep-cancelar" type="button" onclick="cerrarMoverProducto()">Cancelar</button>
+            <button class="mep-mover" id="btnConfirmarMover" type="button" onclick="confirmarMoverProducto()">Mover</button>
+        </div>
     </div>
 </div>
 
@@ -2188,9 +2188,9 @@
 </div>
 
     <!-- JavaScript externo -->
-    <script src="config.js?v=9"></script>
-    <script src="app.js?v=5"></script>
-    <script src="admin-producto.js?v=5"></script>
+    <script src="config.js?v=10"></script>
+    <script src="app.js?v=6"></script>
+    <script src="admin-producto.js?v=6"></script>
     <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->

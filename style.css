@@ -2755,7 +2755,7 @@ body.modo-oscuro .btn-google-auth:hover { background: #3a2e26; }
     .mp-btn-admin, #mpFilaAdminEliminar .mp-btn-eliminar-admin { padding: 0 8px; font-size: 12px; }
 }
 
-/* ── Mover producto (solo administradores) ── */
+/* ── Mover / intercambiar producto de fila (solo administradores) ── */
 #modalMoverProducto {
     display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.6);
     align-items: center; justify-content: center; padding: 16px;
@@ -2767,30 +2767,40 @@ body.modo-oscuro .btn-google-auth:hover { background: #3a2e26; }
 }
 #modalMoverProducto h3 { margin: 0 0 10px; font-size: 1.15rem; }
 #modalMoverProducto p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.45; }
-#modalMoverProducto .mmp-nota { font-size: 0.8rem; color: #8c7565; margin-top: 10px; }
-#modalMoverProducto .mmp-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-#modalMoverProducto .mmp-botones button, #modalMoverProducto .mmp-colocar {
-    padding: 11px 8px; border-radius: 10px; border: 1.5px solid #e0d5cc; background: #f8f4f0; color: #362a22;
-    font-weight: 700; font-size: 0.88rem; cursor: pointer;
-}
-#modalMoverProducto .mmp-botones button:hover:not(:disabled), #modalMoverProducto .mmp-colocar:hover:not(:disabled) { background: #e8607a; border-color: #e8607a; color: #fff; }
-#modalMoverProducto button:disabled { opacity: 0.5; cursor: default; }
+#modalMoverProducto .mmp-nota { font-size: 0.8rem; color: #8c7565; margin-top: 10px; min-height: 2.6em; }
+#modalMoverProducto .mmp-nota.error { color: #c0392b; font-weight: 600; }
 #modalMoverProducto .mmp-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
-#modalMoverProducto select {
-    width: 100%; padding: 11px 10px; font-size: 0.92rem; border: 1.5px solid #e0d5cc; border-radius: 10px;
-    background: #fff; color: #362a22; margin-bottom: 8px;
+#modalMoverProducto .mmp-fila { display: flex; align-items: stretch; gap: 6px; }
+#modalMoverProducto .mmp-fila input {
+    flex: 1; min-width: 0; text-align: center; padding: 11px 12px; font-size: 15px; color: #362a22;
+    background: #fff; border: 1.5px solid #e0d5cc; border-radius: 10px; outline: none; font-family: inherit;
 }
-#modalMoverProducto .mmp-colocar { width: 100%; background: #e8607a; border-color: #e8607a; color: #fff; }
+#modalMoverProducto .mmp-fila input:focus { border-color: #e8607a; }
+#modalMoverProducto .mmp-menos-mas {
+    width: 40px; flex-shrink: 0; border: 1.5px solid #e0d5cc; background: #f8f4f0; color: #6b5548;
+    border-radius: 10px; font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; font-family: inherit;
+}
+#modalMoverProducto .mmp-menos-mas:active { background: #e8607a; border-color: #e8607a; color: #fff; }
 #modalMoverProducto .mep-acciones { display: flex; gap: 10px; margin-top: 14px; }
 #modalMoverProducto .mep-acciones button {
     flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.95rem; cursor: pointer;
     background: #eee; color: #362a22;
 }
-body.modo-oscuro #modalMoverProducto .mep-acciones button { background: #3a3028; color: #e0d0c0; }
+#modalMoverProducto .mep-acciones .mep-mover { background: #e8607a; color: #fff; }
+#modalMoverProducto button:disabled { opacity: 0.5; cursor: default; }
 body.modo-oscuro #modalMoverProducto .mmp-caja { background: #2a2218; color: #e0d5cc; }
-body.modo-oscuro #modalMoverProducto .mmp-botones button { background: #33291f; border-color: #4a3a2e; color: #e0d5cc; }
-body.modo-oscuro #modalMoverProducto select { background: #33291f; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro #modalMoverProducto .mmp-fila input { background: #33291f; border-color: #4a3a2e; color: #f0e8e0; }
+body.modo-oscuro #modalMoverProducto .mmp-menos-mas { background: #33291f; border-color: #4a3a2e; color: #e0d5cc; }
+body.modo-oscuro #modalMoverProducto .mep-acciones .mep-cancelar { background: #3a3028; color: #e0d0c0; }
+body.modo-oscuro #modalMoverProducto .mmp-nota.error { color: #ff8a7a; }
 body.modo-oscuro .mp-btn-admin { background: rgba(42,34,24,0.95); color: #e0d5cc; border-color: #8c7565; }
+
+/* El número de fila del modal del producto, convertido en botón para administradores */
+#mpSheetRowBadge.badge-fila-admin {
+    cursor: pointer !important;
+    background: #362a22 !important; color: #fff !important; border-color: #362a22 !important;
+}
+#mpSheetRowBadge.badge-fila-admin:active { transform: scale(0.95); }
 #mpFilaAdminEliminar .mp-btn-eliminar-admin {
     width: auto; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 13px;
     background: rgba(255,245,244,0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.3);
