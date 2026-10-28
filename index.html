@@ -80,7 +80,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=4">
-    <link rel="stylesheet" href="admin-producto.css?v=1">
+    <link rel="stylesheet" href="admin-producto.css?v=2">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -1711,6 +1711,16 @@
             <p class="sap-nota">Usa el <strong>enlace directo</strong> de imgbb (empieza con https://i.ibb.co/). En Polo la imagen principal es la pieza sobre el fondo azul.</p>
         </div>
 
+        <div id="sapExtrasBloque">
+            <div class="sap-seccion-titulo">Fotos adicionales (galería)</div>
+            <p class="sap-nota">Puedes tener hasta 50 imágenes por producto. Las adicionales se suben tal cual (reducidas) y se ven en la galería del producto. Al elegir la imagen principal también puedes marcar varias fotos: la 1ª es la principal y las demás quedan aquí.</p>
+            <div id="sapExtrasEstado" class="sap-estado"></div>
+            <div id="sapExtrasLista" class="sap-extras-lista" style="display:none;"></div>
+            <input type="file" id="inputImagenesExtraProducto" accept="image/*" multiple style="display:none" onchange="agregarImagenesExtraProducto(event)">
+            <button class="panel-nombre-btn cancelar sap-btn-imagen" id="btnAgregarExtras" type="button" onclick="elegirImagenesExtraProducto()">➕ Agregar más fotos</button>
+            <div id="sapExtrasContador" class="sap-nota">0 / 50 imágenes en el producto</div>
+        </div>
+
         <label class="panel-nombre-label" for="inputNombreProducto">Nombre *</label>
         <input id="inputNombreProducto" class="panel-nombre-input" type="text" maxlength="80" placeholder="Ej. Maceta de Flor" oninput="validarFormularioProducto()">
 
@@ -2115,7 +2125,7 @@
     <!-- JavaScript externo -->
     <script src="config.js?v=8"></script>
     <script src="app.js?v=4"></script>
-    <script src="admin-producto.js?v=1"></script>
+    <script src="admin-producto.js?v=2"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->
     <script>

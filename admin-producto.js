@@ -4,7 +4,8 @@
 //
 // Paso 2 (formulario básico): imagen principal (archivo o link de imgbb), nombre, precios,
 // medidas, descripción, video, existencia, oferta, más vendido y etiqueta principal.
-// Todavía NO incluye: fotos adicionales, editor de imagen, configurar/mover producto,
+// Paso 3a: fotos adicionales (galería, hasta 50 imágenes por producto, subidas una por una).
+// Todavía NO incluye: editor de imagen, configurar/mover producto,
 // ni etiquetas de evento / forma / etiquetas nuevas (vienen en los siguientes pasos).
 //
 // La seguridad real está en el servidor (CodePolo.gs): vuelve a verificar el idToken de Firebase
@@ -13,6 +14,11 @@
 
 var _imagenProductoSeleccionada = null; // dataURL (JPEG) de la foto elegida
 var _guardandoProducto = false;
+
+// Fotos adicionales (galería): la principal es la 1ª imagen del producto; el resto se suben tal cual (reducidas)
+var MAX_IMAGENES_PRODUCTO = 50;
+var _imagenesExtraProducto = [];   // [{ dataUrl, miniatura }] en el orden en que se subirán
+var _procesandoFotosProducto = false;
 
 // ── Botón del perfil: solo visible para administradores ──
 function actualizarBotonAgregarProducto() {
@@ -117,7 +123,7 @@ function ajustarMedidaProducto(idInput, delta) {
 function validarFormularioProducto() {
     var hayImagen = !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
     var ok = _campoProducto('inputNombreProducto') !== '' && _campoProducto('inputPrecioOriginal') !== ''
-             && hayImagen && obtenerEtiquetasPrincipales().length > 0 && !_guardandoProducto;
+             && hayImagen && obtenerEtiquetasPrincipales().length > 0 && !_guardandoProducto && !_procesandoFotosProducto;
     var btn = document.getElementById('btnGuardarProducto');
     if (btn) btn.disabled = !ok;
 }
@@ -130,13 +136,15 @@ function limpiarFormularioProducto() {
         if (el) el.value = '';
     });
     _imagenProductoSeleccionada = null;
+    _imagenesExtraProducto = [];
     var pf = document.getElementById('previewImagenProducto');
     if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
     var pu = document.getElementById('previewUrlImagenProducto');
     if (pu) { pu.style.display = 'none'; pu.removeAttribute('src'); }
     _estadoUrlImagen('');
     _estadoImagen('');
-    _pintarBotonImagen();
+    _estadoExtrasProducto('');
+    _renderExtrasProducto();
     document.querySelectorAll('#chipsEtiquetaPrincipal .sap-chip').forEach(function (b) {
         b.classList.remove('activo'); b.setAttribute('aria-pressed', 'false');
     });
@@ -150,37 +158,52 @@ function limpiarFormularioProducto() {
 }
 
 // ── Imagen principal: foto del dispositivo ──
+// Sin imagen principal se pueden elegir varias (la 1ª es la principal y las demás quedan como adicionales).
+// Con imagen principal se elige UNA sola: la nueva principal (las adicionales se conservan).
 function elegirImagenProducto() {
     var input = document.getElementById('inputImagenProducto');
-    if (input) input.click();
+    if (!input) return;
+    input.multiple = !_hayImagenPrincipal();
+    input.click();
 }
 
+// ¿Ya se eligió la imagen principal (foto o link de imgbb)?
+function _hayImagenPrincipal() {
+    return !!_imagenProductoSeleccionada || !!_extraerUrlImgbb(_campoProducto('inputUrlImagenProducto'));
+}
+
+// Con imagen principal el botón pasa a "Elegir otra imagen principal"
 function _pintarBotonImagen() {
     var t = document.getElementById('sapBtnImagenTitulo');
     var sub = document.getElementById('sapBtnImagenSub');
     if (!t) return;
-    var hay = !!_imagenProductoSeleccionada;
-    t.textContent = hay ? 'Elegir otra imagen' : 'Agregar imagen';
-    if (sub) sub.textContent = hay ? 'Reemplaza la imagen elegida' : 'Se reduce y se sube a ImgBB al guardar';
+    var hay = _hayImagenPrincipal();
+    t.textContent = hay ? 'Elegir otra imagen principal' : 'Agregar imagen';
+    if (sub) sub.textContent = hay
+        ? 'Reemplaza la principal; las fotos adicionales se conservan'
+        : 'Se reduce y se sube a ImgBB al guardar';
 }
 
-// Reduce la foto (máx. maxLado px) y la devuelve como JPEG en base64
-function _leerImagenProducto(archivo, maxLado, calidad) {
+// Lee un archivo y lo reduce (JPG). Devuelve { full, mini }; mini solo si se pide maxMini.
+function _leerImagenProducto(archivo, maxLado, calidad, maxMini) {
     return new Promise(function (resolve, reject) {
         var lector = new FileReader();
         lector.onerror = function () { reject(new Error('lectura')); };
         lector.onload = function (e) {
             var img = new Image();
             img.onload = function () {
-                var escala = Math.min(1, maxLado / Math.max(img.width, img.height));
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.round(img.width * escala);
-                canvas.height = Math.round(img.height * escala);
-                var ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', calidad));
+                var reducir = function (lado, cal) {
+                    var escala = Math.min(1, lado / Math.max(img.width, img.height));
+                    var canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * escala);
+                    canvas.height = Math.round(img.height * escala);
+                    var ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    return canvas.toDataURL('image/jpeg', cal);
+                };
+                resolve({ full: reducir(maxLado, calidad), mini: maxMini ? reducir(maxMini, 0.7) : '' });
             };
             img.onerror = function () { reject(new Error('imagen')); };
             img.src = e.target.result;
@@ -191,23 +214,143 @@ function _leerImagenProducto(archivo, maxLado, calidad) {
 
 async function previsualizarImagenProducto(event) {
     var input = event.target;
-    var archivo = input.files && input.files[0];
-    if (!archivo) return;
+    var archivos = Array.prototype.slice.call(input.files || []);
+    if (!archivos.length) return;
+    if (_procesandoFotosProducto) { mostrarToast('Espera a que termine de preparar las fotos.'); input.value = ''; return; }
+
+    // Cupo: lo que ya tiene el producto + las fotos nuevas no puede pasar del máximo
+    var principalNueva = !_hayImagenPrincipal(); // la 1ª foto solo suma si no había principal
+    var cupo = MAX_IMAGENES_PRODUCTO - _totalImagenesProducto() + (principalNueva ? 0 : 1);
+    if (archivos.length > cupo) {
+        archivos = archivos.slice(0, Math.max(cupo, 0));
+        mostrarToast('Máximo ' + MAX_IMAGENES_PRODUCTO + ' imágenes por producto: solo se tomaron ' + Math.max(cupo, 0) + '.');
+        if (!archivos.length) { input.value = ''; return; }
+    }
+
+    _procesandoFotosProducto = true;
+    validarFormularioProducto();
     _estadoImagen('Preparando la imagen…');
     try {
-        var dataUrl = await _leerImagenProducto(archivo, 1200, 0.88);
-        _imagenProductoSeleccionada = dataUrl;
+        // 1ª foto = imagen principal
+        var r = await _leerImagenProducto(archivos[0], 1200, 0.88, 0);
+        _imagenProductoSeleccionada = r.full;
         // La foto reemplaza cualquier link pegado (para no subir las dos)
         _limpiarUrlImagen();
         var pf = document.getElementById('previewImagenProducto');
-        if (pf) { pf.src = dataUrl; pf.style.display = 'block'; }
+        if (pf) { pf.src = r.full; pf.style.display = 'block'; }
         _estadoImagen('✔ Imagen lista. Se subirá a imgbb al guardar.');
     } catch (e) {
-        _imagenProductoSeleccionada = null;
         _estadoImagen('No se pudo leer esa imagen. Prueba con otra.', true);
+        _procesandoFotosProducto = false;
+        input.value = '';
+        _renderExtrasProducto();
+        validarFormularioProducto();
+        return;
+    }
+    // Las demás quedan como fotos adicionales
+    try {
+        if (archivos.length > 1) await _procesarExtrasProducto(archivos.slice(1));
+    } finally {
+        _procesandoFotosProducto = false;
     }
     input.value = ''; // permite volver a elegir el mismo archivo
+    _renderExtrasProducto();
+    validarFormularioProducto();
+}
+
+// ── Fotos adicionales (galería) ──
+// Imágenes que tendría el producto al guardar: la principal (si hay) + las adicionales
+function _totalImagenesProducto() {
+    return (_hayImagenPrincipal() ? 1 : 0) + _imagenesExtraProducto.length;
+}
+
+function _estadoExtrasProducto(t) {
+    var e = document.getElementById('sapExtrasEstado');
+    if (e) e.textContent = t || '';
+}
+
+function _renderExtrasProducto() {
     _pintarBotonImagen();
+    var lista = document.getElementById('sapExtrasLista');
+    if (lista) {
+        lista.innerHTML = '';
+        _imagenesExtraProducto.forEach(function (it, i) {
+            var caja = document.createElement('div');
+            caja.className = 'sap-extra';
+            var img = document.createElement('img');
+            img.src = it.miniatura;
+            img.alt = 'Foto ' + (i + 2);
+            var num = document.createElement('span');
+            num.textContent = String(i + 2);
+            var quitar = document.createElement('button');
+            quitar.type = 'button';
+            quitar.setAttribute('aria-label', 'Quitar foto ' + (i + 2));
+            quitar.textContent = '✕';
+            quitar.addEventListener('click', function () {
+                if (_guardandoProducto) return;
+                _imagenesExtraProducto.splice(i, 1);
+                _renderExtrasProducto();
+            });
+            caja.appendChild(img); caja.appendChild(num); caja.appendChild(quitar);
+            lista.appendChild(caja);
+        });
+        lista.style.display = _imagenesExtraProducto.length ? 'flex' : 'none';
+    }
+    var total = _totalImagenesProducto();
+    var cont = document.getElementById('sapExtrasContador');
+    if (cont) cont.textContent = total + ' / ' + MAX_IMAGENES_PRODUCTO + ' imágenes en el producto' +
+        (_imagenesExtraProducto.length ? ' (' + _imagenesExtraProducto.length + ' adicionales por subir)' : '');
+    var btn = document.getElementById('btnAgregarExtras');
+    if (btn) btn.disabled = total >= MAX_IMAGENES_PRODUCTO;
+}
+
+// Procesa (una por una, para no saturar la memoria del celular) las fotos adicionales
+async function _procesarExtrasProducto(archivos) {
+    var omitidas = 0;
+    try {
+        for (var i = 0; i < archivos.length; i++) {
+            _estadoExtrasProducto('⏳ Preparando fotos… ' + (i + 1) + '/' + archivos.length);
+            try {
+                var r = await _leerImagenProducto(archivos[i], 1200, 0.85, 160);
+                _imagenesExtraProducto.push({ dataUrl: r.full, miniatura: r.mini });
+            } catch (e) { omitidas++; }
+            _renderExtrasProducto();
+        }
+    } finally {
+        _estadoExtrasProducto(omitidas ? '⚠️ ' + omitidas + ' foto(s) no se pudieron leer y se omitieron.' : '');
+    }
+}
+
+function elegirImagenesExtraProducto() {
+    var input = document.getElementById('inputImagenesExtraProducto');
+    if (input) input.click();
+}
+
+// "➕ Agregar más fotos": se suman a las adicionales sin tocar la principal
+async function agregarImagenesExtraProducto(event) {
+    var input = event.target;
+    var archivos = Array.prototype.slice.call(input.files || []);
+    if (!archivos.length) return;
+    if (_procesandoFotosProducto) { mostrarToast('Espera a que termine de preparar las fotos.'); input.value = ''; return; }
+    var cupo = MAX_IMAGENES_PRODUCTO - _totalImagenesProducto();
+    if (cupo <= 0) {
+        mostrarToast('Ya tiene el máximo de ' + MAX_IMAGENES_PRODUCTO + ' imágenes.');
+        input.value = '';
+        return;
+    }
+    if (archivos.length > cupo) {
+        archivos = archivos.slice(0, cupo);
+        mostrarToast('Máximo ' + MAX_IMAGENES_PRODUCTO + ' imágenes por producto: solo se agregaron ' + cupo + '.');
+    }
+    _procesandoFotosProducto = true;
+    validarFormularioProducto();
+    try {
+        await _procesarExtrasProducto(archivos);
+    } finally {
+        _procesandoFotosProducto = false;
+    }
+    input.value = '';
+    _renderExtrasProducto();
     validarFormularioProducto();
 }
 
@@ -243,6 +386,7 @@ function alCambiarUrlImagen() {
     if (crudo === '') {
         _estadoUrlImagen('');
         if (prev) { prev.style.display = 'none'; prev.removeAttribute('src'); }
+        _renderExtrasProducto();
         validarFormularioProducto();
         return;
     }
@@ -254,6 +398,7 @@ function alCambiarUrlImagen() {
         _estadoUrlImagen(esPagina
             ? 'Ese es el link de la página. En imgbb copia el "Enlace directo" (https://i.ibb.co/...).'
             : 'El link debe ser de imgbb y empezar con https://i.ibb.co/', true);
+        _renderExtrasProducto();
         validarFormularioProducto();
         return;
     }
@@ -267,7 +412,6 @@ function alCambiarUrlImagen() {
         var pf = document.getElementById('previewImagenProducto');
         if (pf) { pf.style.display = 'none'; pf.removeAttribute('src'); }
         _estadoImagen('');
-        _pintarBotonImagen();
     }
 
     _estadoUrlImagen('Cargando vista previa…');
@@ -277,6 +421,7 @@ function alCambiarUrlImagen() {
         prev.src = url;
         prev.style.display = 'block';
     }
+    _renderExtrasProducto();
     validarFormularioProducto();
 }
 
@@ -301,15 +446,48 @@ async function _postAppsScript(cuerpo) {
         });
     } catch (e) {
         console.error('[apps script polo] No hubo respuesta:', e);
-        throw new Error('No se pudo contactar al servidor. Revisa tu internet y que el Apps Script esté implementado con acceso "Cualquier usuario".');
+        var errRed = new Error('No se pudo contactar al servidor. Revisa tu internet y que el Apps Script esté implementado con acceso "Cualquier usuario".');
+        errRed.reintentable = true;
+        throw errRed;
     }
     var texto = await respuesta.text();
     try {
         return JSON.parse(texto);
     } catch (eJson) {
         console.error('[apps script polo] La respuesta no es JSON (HTTP ' + respuesta.status + '):', texto.slice(0, 600));
-        throw new Error('El servidor respondió algo inesperado (HTTP ' + respuesta.status + '). Revisa que CodePolo.gs tenga la última versión implementada.');
+        var errJson = new Error('El servidor respondió algo inesperado (HTTP ' + respuesta.status + '). Revisa que CodePolo.gs tenga la última versión implementada.');
+        errJson.reintentable = respuesta.status >= 500;
+        throw errJson;
     }
+}
+
+// Sube las fotos adicionales a imgbb (vía Apps Script), de UNA en una (varias a la vez hacen que imgbb
+// responda "forbidden"), y devuelve sus links EN ORDEN. Un solo reintento si fue fallo de red / 5xx.
+async function _subirImagenesExtraProducto(idToken, progreso) {
+    var items = _imagenesExtraProducto.slice();
+    var urls = [];
+    for (var i = 0; i < items.length; i++) {
+        var intento = 0, url = '';
+        while (!url) {
+            try {
+                var j = await _postAppsScript({
+                    idToken: idToken,
+                    accion: 'subirImagen',
+                    imagenBase64: items[i].dataUrl,
+                    nombreArchivo: 'producto_' + Date.now() + '_' + (i + 2) + '.jpg'
+                });
+                if (j && j.ok && j.url) { url = j.url; break; }
+                throw new Error((j && j.error) || 'imgbb no aceptó la foto.'); // motivo claro: reintentar no ayuda
+            } catch (e) {
+                intento++;
+                if (e && e.reintentable && intento < 2) continue;
+                throw new Error('Foto ' + (i + 2) + ': ' + (e && e.message ? e.message : 'error desconocido.'));
+            }
+        }
+        urls.push(url);
+        if (progreso) progreso(i + 1, items.length);
+    }
+    return urls;
 }
 
 // ── Guardar ──
@@ -351,6 +529,7 @@ async function guardarProductoAdmin() {
         mostrarToast('La existencia no es válida.');
         return;
     }
+    if (_procesandoFotosProducto) { mostrarToast('Espera a que termine de preparar las fotos.'); return; }
     if (!CONFIG.APPS_SCRIPT_URL) { mostrarToast('Falta configurar APPS_SCRIPT_URL en config.js.'); return; }
 
     var btn = document.getElementById('btnGuardarProducto');
@@ -360,6 +539,21 @@ async function guardarProductoAdmin() {
     try {
         // El idToken prueba, del lado del servidor, quién es realmente el usuario
         var idToken = await user.getIdToken();
+
+        // Fotos adicionales: primero se suben a imgbb (una petición por foto); el guardado solo recibe los links
+        var imagenesExtraUrls = [];
+        if (_imagenesExtraProducto.length) {
+            try {
+                imagenesExtraUrls = await _subirImagenesExtraProducto(idToken, function (n, total) {
+                    if (btn) btn.textContent = 'Subiendo fotos ' + n + '/' + total + '…';
+                });
+            } catch (errSub) {
+                mostrarToast('❌ ' + (errSub && errSub.message ? errSub.message : 'No se pudieron subir las fotos adicionales.') + ' No se guardó el producto.', 6000);
+                return;
+            }
+            if (btn) btn.textContent = 'Guardando...';
+        }
+
         var resultado = await _postAppsScript({
             idToken: idToken,
             accion: 'agregar',
@@ -376,6 +570,7 @@ async function guardarProductoAdmin() {
             masVendido: _toggleProductoActivo('btnMasVendidoProducto'),
             imagenUrl: urlImagen,
             imagenBase64: urlImagen ? '' : (_imagenProductoSeleccionada || ''),
+            imagenesExtra: imagenesExtraUrls,
             nombreArchivo: 'producto_' + Date.now() + '.jpg'
         });
 

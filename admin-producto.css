@@ -140,3 +140,12 @@ body.modo-oscuro .sap-chip { color: #e0d5cc; border-color: #3a3028; }
 body.modo-oscuro .sap-chip.activo { background: #e8607a; color: #fff; }
 body.modo-oscuro .sap-zona { background: #1f2a36; border-color: #34506b; }
 body.modo-oscuro #submenuAgregarProducto .panel-nombre-btn.cancelar { background: #33291f; color: #e0d5cc; }
+
+/* ── Fotos adicionales (galería) ── */
+.sap-btn-imagen { align-self: flex-start; }
+.sap-extras-lista { display: flex; flex-wrap: wrap; gap: 10px; max-height: 260px; overflow-y: auto; padding: 2px; }
+.sap-extra { position: relative; width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 1.5px solid #e0d5cc; background: #f3ede7; flex-shrink: 0; }
+.sap-extra img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sap-extra button { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; line-height: 20px; cursor: pointer; }
+.sap-extra span { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 800; color: #fff; background: rgba(0,0,0,0.55); border-radius: 6px; padding: 0 5px; }
+body.modo-oscuro .sap-extra { border-color: #4a3a2e; background: #2a2218; }
