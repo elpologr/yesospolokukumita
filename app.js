@@ -1053,16 +1053,17 @@ function _hayBusquedaDeTextoActiva() {
 //   tipo   = etiqueta principal (columna G) que debe tener el producto
 //   precio = (opcional) precio original exacto; sirve para separar las figuras por precio
 //   origenExterno = productos "prestados" de otra hoja (Velas Kukúmita)
+//   nota   = (opcional) texto de la nota que se muestra arriba de la hoja; si no hay, se usa "texto"
 // ══════════════════════════════════════════════════════════════════════════════
 var HOJAS_CATEGORIAS = [
     { texto: 'Bases',          tipo: 'bases' },                       // hoja 2
-    { texto: 'Figuras de $5',  tipo: 'figuras', precio: 5 },          // hoja 3
-    { texto: 'Figuras de $10', tipo: 'figuras', precio: 10 },         // hoja 4
-    { texto: 'Figuras de $15', tipo: 'figuras', precio: 15 },         // hoja 5
+    { texto: 'Figuras de $5',  nota: 'Figuras de $5 MXN',  tipo: 'figuras', precio: 5 },          // hoja 3
+    { texto: 'Figuras de $10', nota: 'Figuras de $10 MXN', tipo: 'figuras', precio: 10 },         // hoja 4
+    { texto: 'Figuras de $15', nota: 'Figuras de $15 MXN', tipo: 'figuras', precio: 15 },         // hoja 5
     { texto: 'Macetas',        tipo: 'macetas' },                      // hoja 6
     { texto: 'Alajeros',       tipo: 'alajeros' },                     // hoja 7
-    { texto: 'Figuras de $20', tipo: 'figuras', precio: 20 },         // hoja 8
-    { texto: 'Figuras de $25', tipo: 'figuras', precio: 25 },         // hoja 9
+    { texto: 'Figuras de $20', nota: 'Figuras de $20 MXN', tipo: 'figuras', precio: 20 },         // hoja 8
+    { texto: 'Figuras de $25', nota: 'Figuras de $25 MXN', tipo: 'figuras', precio: 25 },         // hoja 9
     { texto: 'Arreglos',       tipo: 'arreglo', sinFilaEnResumen: true }, // hoja 10 (no tiene fila en la Hoja 1)
     { texto: 'Velas',          origenExterno: 'velas', enlace: 'https://velaskukumita.com' } // hoja 11
 ];
@@ -1122,11 +1123,11 @@ function _construirPlanHojas(cards) {
     });
     agregarFila({ texto: 'Etiquetas', irAModo: 'etiquetas' }, etiquetasExt);
     if (idxVelas >= 0) agregarFila({ cfgIndex: idxVelas }, porHoja[idxVelas]);
-    var paginas = [{ titulo: 'Inicio', cards: resumen, filas: filas }];
+    var paginas = [{ titulo: 'Inicio', nota: '', cards: resumen, filas: filas }];
     HOJAS_CATEGORIAS.forEach(function(cfg, i) {
-        paginas.push({ titulo: cfg.texto, cards: porHoja[i], cfgIndex: i });
+        paginas.push({ titulo: cfg.texto, nota: cfg.nota || cfg.texto, cards: porHoja[i], cfgIndex: i });
     });
-    if (otros.length) paginas.push({ titulo: 'Otros productos', cards: otros, otros: true });
+    if (otros.length) paginas.push({ titulo: 'Otros productos', nota: 'Otros productos', cards: otros, otros: true });
     return paginas;
 }
 
@@ -1142,6 +1143,15 @@ function _modoHojasActivo() {
     if (!cards.length) return false;
     return !grid.querySelector('.card-dinamica.oculto, .card-dinamica.oculto-forma-carrusel');
 }
+
+// Nota de la hoja (justo debajo de "Todos los productos de esta página son de YESO"). Vacío = se oculta.
+function actualizarNotaHojaCatalogo(texto) {
+    var el = document.getElementById('notaHojaCatalogo');
+    if (!el) return;
+    el.textContent = texto || '';
+    el.style.display = texto ? '' : 'none';
+}
+window.actualizarNotaHojaCatalogo = actualizarNotaHojaCatalogo;
 
 function _crearBarraHoja(titulo, botones) {
     var barra = document.createElement('div');
@@ -1299,6 +1309,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
         });
         _ordenAlterado = true;
         window._hojaPlanActual = { num: num, pag: pag };
+        actualizarNotaHojaCatalogo(pag.nota);
         renderControles();
         insertarBarrasCategoriaProductos();
         if (_scrollAlCambiarPagina) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1308,6 +1319,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
         if (_planHojas) return mostrarPaginaPlan(num);
         _restaurarOrdenOriginal();
         window._hojaPlanActual = null;
+        actualizarNotaHojaCatalogo('');
         paginaActual = num;
         // Guardar página en el hash de la URL para que persista al recargar
         var nuevoHash = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '') || '';

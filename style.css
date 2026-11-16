@@ -2023,6 +2023,21 @@
     .barra-categoria-fila-quitar {
         background: linear-gradient(135deg, #c0392b, #922b21);
     }
+
+    /* — Hojas por categoría: etiqueta a la izquierda + botón "Ver más →" a la derecha — */
+    .barra-categoria-fila.barra-hoja {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        text-align: left; cursor: default;
+    }
+    .barra-hoja-titulo { flex: 1; min-width: 0; }
+    .barra-hoja-btn {
+        flex: 0 0 auto; padding: 5px 12px; font: inherit; font-size: 0.85em; font-weight: 700;
+        color: #fff; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.55);
+        border-radius: 8px; cursor: pointer; white-space: nowrap;
+    }
+    .barra-hoja-btn:hover { background: rgba(255,255,255,0.3); }
+    .hoja-vacia { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: #8c7565; font-weight: 600; }
+    body.modo-oscuro .hoja-vacia { color: #c9b8aa; }
     .barra-categoria-fila:first-child { margin-top: 0; }
     body.modo-oscuro .barra-categoria-fila {
         background: linear-gradient(135deg, #4a3c33, #362a22);
