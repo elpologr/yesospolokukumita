@@ -3,8 +3,8 @@
 // Se carga DESPUÉS de app.js y admin-producto.js (usa: auth, esCorreoAdmin, mostrarToast, CONFIG,
 // y, para subir fotos, _leerImagenProducto y _postAppsScript de admin-producto.js).
 //
-// Una mesa negra en vista isométrica de 150 columnas × 100 filas de celdas, dividida en 50 mesas chicas
-// (10 a lo ancho × 5 a lo largo, de 15 columnas × 20 filas cada una), separadas por un hueco.
+// Una mesa negra en vista isométrica de 200 columnas × 75 filas de celdas, dividida en 50 mesas chicas
+// (10 a lo ancho × 5 a lo largo, de 20 columnas × 15 filas cada una), separadas por un hueco.
 // Cada celda puede llevar una imagen de imgbb (link https://i.ibb.co/...), pegando el link, pegando
 // varios links de golpe o subiendo fotos (se suben a imgbb por el Apps Script, igual que en "Agregar producto").
 //
@@ -19,8 +19,8 @@
 (function () {
     'use strict';
 
-    var NC = 150, NF = 100;      // la mesa grande, en horizontal: 150 columnas × 100 filas de celdas
-    var MC = 15, MF = 20;        // cada mesa chica mide 15 columnas × 20 filas
+    var NC = 200, NF = 75;       // la mesa grande, en horizontal: 200 columnas × 75 filas de celdas
+    var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
     var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra
     var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 10 mesas a lo ancho × 5 a lo largo = 50 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
@@ -86,15 +86,30 @@
     }
     // Disposición de los datos guardados: 1 = mesas en vertical (5 a lo ancho × 10 a lo largo), 2 = en horizontal (10 × 5).
     // Los datos de la disposición 1 se giran una vez (fila ↔ columna) para que cada pieza y cada descripción siga en su mesa.
-    var DISPOSICION = 2;
+    // 3 = cada mesa chica de 20 columnas × 15 filas (antes, en la disposición 2, eran 15 columnas × 20 filas).
+    var DISPOSICION = 3;
     function transponer(m) {
         var o = {};
         Object.keys(m || {}).forEach(function (k) { var q = k.split(','); o[q[1] + ',' + q[0]] = m[k]; });
         return o;
     }
+    // Disposición 2 → 3: dentro de cada mesa chica se gira la cuadrícula (fila ↔ columna), de 15×20 a 20×15.
+    // Cada pieza se queda en su misma mesa (mismo número de mesa); las descripciones de mesa no cambian de clave.
+    function transponerDentroDeMesas(m) {
+        var o = {};
+        Object.keys(m || {}).forEach(function (k) {
+            var q = k.split(','), r = +q[0], c = +q[1];
+            var mr = Math.floor(r / 20), mc = Math.floor(c / 15), lr = r % 20, lc = c % 15;
+            o[(mr * 15 + lc) + ',' + (mc * 20 + lr)] = m[k];
+        });
+        return o;
+    }
     function normalizarDatos(celdas, previas, mesas, disp) {
-        if ((disp || 1) >= DISPOSICION) return { celdas: celdas || {}, previas: previas || {}, mesas: mesas || {} };
-        return { celdas: transponer(celdas), previas: transponer(previas), mesas: transponer(mesas) };
+        var d = disp || 1;
+        celdas = celdas || {}; previas = previas || {}; mesas = mesas || {};
+        if (d < 2) { celdas = transponer(celdas); previas = transponer(previas); mesas = transponer(mesas); }
+        if (d < 3) { celdas = transponerDentroDeMesas(celdas); previas = transponerDentroDeMesas(previas); }
+        return { celdas: celdas, previas: previas, mesas: mesas };
     }
     function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..50, de izquierda a derecha y de arriba abajo
     function mesaDe(ce) { return { mr: Math.floor(ce.r / MF), mc: Math.floor(ce.c / MC) }; }
