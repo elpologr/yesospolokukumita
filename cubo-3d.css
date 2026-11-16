@@ -1,0 +1,91 @@
+/* ══════════════════════════════════════════════════════════════
+   Yesos Polo Kukúmita — Pieza en 6 vistas (cubo desplegado → 3D)
+   Todo va acotado a #pantallaCubo. Lo abre cubo-3d.js desde la Mesa.
+   ══════════════════════════════════════════════════════════════ */
+#pantallaCubo, #pantallaCubo * {
+    box-sizing: border-box;
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#pantallaCubo {
+    display: none; position: fixed; inset: 0; z-index: 30001;   /* encima de la Mesa (30000) */
+    flex-direction: column; background: #15151b; color: #e8e2dc;
+}
+#pantallaCubo.abierta { display: flex; }
+
+#pantallaCubo .cubo-header {
+    position: relative; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+    height: 64px; padding: 0 16px; background: rgba(0,0,0,0.35); border-bottom: 1px solid #2c2c35;
+}
+#pantallaCubo .cubo-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: #f1ebe4; }
+#pantallaCubo .cubo-volver {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border: none; border-radius: 50%; background: transparent;
+    color: #f1ebe4; cursor: pointer; font-size: 30px; line-height: 1; padding-bottom: 4px;
+}
+#pantallaCubo .cubo-volver:hover { background: rgba(255,255,255,0.1); }
+
+#pantallaCubo .cubo-cuerpo {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 14px; padding: 14px;
+}
+#pantallaCubo .cubo-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+#pantallaCubo .cubo-ayuda { margin: 0; font-size: 12.5px; line-height: 1.45; color: #a8a0b0; }
+
+/* Cubo desplegado: cuadrícula de 4 columnas × 3 filas (la posición de cada cuadro la pone el JS) */
+#pantallaCubo .cubo-red {
+    display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, auto);
+    gap: 6px; width: 100%; max-width: 520px; margin: 0 auto;
+}
+#pantallaCubo .cubo-slot {
+    position: relative; aspect-ratio: 1 / 1; overflow: hidden; cursor: pointer;
+    background: #000; border: 1.5px dashed #3f3f4c; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+}
+#pantallaCubo .cubo-slot:hover { border-color: #8a8a9a; }
+#pantallaCubo .cubo-slot.principal { border-color: #e8607a; }
+#pantallaCubo .cubo-slot.lleno { border-style: solid; }
+#pantallaCubo .cubo-slot.arrastrando { border-color: #e8607a; background: #2a1a20; }
+#pantallaCubo .cubo-slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+#pantallaCubo .cubo-slot-nombre {
+    position: absolute; left: 4px; top: 4px; z-index: 1; font-size: 10px; font-weight: 800;
+    color: #fff; background: rgba(0,0,0,0.6); border-radius: 6px; padding: 1px 6px;
+}
+#pantallaCubo .cubo-slot-mas { font-size: 28px; font-weight: 300; color: #5a5a68; }
+#pantallaCubo .cubo-slot-x {
+    position: absolute; top: 3px; right: 3px; z-index: 2; width: 22px; height: 22px; padding: 0;
+    border: none; border-radius: 50%; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; line-height: 22px; cursor: pointer;
+}
+
+#pantallaCubo .cubo-label { font-size: 13px; font-weight: 600; color: #cfc7d6; margin-top: 4px; }
+#pantallaCubo .cubo-label small { font-weight: 400; color: #8a8294; }
+#pantallaCubo .cubo-input {
+    width: 100%; padding: 10px 12px; font-size: 14px; color: #f1ebe4;
+    background: #0d0d11; border: 1.5px solid #34343f; border-radius: 10px; outline: none;
+}
+#pantallaCubo .cubo-input:focus { border-color: #e8607a; }
+#pantallaCubo input[type="range"] { width: 100%; accent-color: #e8607a; }
+#pantallaCubo .cubo-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+#pantallaCubo .cubo-btn {
+    flex: 1 1 160px; padding: 11px 14px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700;
+    cursor: pointer; background: #2a2a33; color: #e8e2dc;
+}
+#pantallaCubo .cubo-btn.principal { background: #e8607a; color: #fff; }
+#pantallaCubo .cubo-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+#pantallaCubo .cubo-estado { min-height: 18px; font-size: 12.5px; color: #a8a0b0; }
+#pantallaCubo .cubo-estado.error { color: #ff8a8a; }
+
+/* Visor 3D */
+#pantallaCubo .cubo-visor { position: relative; }
+#pantallaCubo #cuboVista {
+    width: 100%; height: 340px; display: block; border-radius: 14px; cursor: grab; touch-action: none;
+    background: radial-gradient(ellipse at 50% 40%, #34343e 0%, #1b1b22 60%, #0d0d11 100%);
+}
+#pantallaCubo #cuboVista:active { cursor: grabbing; }
+#pantallaCubo .cubo-nota { margin: 8px 0 0; font-size: 12px; color: #8a8294; text-align: center; }
+
+@media (min-width: 900px) {
+    #pantallaCubo .cubo-cuerpo { flex-direction: row; align-items: flex-start; gap: 24px; padding: 20px 28px; }
+    #pantallaCubo .cubo-col { flex: 1 1 0; }
+    #pantallaCubo .cubo-visor { position: sticky; top: 0; }
+    #pantallaCubo #cuboVista { height: min(70vh, 640px); }
+}

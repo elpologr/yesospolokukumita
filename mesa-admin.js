@@ -42,13 +42,13 @@
         "  } catch (e) { self.postMessage({ error: String((e && e.message) || e) }); }",
         "};"
     ].join('\n');
-    var RE_UNA = /https:\/\/i\.ibb\.co\/[^\s,"'<>\[\]()]+/i;
-    var RE_VARIAS = /https:\/\/i\.ibb\.co\/[^\s,"'<>\[\]()]+/gi;
+    var RE_UNA = /(?:https:\/\/i\.ibb\.co\/|imagenes\/)[^\s,"'<>\[\]()]+/i;   // imgbb o una imagen del repo (imagenes/pieza/miniatura.webp)
+    var RE_VARIAS = /(?:https:\/\/i\.ibb\.co\/|imagenes\/)[^\s,"'<>\[\]()]+/gi;
 
     var S = {
-        celdas: {}, ts: 0, sel: null,
+        celdas: {}, previas: {}, ts: 0, sel: null,
         scale: 0.05, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, minEscala: 0.03, fitEscala: 0.05,
-        raf: 0, abierta: false, ajustada: false,
+        raf: 0, abierta: false, ajustada: false, vista3d: true,
         thumb: {}, full: {}, fullOrden: [], fallo: {}, vuelo: {}, pend: [], enVuelo: 0,
         nubeTimer: null, nubeOk: null, subiendo: false, procesando: false, worker: null, workerTimer: null
     };
@@ -99,19 +99,30 @@
                     '<button type="button" id="mesaMas" aria-label="Acercar">+</button>' +
                     '<button type="button" id="mesaMenos" aria-label="Alejar">−</button>' +
                     '<button type="button" id="mesaAjustar" aria-label="Ver toda la mesa">⤢</button>' +
+                    '<button type="button" id="mesaVista" aria-label="Cambiar entre vista de pie y plana" title="Piezas de pie / acostadas">🧊</button>' +
                 '</div>' +
             '</div>' +
             '<div class="mesa-panel">' +
                 '<div class="mesa-celda-info" id="mesaCeldaInfo">Toca una celda de la mesa para elegirla.</div>' +
+                '<button class="mesa-btn" type="button" id="mesaFaltan">🔎 Siguiente pieza sin 3D</button>' +
                 '<div id="mesaEditor" style="display:none; flex-direction:column; gap:10px;">' +
                     '<div class="mesa-fila">' +
-                        '<input id="mesaUrl" class="mesa-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://i.ibb.co/...">' +
+                        '<input id="mesaUrl" class="mesa-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="imagenes/pieza/miniatura.webp  ó  https://i.ibb.co/...">' +
                         '<button class="mesa-btn principal" type="button" id="mesaPoner">Poner</button>' +
                     '</div>' +
                     '<div class="mesa-fila">' +
                         '<button class="mesa-btn" type="button" id="mesaSubir">📷 Subir fotos</button>' +
                         '<button class="mesa-btn peligro" type="button" id="mesaQuitar">Quitar imagen</button>' +
                     '</div>' +
+                    '<div class="mesa-previa">' +
+                        '<div class="mesa-previa-titulo">👁 Vista previa <small>(temporal: se muestra mientras la celda no tenga 3D)</small></div>' +
+                        '<div class="mesa-fila">' +
+                            '<input id="mesaPreviaUrl" class="mesa-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://i.ibb.co/...">' +
+                            '<button class="mesa-btn" type="button" id="mesaPreviaPoner">Poner</button>' +
+                        '</div>' +
+                        '<button class="mesa-btn peligro" type="button" id="mesaPreviaQuitar">Quitar vista previa</button>' +
+                    '</div>' +
+                    '<button class="mesa-btn principal" type="button" id="mesaCubo">🧊 Pieza en 6 vistas (3D, sin imgbb)</button>' +
                     '<button class="mesa-btn" type="button" id="mesaSinFondo">✂️ Quitar fondo y subir a la otra cuenta</button>' +
                     '<input type="file" id="mesaArchivos" accept="image/*" multiple style="display:none">' +
                     '<details class="mesa-detalle">' +
@@ -133,10 +144,25 @@
         $('mesaMas').addEventListener('click', function () { zoomCentro(1.4); });
         $('mesaMenos').addEventListener('click', function () { zoomCentro(1 / 1.4); });
         $('mesaAjustar').addEventListener('click', function () { ajustarVista(); pedirDibujo(); });
+        try { S.vista3d = localStorage.getItem('polo_mesa_vista') !== 'plana'; } catch (e) { /* sin preferencia guardada */ }
+        $('mesaVista').addEventListener('click', function () {
+            S.vista3d = !S.vista3d;
+            try { localStorage.setItem('polo_mesa_vista', S.vista3d ? 'pie' : 'plana'); } catch (e) {}
+            estado(S.vista3d ? 'Vista: piezas de pie, con luz y sombra.' : 'Vista: piezas acostadas sobre la mesa.');
+            pedirDibujo();
+        });
         $('mesaPoner').addEventListener('click', ponerDesdeCampo);
         $('mesaUrl').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ponerDesdeCampo(); } });
         $('mesaQuitar').addEventListener('click', quitarSeleccionada);
         $('mesaSinFondo').addEventListener('click', quitarFondoSeleccionada);
+        $('mesaPreviaPoner').addEventListener('click', ponerPrevia);
+        $('mesaPreviaUrl').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ponerPrevia(); } });
+        $('mesaPreviaQuitar').addEventListener('click', quitarPrevia);
+        $('mesaFaltan').addEventListener('click', irAFaltante);
+        $('mesaCubo').addEventListener('click', function () {
+            if (typeof window.abrirCubo3D === 'function') window.abrirCubo3D();
+            else estado('Falta cargar cubo-3d.js en index.html.', true);
+        });
         $('mesaSubir').addEventListener('click', function () { $('mesaArchivos').click(); });
         $('mesaArchivos').addEventListener('change', subirFotos);
         $('mesaPonerVarios').addEventListener('click', ponerVarios);
@@ -324,7 +350,11 @@
             ed.style.display = 'none';
         } else {
             var url = S.celdas[clave(S.sel.r, S.sel.c)] || '';
-            info.textContent = 'Fila ' + (S.sel.r + 1) + ' · Columna ' + (S.sel.c + 1) + (url ? ' · con imagen' : ' · vacía');
+            var previa = S.previas[clave(S.sel.r, S.sel.c)] || '';
+            info.textContent = 'Fila ' + (S.sel.r + 1) + ' · Columna ' + (S.sel.c + 1) +
+                (url ? ' · con 3D' + (previa ? ' (su vista previa ya no se muestra)' : '') : previa ? ' · solo vista previa: falta el 3D' : ' · vacía');
+            $('mesaPreviaUrl').value = previa;
+            $('mesaPreviaQuitar').disabled = !previa;
             ed.style.display = 'flex';
             $('mesaUrl').value = url;
             $('mesaQuitar').disabled = !url;
@@ -332,7 +362,10 @@
         }
         var total = Object.keys(S.celdas).length;
         var cont = $('mesaContador');
-        if (cont) cont.textContent = total + ' / ' + (N * N);
+        var faltan = listaFaltantes().length;
+        if (cont) cont.textContent = total + ' / ' + (N * N) + (faltan ? ' · ' + faltan + ' sin 3D' : '');
+        var bf = $('mesaFaltan');
+        if (bf) { bf.textContent = '🔎 Siguiente pieza sin 3D (' + faltan + ')'; bf.disabled = !faltan; }
     }
 
     function estado(txt, error) {
@@ -353,12 +386,56 @@
         if (!url) {
             estado(/^https?:\/\/(www\.)?ibb\.co\//i.test(crudo)
                 ? 'Ese es el link de la página. En imgbb copia el "Enlace directo" (https://i.ibb.co/...).'
-                : 'El link debe ser de imgbb y empezar con https://i.ibb.co/', true);
+                : 'El link debe ser de imgbb (https://i.ibb.co/...) o una ruta del repo (imagenes/pieza/miniatura.webp)', true);
             return;
         }
         S.celdas[clave(S.sel.r, S.sel.c)] = url;
         estado('✔ Imagen colocada.');
         cambioGuardable();
+    }
+
+    // ── Vista previa: imagen temporal (imgbb) que se muestra mientras la celda no tenga su 3D ──
+    function ponerPrevia() {
+        if (!S.sel) return;
+        var crudo = $('mesaPreviaUrl').value.trim(), k = clave(S.sel.r, S.sel.c);
+        if (!crudo) { estado('Pega un link de imgbb (https://i.ibb.co/...) para la vista previa.', true); return; }
+        var url = extraerUrl(crudo);
+        if (!url) { estado('El link debe ser de imgbb (https://i.ibb.co/...).', true); return; }
+        S.previas[k] = url;
+        estado(S.celdas[k] ? '✔ Vista previa guardada (esta celda ya tiene 3D, así que no se muestra).' : '✔ Vista previa colocada: se verá hasta que le pongas el 3D.');
+        cambioGuardable();
+    }
+    function quitarPrevia() {
+        if (!S.sel) return;
+        delete S.previas[clave(S.sel.r, S.sel.c)];
+        estado('Vista previa quitada.');
+        cambioGuardable();
+    }
+    // Celdas que solo tienen vista previa (todavía falta hacer su 3D), en orden de fila y columna
+    function listaFaltantes() {
+        var out = [];
+        Object.keys(S.previas).forEach(function (k) {
+            if (S.celdas[k]) return;
+            var p = k.split(',');
+            out.push({ r: +p[0], c: +p[1] });
+        });
+        out.sort(function (a, b) { return a.r - b.r || a.c - b.c; });
+        return out;
+    }
+    function irAFaltante() {
+        var l = listaFaltantes();
+        if (!l.length) { estado('No hay piezas pendientes: todas las que tienen vista previa ya tienen 3D.'); return; }
+        var i = 0;
+        if (S.sel) {
+            for (var j = 0; j < l.length; j++) {
+                if (l[j].r > S.sel.r || (l[j].r === S.sel.r && l[j].c > S.sel.c)) { i = j; break; }
+                if (j === l.length - 1) i = 0;
+            }
+        }
+        S.sel = { r: l[i].r, c: l[i].c };
+        centrarEn(S.sel.c, S.sel.r, Math.max(S.scale, 0.5));
+        estado('Pendiente ' + (i + 1) + ' de ' + l.length + ': fila ' + (S.sel.r + 1) + ', columna ' + (S.sel.c + 1) + '.');
+        pintarPanel(); pedirDibujo();
     }
 
     function quitarSeleccionada() {
@@ -526,10 +603,10 @@
     }
 
     function vaciarMesa() {
-        var total = Object.keys(S.celdas).length;
+        var total = Object.keys(S.celdas).length + Object.keys(S.previas).length;
         if (!total) { estado('La mesa ya está vacía.'); return; }
-        if (!window.confirm('¿Quitar las ' + total + ' imágenes de la mesa? Esto no se puede deshacer.')) return;
-        S.celdas = {};
+        if (!window.confirm('¿Quitar las ' + total + ' imágenes de la mesa (3D y vistas previas)? Esto no se puede deshacer.')) return;
+        S.celdas = {}; S.previas = {};
         estado('Mesa vaciada.');
         cambioGuardable();
     }
@@ -549,13 +626,13 @@
     function cargarLocal() {
         try {
             var o = JSON.parse(localStorage.getItem(claveLocal()) || 'null');
-            if (o && o.celdas) { S.celdas = o.celdas; S.ts = o.ts || 0; }
+            if (o && (o.celdas || o.previas)) { S.celdas = o.celdas || {}; S.previas = o.previas || {}; S.ts = o.ts || 0; }
         } catch (e) { /* sin datos guardados: se empieza vacía */ }
     }
 
     function guardar() {
         S.ts = Date.now();
-        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
+        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
         clearTimeout(S.nubeTimer);
         S.nubeTimer = setTimeout(guardarNube, 1500);
     }
@@ -571,7 +648,7 @@
     function guardarNube() {
         var ref = refNube();
         if (!ref) return;
-        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas) })
+        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas) })
             .then(function () { S.nubeOk = true; })
             .catch(function (e) { S.nubeOk = false; console.warn('[mesa] no se pudo sincronizar con Firestore:', e); });
     }
@@ -580,12 +657,13 @@
         var ref = refNube();
         if (!ref) return;
         ref.get().then(function (doc) {
-            if (!doc.exists) { if (Object.keys(S.celdas).length) guardarNube(); return; }
+            if (!doc.exists) { if (Object.keys(S.celdas).length || Object.keys(S.previas).length) guardarNube(); return; }
             var d = doc.data() || {};
             if ((d.ts || 0) > S.ts && d.datos) {
                 try {
                     S.celdas = JSON.parse(d.datos); S.ts = d.ts;
-                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas }));
+                    S.previas = d.previas ? JSON.parse(d.previas) : {};
+                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas }));
                     pintarPanel(); pedirDibujo();
                 } catch (e) { console.warn('[mesa] datos de la nube dañados', e); }
             } else if (S.ts > (d.ts || 0)) {
@@ -725,12 +803,52 @@
         ctx.restore();
     }
 
+    // Dibuja una pieza "de pie" sobre la celda (r, c): charco de luz en el piso, sombra de contacto y la
+    // imagen parada con la base en el suelo. Se dibujan de atrás hacia adelante para que se tapen bien.
+    function dibujarFigura(ctx, src, iw, ih, r, c) {
+        var o = proj(c, r), cx = o[0], cy = o[1] + TH / 2;
+        var s = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * s, h = ih * s;
+        var pie = cy + TH * 0.14;
+        var g;
+        // charco de luz sobre la mesa (elipse en perspectiva)
+        ctx.save();
+        ctx.translate(cx, cy); ctx.scale(1, TH / TW);
+        g = ctx.createRadialGradient(0, 0, 0, 0, 0, TW * 0.52);
+        g.addColorStop(0, 'rgba(255,255,255,0.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, TW * 0.52, 0, 6.2832); ctx.fill();
+        ctx.restore();
+        // sombra de contacto bajo la base
+        ctx.save();
+        ctx.translate(cx, pie); ctx.scale(1, 0.32);
+        var rr = Math.max(w * 0.5, TW * 0.22);
+        g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
+        g.addColorStop(0, 'rgba(0,0,0,0.85)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.2832); ctx.fill();
+        ctx.restore();
+        // la pieza, parada
+        ctx.drawImage(src, cx - w / 2, pie - h, w, h);
+    }
+
+    // Contorno ámbar punteado en el piso de las celdas que solo tienen vista previa
+    function marcarPrevia(ctx, r, c) {
+        var p = proj(c, r), k = S.scale;
+        ctx.beginPath();
+        ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
+        ctx.lineTo(p[0], p[1] + TH); ctx.lineTo(p[0] - TW / 2, p[1] + TH / 2); ctx.closePath();
+        ctx.fillStyle = 'rgba(245,166,35,0.12)'; ctx.fill();
+        ctx.setLineDash([5 / k, 4 / k]);
+        ctx.strokeStyle = '#f5a623'; ctx.lineWidth = Math.max(2 / k, 1.2); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
     function dibujarImagenes(ctx) {
-        var rg = rangoVisible(), cw = TW * S.scale;
+        var rg = rangoVisible(), cw = TW * S.scale, enPie = [];
         for (var r = rg.r0; r <= rg.r1; r++) {
             for (var c = rg.c0; c <= rg.c1; c++) {
-                var url = S.celdas[clave(r, c)];
+                var kc = clave(r, c), url = S.celdas[kc], esPrevia = false;
+                if (!url) { url = S.previas[kc]; esPrevia = !!url; }
                 if (!url) continue;
+                if (esPrevia) marcarPrevia(ctx, r, c);
                 var th = S.thumb[url], full = S.full[url];
                 var src = null;
                 if (cw > UMBRAL_COMPLETA) {
@@ -741,7 +859,12 @@
                 if (!th && !full && cw >= UMBRAL_CARGA && !S.fallo[url]) pedir(url, false);
 
                 if (src) {
-                    dibujarSprite(ctx, src, src.naturalWidth || src.width, src.naturalHeight || src.height, r, c);
+                    if (S.vista3d) enPie.push({ src: src, r: r, c: c, previa: esPrevia });
+                    else {
+                        if (esPrevia) ctx.globalAlpha = 0.6;
+                        dibujarSprite(ctx, src, src.naturalWidth || src.width, src.naturalHeight || src.height, r, c);
+                        ctx.globalAlpha = 1;
+                    }
                 } else {
                     var p = proj(c, r);
                     poli(ctx, [p, [p[0] + TW / 2, p[1] + TH / 2], [p[0], p[1] + TH], [p[0] - TW / 2, p[1] + TH / 2]],
@@ -749,7 +872,16 @@
                 }
             }
         }
+        if (enPie.length) {
+            enPie.sort(function (a, b) { return (a.r + a.c) - (b.r + b.c) || a.r - b.r; });
+            enPie.forEach(function (f) {
+                if (f.previa) ctx.globalAlpha = 0.6;   // la vista previa se ve semitransparente: aún falta su 3D
+                dibujarFigura(ctx, f.src, f.src.naturalWidth || f.src.width, f.src.naturalHeight || f.src.height, f.r, f.c);
+                ctx.globalAlpha = 1;
+            });
+        }
     }
+
 
     function dibujarSeleccion(ctx, k) {
         if (!S.sel) return;
