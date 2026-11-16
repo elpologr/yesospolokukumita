@@ -3,11 +3,12 @@
 // Se carga DESPUÉS de app.js y admin-producto.js (usa: auth, esCorreoAdmin, mostrarToast, CONFIG,
 // y, para subir fotos, _leerImagenProducto y _postAppsScript de admin-producto.js).
 //
-// Una mesa negra en vista isométrica con una cuadrícula de 100×100 celdas (10,000 espacios).
+// Una mesa negra en vista isométrica de 150 columnas × 100 filas de celdas, dividida en 50 mesas chicas
+// (10 a lo ancho × 5 a lo largo, de 15 columnas × 20 filas cada una), separadas por un hueco.
 // Cada celda puede llevar una imagen de imgbb (link https://i.ibb.co/...), pegando el link, pegando
 // varios links de golpe o subiendo fotos (se suben a imgbb por el Apps Script, igual que en "Agregar producto").
 //
-// Se dibuja en <canvas> (10,000 elementos HTML serían demasiado pesados). Para cuidar la memoria,
+// Se dibuja en <canvas> (15,000 elementos HTML serían demasiado pesados). Para cuidar la memoria,
 // de cada imagen se guarda una miniatura y solo se cargan las que están a la vista.
 // Se guarda en este dispositivo (localStorage) y, si Firestore lo permite, también en
 // usuarios/{uid}/mesa/tablero (esa ruta ya está permitida por las reglas actuales).
@@ -18,10 +19,10 @@
 (function () {
     'use strict';
 
-    var NC = 100, NF = 150;      // la mesa grande: 100 columnas × 150 filas de celdas
-    var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
+    var NC = 150, NF = 100;      // la mesa grande, en horizontal: 150 columnas × 100 filas de celdas
+    var MC = 15, MF = 20;        // cada mesa chica mide 15 columnas × 20 filas
     var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra
-    var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 5 mesas a lo ancho × 10 a lo largo = 50 mesas
+    var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 10 mesas a lo ancho × 5 a lo largo = 50 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
     var M = 1.5;                 // margen de la mesa alrededor de la cuadrícula (en celdas)
     var DEPTH = 40, LEG = 300;   // grosor del tablero y largo de las patas
@@ -82,6 +83,18 @@
             i = d >= m ? (modo === 'ini' ? (bl + 1) * m : (bl + 1) * m - 1) : bl * m + Math.floor(d);
         }
         return Math.max(-1, Math.min(n, i));
+    }
+    // Disposición de los datos guardados: 1 = mesas en vertical (5 a lo ancho × 10 a lo largo), 2 = en horizontal (10 × 5).
+    // Los datos de la disposición 1 se giran una vez (fila ↔ columna) para que cada pieza y cada descripción siga en su mesa.
+    var DISPOSICION = 2;
+    function transponer(m) {
+        var o = {};
+        Object.keys(m || {}).forEach(function (k) { var q = k.split(','); o[q[1] + ',' + q[0]] = m[k]; });
+        return o;
+    }
+    function normalizarDatos(celdas, previas, mesas, disp) {
+        if ((disp || 1) >= DISPOSICION) return { celdas: celdas || {}, previas: previas || {}, mesas: mesas || {} };
+        return { celdas: transponer(celdas), previas: transponer(previas), mesas: transponer(mesas) };
     }
     function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..50, de izquierda a derecha y de arriba abajo
     function mesaDe(ce) { return { mr: Math.floor(ce.r / MF), mc: Math.floor(ce.c / MC) }; }
@@ -739,13 +752,17 @@
     function cargarLocal() {
         try {
             var o = JSON.parse(localStorage.getItem(claveLocal()) || 'null');
-            if (o && (o.celdas || o.previas || o.mesas)) { S.celdas = o.celdas || {}; S.previas = o.previas || {}; S.mesas = o.mesas || {}; S.ts = o.ts || 0; }
+            if (o && (o.celdas || o.previas || o.mesas)) {
+                var n = normalizarDatos(o.celdas, o.previas, o.mesas, o.disp);
+                S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.ts = o.ts || 0;
+                if ((o.disp || 1) < DISPOSICION) localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));   // ya queda guardado con la disposición nueva
+            }
         } catch (e) { /* sin datos guardados: se empieza vacía */ }
     }
 
     function guardar() {
         S.ts = Date.now();
-        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas, mesas: S.mesas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
+        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
         clearTimeout(S.nubeTimer);
         S.nubeTimer = setTimeout(guardarNube, 1500);
     }
@@ -761,7 +778,7 @@
     function guardarNube() {
         var ref = refNube();
         if (!ref) return;
-        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas), mesas: JSON.stringify(S.mesas) })
+        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas), mesas: JSON.stringify(S.mesas), disp: DISPOSICION })
             .then(function () { S.nubeOk = true; })
             .catch(function (e) { S.nubeOk = false; console.warn('[mesa] no se pudo sincronizar con Firestore:', e); });
     }
@@ -774,10 +791,9 @@
             var d = doc.data() || {};
             if ((d.ts || 0) > S.ts && d.datos) {
                 try {
-                    S.celdas = JSON.parse(d.datos); S.ts = d.ts;
-                    S.previas = d.previas ? JSON.parse(d.previas) : {};
-                    S.mesas = d.mesas ? JSON.parse(d.mesas) : {};
-                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));
+                    var n = normalizarDatos(JSON.parse(d.datos), d.previas ? JSON.parse(d.previas) : {}, d.mesas ? JSON.parse(d.mesas) : {}, d.disp);
+                    S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.ts = d.ts;
+                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));
                     pintarPanel(); pedirDibujo();
                 } catch (e) { console.warn('[mesa] datos de la nube dañados', e); }
             } else if (S.ts > (d.ts || 0)) {
