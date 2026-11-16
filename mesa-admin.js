@@ -46,7 +46,7 @@
     var RE_VARIAS = /(?:https:\/\/i\.ibb\.co\/|imagenes\/)[^\s,"'<>\[\]()]+/gi;
 
     var S = {
-        celdas: {}, previas: {}, ts: 0, sel: null,
+        celdas: {}, previas: {}, ts: 0, sel: null, mover: null,
         scale: 0.05, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, minEscala: 0.03, fitEscala: 0.05,
         raf: 0, abierta: false, ajustada: false, vista3d: true,
         thumb: {}, full: {}, fullOrden: [], fallo: {}, vuelo: {}, pend: [], enVuelo: 0,
@@ -103,7 +103,7 @@
                 '</div>' +
             '</div>' +
             '<div class="mesa-panel">' +
-                '<div class="mesa-celda-info" id="mesaCeldaInfo">Toca una celda de la mesa para elegirla.</div>' +
+                '<div class="mesa-celda-info" id="mesaCeldaInfo">Toca una celda para elegirla. Mantén presionada una pieza para moverla.</div>' +
                 '<button class="mesa-btn" type="button" id="mesaFaltan">🔎 Siguiente pieza sin 3D</button>' +
                 '<div id="mesaEditor" style="display:none; flex-direction:column; gap:10px;">' +
                     '<div class="mesa-fila">' +
@@ -270,7 +270,7 @@
 
     // ── Gestos: arrastrar, pellizcar, rueda y toque ──
     function engancharGestos() {
-        var ptrs = {}, drag = null, pinch = null;
+        var ptrs = {}, drag = null, pinch = null, timerMover = null;
 
         function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
         function dosPuntos() { var ids = Object.keys(ptrs); return [ptrs[ids[0]], ptrs[ids[1]]]; }
@@ -281,7 +281,24 @@
             var n = Object.keys(ptrs).length;
             if (n === 1) {
                 drag = { x: ptrs[e.pointerId].x, y: ptrs[e.pointerId].y, ox: S.ox, oy: S.oy, movido: false };
+                // Mantener presionada una celda con imagen → se "levanta" para moverla
+                clearTimeout(timerMover);
+                var ce0 = celdaEn(drag.x, drag.y);
+                if (ce0 && tieneContenido(ce0)) {
+                    var idPtr = e.pointerId;
+                    timerMover = setTimeout(function () {
+                        if (!drag || drag.movido || !ptrs[idPtr] || Object.keys(ptrs).length !== 1) return;
+                        var q = ptrs[idPtr];
+                        S.mover = { desde: ce0, hover: ce0, x: q.x, y: q.y };
+                        drag = null;
+                        try { if (navigator.vibrate) navigator.vibrate(25); } catch (x) {}
+                        estado('Arrastra la pieza a otra celda y suéltala. (Si la celda tiene algo, intercambian lugar.)');
+                        pedirDibujo();
+                    }, 450);
+                }
             } else if (n === 2) {
+                clearTimeout(timerMover);
+                if (S.mover) { S.mover = null; estado('Movimiento cancelado.'); pedirDibujo(); }
                 drag = null;
                 var p = dosPuntos();
                 var mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
@@ -293,6 +310,12 @@
         cv.addEventListener('pointermove', function (e) {
             if (!ptrs[e.pointerId]) return;
             ptrs[e.pointerId] = pos(e);
+            if (S.mover) {
+                var m = ptrs[e.pointerId];
+                S.mover.x = m.x; S.mover.y = m.y; S.mover.hover = celdaEn(m.x, m.y);
+                pedirDibujo();
+                return;
+            }
             if (pinch && Object.keys(ptrs).length >= 2) {
                 var p = dosPuntos();
                 var mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
@@ -303,13 +326,21 @@
             } else if (drag) {
                 var q = ptrs[e.pointerId];
                 var dx = q.x - drag.x, dy = q.y - drag.y;
-                if (!drag.movido && Math.hypot(dx, dy) > 6) drag.movido = true;
+                if (!drag.movido && Math.hypot(dx, dy) > 6) { drag.movido = true; clearTimeout(timerMover); }
                 if (drag.movido) { S.ox = drag.ox + dx; S.oy = drag.oy + dy; pedirDibujo(); }
             }
         });
 
         function soltar(e) {
             if (!ptrs[e.pointerId]) return;
+            clearTimeout(timerMover);
+            if (S.mover) {
+                var mv = S.mover; S.mover = null;
+                delete ptrs[e.pointerId]; drag = null; pinch = null;
+                if (e.type === 'pointerup' && mv.hover && (mv.hover.r !== mv.desde.r || mv.hover.c !== mv.desde.c)) moverCelda(mv.desde, mv.hover);
+                else { estado(e.type === 'pointerup' ? 'La pieza se quedó en su lugar.' : 'Movimiento cancelado.'); pedirDibujo(); }
+                return;
+            }
             var eraToque = drag && !drag.movido && Object.keys(ptrs).length === 1 && e.type === 'pointerup';
             var punto = ptrs[e.pointerId];
             delete ptrs[e.pointerId];
@@ -317,6 +348,7 @@
             if (Object.keys(ptrs).length < 2) pinch = null;
             drag = null;
         }
+        cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });   // el toque largo no abre menú
         cv.addEventListener('pointerup', soltar);
         cv.addEventListener('pointercancel', soltar);
 
@@ -325,6 +357,21 @@
             var p = pos(e);
             zoomEn(p.x, p.y, S.scale * Math.exp(-e.deltaY * 0.0015));
         }, { passive: false });
+    }
+
+    // ── Mover una celda (mantener presionada y arrastrar) ──
+    function tieneContenido(ce) { var k = clave(ce.r, ce.c); return !!(S.celdas[k] || S.previas[k]); }
+    function moverCelda(a, b) {
+        var ka = clave(a.r, a.c), kb = clave(b.r, b.c), habia = tieneContenido(b);
+        [S.celdas, S.previas].forEach(function (M) {
+            var va = M[ka], vb = M[kb];
+            delete M[ka]; delete M[kb];
+            if (va) M[kb] = va;
+            if (vb) M[ka] = vb;
+        });
+        S.sel = { r: b.r, c: b.c };
+        estado(habia ? '✔ Las dos piezas intercambiaron lugar.' : '✔ Pieza movida a fila ' + (b.r + 1) + ', columna ' + (b.c + 1) + '.');
+        cambioGuardable();
     }
 
     // ── Selección de celda ──
@@ -346,7 +393,7 @@
         var info = $('mesaCeldaInfo'), ed = $('mesaEditor');
         if (!info || !ed) return;
         if (!S.sel) {
-            info.textContent = 'Toca una celda de la mesa para elegirla.';
+            info.textContent = 'Toca una celda para elegirla. Mantén presionada una pieza para moverla.';
             ed.style.display = 'none';
         } else {
             var url = S.celdas[clave(S.sel.r, S.sel.c)] || '';
@@ -737,6 +784,7 @@
         dibujarRejilla(ctx, k);
         dibujarImagenes(ctx);
         dibujarSeleccion(ctx, k);
+        dibujarMovimiento(ctx, k);
         bombear();
     }
 
@@ -848,6 +896,7 @@
                 var kc = clave(r, c), url = S.celdas[kc], esPrevia = false;
                 if (!url) { url = S.previas[kc]; esPrevia = !!url; }
                 if (!url) continue;
+                if (S.mover && S.mover.desde.r === r && S.mover.desde.c === c) continue;   // la pieza levantada se dibuja siguiendo el dedo
                 if (esPrevia) marcarPrevia(ctx, r, c);
                 var th = S.thumb[url], full = S.full[url];
                 var src = null;
@@ -882,6 +931,38 @@
         }
     }
 
+
+    // Mientras se arrastra una pieza: celda de origen, celda destino y la pieza siguiendo el dedo
+    function dibujarMovimiento(ctx, k) {
+        var m = S.mover; if (!m) return;
+        function rombo(ce, relleno, borde, punteado) {
+            var p = proj(ce.c, ce.r);
+            ctx.beginPath();
+            ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
+            ctx.lineTo(p[0], p[1] + TH); ctx.lineTo(p[0] - TW / 2, p[1] + TH / 2); ctx.closePath();
+            ctx.fillStyle = relleno; ctx.fill();
+            ctx.setLineDash(punteado ? [5 / k, 4 / k] : []);
+            ctx.strokeStyle = borde; ctx.lineWidth = Math.max(2.5 / k, 1.5); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        rombo(m.desde, 'rgba(255,255,255,0.06)', '#9a9aa8', true);
+        if (m.hover && (m.hover.r !== m.desde.r || m.hover.c !== m.desde.c)) {
+            var ocupada = tieneContenido(m.hover);
+            rombo(m.hover, ocupada ? 'rgba(245,166,35,0.30)' : 'rgba(80,200,120,0.30)', ocupada ? '#f5a623' : '#50c878', false);
+        }
+        var kd = clave(m.desde.r, m.desde.c), url = S.celdas[kd] || S.previas[kd];
+        var src = url ? (S.full[url] || S.thumb[url]) : null;
+        var wx = (m.x - S.ox) / S.scale, wy = (m.y - S.oy) / S.scale;
+        if (src) {
+            var iw = src.naturalWidth || src.width, ih = src.naturalHeight || src.height;
+            var e = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * e, h = ih * e;
+            ctx.save(); ctx.globalAlpha = 0.85;
+            ctx.drawImage(src, wx - w / 2, wy - h * 0.7, w, h);
+            ctx.restore();
+        } else {
+            ctx.beginPath(); ctx.arc(wx, wy, TW * 0.18, 0, 6.2832); ctx.fillStyle = 'rgba(232,96,122,0.8)'; ctx.fill();
+        }
+    }
 
     function dibujarSeleccion(ctx, k) {
         if (!S.sel) return;
