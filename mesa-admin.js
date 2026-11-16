@@ -20,6 +20,7 @@
 
     var NC = 100, NF = 150;      // la mesa grande: 100 columnas × 150 filas de celdas
     var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
+    var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra
     var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 5 mesas a lo ancho × 10 a lo largo = 50 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
     var M = 1.5;                 // margen de la mesa alrededor de la cuadrícula (en celdas)
@@ -59,6 +60,29 @@
     function $(id) { return document.getElementById(id); }
     function proj(c, r) { return [(c - r) * TW / 2, (c + r) * TH / 2]; }
     function clave(r, c) { return r + ',' + c; }
+    // Posición de una columna/fila en la mesa grande, contando los huecos entre mesas
+    function px(c) { return c + Math.floor(c / MC) * G; }
+    function py(r) { return r + Math.floor(r / MF) * G; }
+    function pc(c, r) { return proj(px(c), py(r)); }        // esquina de la celda (columna c, fila r), como proj pero con huecos
+    var AC = NC + (MESAS_C - 1) * G, AF = NF + (MESAS_F - 1) * G;   // medidas totales con huecos
+    // índice de celda a partir de una posición continua (null si cae en un hueco o fuera de la mesa)
+    function idxExacto(f, m, n) {
+        if (f < 0) return -1;
+        var b = m + G, bl = Math.floor(f / b), d = f - bl * b;
+        if (d >= m) return -1;
+        var i = bl * m + Math.floor(d);
+        return i < n ? i : -1;
+    }
+    // límite del rango visible: si cae en un hueco, se toma la celda más cercana de la mesa vecina
+    function idxLimite(f, m, n, modo) {
+        var i;
+        if (f < 0) i = modo === 'ini' ? 0 : -1;
+        else {
+            var b = m + G, bl = Math.floor(f / b), d = f - bl * b;
+            i = d >= m ? (modo === 'ini' ? (bl + 1) * m : (bl + 1) * m - 1) : bl * m + Math.floor(d);
+        }
+        return Math.max(-1, Math.min(n, i));
+    }
     function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..50, de izquierda a derecha y de arriba abajo
     function mesaDe(ce) { return { mr: Math.floor(ce.r / MF), mc: Math.floor(ce.c / MC) }; }
 
@@ -253,12 +277,12 @@
     }
 
     function ajustarVista() {
-        var bw = (NC + NF + 4 * M) * TW / 2;
-        var yArriba = -M * TH, yAbajo = (NC + NF + 2 * M) * TH / 2 + DEPTH + LEG;
+        var bw = (AC + AF + 4 * M) * TW / 2;
+        var yArriba = -(M + G / 2) * TH, yAbajo = (AC + AF + 2 * M) * TH / 2 + DEPTH + 30;
         var k = Math.min(S.w * 0.94 / bw, S.h * 0.94 / (yAbajo - yArriba));
         S.fitEscala = k; S.minEscala = k * 0.7;
         S.scale = k;
-        S.ox = S.w / 2 - (NC - NF) * TW / 4 * k;   // centra la mesa aunque no sea cuadrada
+        S.ox = S.w / 2 - (AC - AF) * TW / 4 * k;   // centra la mesa aunque no sea cuadrada
         S.oy = S.h / 2 - (yArriba + yAbajo) / 2 * k;
     }
 
@@ -272,7 +296,7 @@
     function zoomCentro(f) { zoomEn(S.w / 2, S.h / 2, S.scale * f); }
 
     function centrarEn(c, r, escala) {
-        var p = proj(c + 0.5, r + 0.5);
+        var p = proj(px(c) + 0.5, py(r) + 0.5);
         S.scale = Math.max(S.minEscala, Math.min(MAX_ESCALA, escala));
         S.ox = S.w / 2 - p[0] * S.scale;
         S.oy = S.h / 2 - p[1] * S.scale;
@@ -387,8 +411,8 @@
     // ── Selección de celda ──
     function celdaEn(sx, sy) {
         var wx = (sx - S.ox) / S.scale, wy = (sy - S.oy) / S.scale;
-        var c = Math.floor(wy / TH + wx / TW), r = Math.floor(wy / TH - wx / TW);
-        return (c >= 0 && c < NC && r >= 0 && r < NF) ? { r: r, c: c } : null;
+        var c = idxExacto(wy / TH + wx / TW, MC, NC), r = idxExacto(wy / TH - wx / TW, MF, NF);
+        return (c >= 0 && r >= 0) ? { r: r, c: c } : null;
     }
 
     function seleccionarEn(sx, sy) {
@@ -825,70 +849,83 @@
         S.pend.length = 0;
         dibujarMesa(ctx, k);
         dibujarRejilla(ctx, k);
-        dibujarNombresMesas(ctx, k);
+        dibujarDescripciones(ctx, k);
         dibujarImagenes(ctx);
         dibujarSeleccion(ctx, k);
         dibujarMovimiento(ctx, k);
         bombear();
     }
 
+    // Cada mesa chica es su propia tabla, con su marco, separada de las demás por un hueco del "infinito" oscuro
     function dibujarMesa(ctx, k) {
-        var A = proj(-M, -M), B = proj(NC + M, -M), C = proj(NC + M, NF + M), D = proj(-M, NF + M);
-        var LW = TW * 2.4;
-        // patas (de atrás hacia adelante)
-        [[-M + 2.5, -M + 2.5], [-M + 2.5, NF + M - 2.5], [NC + M - 2.5, -M + 2.5], [NC + M - 2.5, NF + M - 2.5]].forEach(function (p) {
-            var q = proj(p[0], p[1]), alto = DEPTH + LEG;
-            ctx.fillStyle = '#040405'; ctx.fillRect(q[0] - LW / 2, q[1], LW / 2, alto);
-            ctx.fillStyle = '#0e0e11'; ctx.fillRect(q[0], q[1], LW / 2, alto);
-        });
-        // tablero: costado izquierdo, costado derecho y cara superior
-        poli(ctx, [D, C, [C[0], C[1] + DEPTH], [D[0], D[1] + DEPTH]], '#070708');
-        poli(ctx, [C, B, [B[0], B[1] + DEPTH], [C[0], C[1] + DEPTH]], '#101013');
-        poli(ctx, [A, B, C, D], '#0b0b0d');
-        ctx.beginPath(); ctx.moveTo(D[0], D[1]); ctx.lineTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(D[0], D[1]);
-        ctx.strokeStyle = '#2d2d34'; ctx.lineWidth = 1.5 / k; ctx.stroke();
-        // zona de la cuadrícula, un poco más clara
-        poli(ctx, [proj(0, 0), proj(NC, 0), proj(NC, NF), proj(0, NF)], '#121216');
-    }
-
-    function dibujarRejilla(ctx, k) {
-        var chica = TW * k < 8; // muy alejado: solo las divisiones entre mesas
-        for (var pasada = 0; pasada < 2; pasada++) {
-            ctx.beginPath();
-            var i, a, b;
-            for (i = 0; i <= NC; i++) {                       // líneas de columna
-                var mayorC = i % MC === 0;
-                if ((pasada === 1) !== mayorC || (chica && !mayorC)) continue;
-                a = proj(i, 0); b = proj(i, NF);
-                ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+        for (var mr = 0; mr < MESAS_F; mr++) {
+            for (var mc = 0; mc < MESAS_C; mc++) {
+                var x0 = mc * (MC + G), x1 = x0 + MC, y0 = mr * (MF + G), y1 = y0 + MF;
+                var A = proj(x0, y0), B = proj(x1, y0), C = proj(x1, y1), D = proj(x0, y1);
+                poli(ctx, [D, C, [C[0], C[1] + DEPTH], [D[0], D[1] + DEPTH]], '#070708');          // costado izquierdo
+                poli(ctx, [C, B, [B[0], B[1] + DEPTH], [C[0], C[1] + DEPTH]], '#101013');          // costado derecho
+                poli(ctx, [A, B, C, D], '#121216');                                                // cara superior
+                ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(D[0], D[1]); ctx.closePath();
+                ctx.strokeStyle = 'rgba(245,196,107,0.75)'; ctx.lineWidth = Math.max(2.4 / k, 1.6); ctx.lineJoin = 'round'; ctx.stroke();   // marco
             }
-            for (i = 0; i <= NF; i++) {                       // líneas de fila
-                var mayorF = i % MF === 0;
-                if ((pasada === 1) !== mayorF || (chica && !mayorF)) continue;
-                a = proj(0, i); b = proj(NC, i);
-                ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-            }
-            ctx.strokeStyle = pasada ? 'rgba(245,196,107,0.55)' : 'rgba(255,255,255,0.10)';
-            ctx.lineWidth = (pasada ? 2.2 : 1) / k;
-            ctx.stroke();
         }
     }
+    // Rejilla fina dentro de cada mesa (el marco ya lo dibuja dibujarMesa)
+    function dibujarRejilla(ctx, k) {
+        if (TW * k < 8) return;   // muy alejado: solo se ven los marcos
+        ctx.beginPath();
+        for (var mr = 0; mr < MESAS_F; mr++) {
+            for (var mc = 0; mc < MESAS_C; mc++) {
+                var x0 = mc * (MC + G), y0 = mr * (MF + G), i, a, b;
+                for (i = 1; i < MC; i++) { a = proj(x0 + i, y0); b = proj(x0 + i, y0 + MF); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+                for (i = 1; i < MF; i++) { a = proj(x0, y0 + i); b = proj(x0 + MC, y0 + i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+            }
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1 / k; ctx.stroke();
+    }
 
-    // Nombre de cada mesa ("Mesa 7", con ✎ si tiene descripción) en el centro de su zona, solo cuando se ve de lejos
-    function dibujarNombresMesas(ctx, k) {
-        if (TW * k >= 45) return;
-        var px = Math.max(11, Math.min(26, TW * k * 5)) / k;
+    // Parte un texto en máximo "maxLineas" renglones que quepan en "ancho" (con la fuente ya puesta en ctx); agrega … si se corta
+    function partirTexto(ctx, texto, ancho, maxLineas) {
+        var palabras = String(texto).replace(/\s+/g, ' ').trim().split(' '), lineas = [], actual = '';
+        for (var i = 0; i < palabras.length; i++) {
+            var prueba = actual ? actual + ' ' + palabras[i] : palabras[i];
+            if (ctx.measureText(prueba).width <= ancho || !actual) actual = prueba;
+            else { lineas.push(actual); actual = palabras[i]; if (lineas.length === maxLineas) break; }
+        }
+        if (lineas.length < maxLineas && actual) lineas.push(actual);
+        var cortado = lineas.join(' ').length < palabras.join(' ').length;
+        var ult = lineas.length - 1;
+        if (ult >= 0 && (cortado || ctx.measureText(lineas[ult]).width > ancho)) {
+            var t = lineas[ult];
+            while (t.length > 1 && ctx.measureText(t + '…').width > ancho) t = t.slice(0, -1);
+            lineas[ult] = t.replace(/\s+$/, '') + '…';
+        }
+        return lineas;
+    }
+
+    // La descripción de cada mesa se escribe "pintada en el piso", en el hueco oscuro que queda arriba de la mesa
+    function dibujarDescripciones(ctx, k) {
+        if (TW * k < 5) return;   // muy alejado: sería ilegible
         ctx.save();
-        ctx.font = '700 ' + px + 'px Segoe UI, system-ui, sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(245,196,107,0.55)';
-        for (var mr = 0; mr < MESAS_F; mr++) for (var mc = 0; mc < MESAS_C; mc++) {
-            var p = proj(mc * MC + MC / 2, mr * MF + MF / 2);
-            ctx.fillText('Mesa ' + numeroMesa(mr, mc) + (S.mesas[mr + ',' + mc] ? ' ✎' : ''), p[0], p[1]);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(245,196,107,0.95)';
+        for (var mr = 0; mr < MESAS_F; mr++) {
+            for (var mc = 0; mc < MESAS_C; mc++) {
+                var texto = S.mesas[mr + ',' + mc];
+                if (!texto) continue;
+                var o = proj(mc * (MC + G), mr * (MF + G));
+                ctx.save();
+                ctx.transform(TW / 2, TH / 2, -TW / 2, TH / 2, o[0], o[1]);   // el plano del piso: 1 unidad = 1 celda
+                ctx.scale(0.01, 0.01);                                       // ahora 1 unidad = 1/100 de celda
+                var tam = 125;                                               // letra de 1.25 celdas de alto
+                ctx.font = '600 ' + tam + 'px Segoe UI, system-ui, sans-serif';
+                var lineas = partirTexto(ctx, texto, MC * 100 - 60, 2);
+                if (lineas.length === 1) ctx.fillText(lineas[0], MC * 50, -(G * 100) / 2 + tam * 0.35);
+                else { ctx.fillText(lineas[0], MC * 50, -(G * 100) + tam * 1.1); ctx.fillText(lineas[1], MC * 50, -30); }
+                ctx.restore();
+            }
         }
         ctx.restore();
     }
-
     function rangoVisible() {
         var esq = [[0, 0], [S.w, 0], [S.w, S.h], [0, S.h]];
         var c0 = 1e9, c1 = -1e9, r0 = 1e9, r1 = -1e9;
@@ -899,14 +936,13 @@
             if (r < r0) r0 = r; if (r > r1) r1 = r;
         });
         return {
-            c0: Math.max(0, Math.floor(c0)), c1: Math.min(NC - 1, Math.ceil(c1)),
-            r0: Math.max(0, Math.floor(r0)), r1: Math.min(NF - 1, Math.ceil(r1))
+            c0: Math.max(0, idxLimite(Math.floor(c0), MC, NC, 'ini')), c1: Math.min(NC - 1, idxLimite(Math.ceil(c1), MC, NC, 'fin')),
+            r0: Math.max(0, idxLimite(Math.floor(r0), MF, NF, 'ini')), r1: Math.min(NF - 1, idxLimite(Math.ceil(r1), MF, NF, 'fin'))
         };
     }
-
     // Dibuja una imagen acostada sobre la celda (r, c), ajustada con un pequeño margen
     function dibujarSprite(ctx, src, iw, ih, r, c) {
-        var o = proj(c, r), s = 0.94 / Math.max(iw, ih);
+        var o = pc(c, r), s = 0.94 / Math.max(iw, ih);
         var u0 = (1 - iw * s) / 2, v0 = (1 - ih * s) / 2;
         var exx = TW / 2, exy = TH / 2, eyx = -TW / 2, eyy = TH / 2;
         ctx.save();
@@ -918,7 +954,7 @@
     // Dibuja una pieza "de pie" sobre la celda (r, c): charco de luz en el piso, sombra de contacto y la
     // imagen parada con la base en el suelo. Se dibujan de atrás hacia adelante para que se tapen bien.
     function dibujarFigura(ctx, src, iw, ih, r, c) {
-        var o = proj(c, r), cx = o[0], cy = o[1] + TH / 2;
+        var o = pc(c, r), cx = o[0], cy = o[1] + TH / 2;
         var s = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * s, h = ih * s;
         var pie = cy + TH * 0.14;
         var g;
@@ -943,7 +979,7 @@
 
     // Contorno ámbar punteado en el piso de las celdas que solo tienen vista previa
     function marcarPrevia(ctx, r, c) {
-        var p = proj(c, r), k = S.scale;
+        var p = pc(c, r), k = S.scale;
         ctx.beginPath();
         ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
         ctx.lineTo(p[0], p[1] + TH); ctx.lineTo(p[0] - TW / 2, p[1] + TH / 2); ctx.closePath();
@@ -956,7 +992,7 @@
     // Prisma triangular para las imágenes de imgbb: la base es un triángulo sobre la mesa con su lado ANCHO
     // al frente (hacia ti) y la punta atrás. La imagen va en la cara ancha; arriba se ve la tapa triangular.
     function dibujarPrisma(ctx, src, iw, ih, r, c) {
-        var o = proj(c, r), cx = o[0], cy = o[1] + TH / 2, k = S.scale;
+        var o = pc(c, r), cx = o[0], cy = o[1] + TH / 2, k = S.scale;
         var s = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * s, h = ih * s;
         var yF = cy + TH * 0.16, yA = cy - TH * 0.28;          // borde ancho (frente) y punta (atrás), en el piso
         var xi = cx - w / 2, xd = cx + w / 2, g;
@@ -1014,7 +1050,7 @@
                         ctx.globalAlpha = 1;
                     }
                 } else {
-                    var p = proj(c, r);
+                    var p = pc(c, r);
                     poli(ctx, [p, [p[0] + TW / 2, p[1] + TH / 2], [p[0], p[1] + TH], [p[0] - TW / 2, p[1] + TH / 2]],
                          S.fallo[url] ? '#5a2a30' : '#3b4a63');
                 }
@@ -1035,7 +1071,7 @@
     function dibujarMovimiento(ctx, k) {
         var m = S.mover; if (!m) return;
         function rombo(ce, relleno, borde, punteado) {
-            var p = proj(ce.c, ce.r);
+            var p = pc(ce.c, ce.r);
             ctx.beginPath();
             ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
             ctx.lineTo(p[0], p[1] + TH); ctx.lineTo(p[0] - TW / 2, p[1] + TH / 2); ctx.closePath();
@@ -1066,11 +1102,12 @@
     function dibujarSeleccion(ctx, k) {
         if (!S.sel) return;
         var mr = Math.floor(S.sel.r / MF), mc = Math.floor(S.sel.c / MC);
-        var q0 = proj(mc * MC, mr * MF), q1 = proj((mc + 1) * MC, mr * MF), q2 = proj((mc + 1) * MC, (mr + 1) * MF), q3 = proj(mc * MC, (mr + 1) * MF);
+        var xa = mc * (MC + G), ya = mr * (MF + G);
+        var q0 = proj(xa, ya), q1 = proj(xa + MC, ya), q2 = proj(xa + MC, ya + MF), q3 = proj(xa, ya + MF);
         ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.closePath();
         ctx.fillStyle = 'rgba(245,196,107,0.05)'; ctx.fill();
         ctx.strokeStyle = 'rgba(245,196,107,0.9)'; ctx.lineWidth = Math.max(2.5 / k, 1.5); ctx.stroke();
-        var p = proj(S.sel.c, S.sel.r);
+        var p = pc(S.sel.c, S.sel.r);
         ctx.beginPath();
         ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
         ctx.lineTo(p[0], p[1] + TH); ctx.lineTo(p[0] - TW / 2, p[1] + TH / 2); ctx.closePath();
