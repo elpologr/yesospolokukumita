@@ -889,6 +889,41 @@
         ctx.setLineDash([]);
     }
 
+    // Prisma triangular para las imágenes de imgbb: la base es un triángulo sobre la mesa con su lado ANCHO
+    // al frente (hacia ti) y la punta atrás. La imagen va en la cara ancha; arriba se ve la tapa triangular.
+    function dibujarPrisma(ctx, src, iw, ih, r, c) {
+        var o = proj(c, r), cx = o[0], cy = o[1] + TH / 2, k = S.scale;
+        var s = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * s, h = ih * s;
+        var yF = cy + TH * 0.16, yA = cy - TH * 0.28;          // borde ancho (frente) y punta (atrás), en el piso
+        var xi = cx - w / 2, xd = cx + w / 2, g;
+        // charco de luz bajo el prisma
+        ctx.save();
+        ctx.translate(cx, cy); ctx.scale(1, TH / TW);
+        g = ctx.createRadialGradient(0, 0, 0, 0, 0, TW * 0.56);
+        g.addColorStop(0, 'rgba(245,200,120,0.22)'); g.addColorStop(1, 'rgba(245,200,120,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, TW * 0.56, 0, 6.2832); ctx.fill();
+        ctx.restore();
+        // base triangular en el piso (sombra de contacto)
+        poli(ctx, [[xi, yF], [xd, yF], [cx, yA]], 'rgba(0,0,0,0.55)');
+        // cara trasera izquierda y derecha: se asoman un poco a los lados de la imagen, más oscuras
+        poli(ctx, [[xi, yF], [cx, yA], [cx, yA - h], [xi, yF - h]], '#1c1c24');
+        poli(ctx, [[xd, yF], [cx, yA], [cx, yA - h], [xd, yF - h]], '#24242d');
+        // cara ancha con la imagen (mira hacia ti)
+        ctx.drawImage(src, xi, yF - h, w, h);
+        // tapa triangular (se ve desde arriba)
+        g = ctx.createLinearGradient(0, yA - h, 0, yF - h);
+        g.addColorStop(0, '#e9e2da'); g.addColorStop(1, '#bdb4aa');
+        poli(ctx, [[xi, yF - h], [xd, yF - h], [cx, yA - h]], g);
+        // bordes resaltados
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(1.4 / k, 0.9);
+        ctx.strokeStyle = '#f5c46b';
+        ctx.beginPath(); ctx.moveTo(xi, yF); ctx.lineTo(xi, yF - h); ctx.lineTo(xd, yF - h); ctx.lineTo(xd, yF); ctx.closePath(); ctx.stroke();
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath(); ctx.moveTo(xi, yF - h); ctx.lineTo(cx, yA - h); ctx.lineTo(xd, yF - h); ctx.stroke();
+    }
+    function esDeImgbb(url) { return /^https:\/\/i\.ibb\.co\//i.test(url || ''); }
+
     function dibujarImagenes(ctx) {
         var rg = rangoVisible(), cw = TW * S.scale, enPie = [];
         for (var r = rg.r0; r <= rg.r1; r++) {
@@ -908,7 +943,7 @@
                 if (!th && !full && cw >= UMBRAL_CARGA && !S.fallo[url]) pedir(url, false);
 
                 if (src) {
-                    if (S.vista3d) enPie.push({ src: src, r: r, c: c, previa: esPrevia });
+                    if (S.vista3d) enPie.push({ src: src, r: r, c: c, previa: esPrevia, prisma: esDeImgbb(url) });
                     else {
                         if (esPrevia) ctx.globalAlpha = 0.6;
                         dibujarSprite(ctx, src, src.naturalWidth || src.width, src.naturalHeight || src.height, r, c);
@@ -925,7 +960,7 @@
             enPie.sort(function (a, b) { return (a.r + a.c) - (b.r + b.c) || a.r - b.r; });
             enPie.forEach(function (f) {
                 if (f.previa) ctx.globalAlpha = 0.6;   // la vista previa se ve semitransparente: aún falta su 3D
-                dibujarFigura(ctx, f.src, f.src.naturalWidth || f.src.width, f.src.naturalHeight || f.src.height, f.r, f.c);
+                (f.prisma ? dibujarPrisma : dibujarFigura)(ctx, f.src, f.src.naturalWidth || f.src.width, f.src.naturalHeight || f.src.height, f.r, f.c);
                 ctx.globalAlpha = 1;
             });
         }
