@@ -395,7 +395,8 @@ function csvAProductos(filas) {
         var get = function(idx) { return (f[idx] || '').trim(); };
 
         // Saltar filas sin imagen en la columna E (aunque tengan nombre o precio)
-        if (!get(4)) continue;
+        // (también se ignoran las filas que dicen "vacio" en esa columna: son huecos, no productos)
+        if (!get(4) || /^"?\s*vac[ií]o\s*"?$/i.test(get(4))) continue;
 
         // Orden de columnas de la hoja exclusiva de Yesos Polo Kukúmita (A a L):
         // A=0  Producto (nombre)
@@ -1041,93 +1042,87 @@ function _hayBusquedaDeTextoActiva() {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // HOJAS DEL CATÁLOGO (modo "Mostrar Todo", sin búsqueda ni filtros)
+// Las hojas siguen el ORDEN DE LA HOJA DE GOOGLE SHEETS, de 30 en 30 filas:
+//   Hoja 2 = filas 2 a 31,  Hoja 3 = filas 32 a 61,  Hoja 4 = filas 62 a 91, ... (fila 1 = encabezados)
+// Es decir, la fila 2, 3 y 4 son los 3 primeros productos de la hoja 2; la 32, 33 y 34, los 3 primeros de la hoja 3.
+// Se usa el número de fila real (no la posición entre los visibles): si una fila no tiene imagen, ese
+// hueco queda en su hoja y no recorre a las demás.
 //   Hoja 1  = resumen: 10 filas de 3 productos, cada una con su etiqueta y un botón "Ver más →":
-//             filas 1-8 = bases, figuras $5/$10/$15, macetas, alajeros, figuras $20/$25 (hojas 2-9),
-//             fila 9 = primeras 3 etiquetas (Ver más abre la zona de Etiquetas),
-//             fila 10 = primeras 3 velas de velaskukumita.com (hoja 11).
-//             Los arreglos tienen su hoja 10 pero no una fila en la Hoja 1.
-//   Hoja 2 a 11 = una hoja por categoría, en el orden de abajo (la hoja de cada una es su
-//             posición en la lista + 2).
-//   Hoja 12 = "Otros productos" (solo aparece si hay productos que no caen en ninguna categoría).
-// Para cambiar el orden o agregar categorías, edita SOLO esta lista:
-//   tipo   = etiqueta principal (columna G) que debe tener el producto
-//   precio = (opcional) precio original exacto; sirve para separar las figuras por precio
-//   origenExterno = productos "prestados" de otra hoja (Velas Kukúmita)
-//   nota   = (opcional) texto de la nota que se muestra arriba de la hoja; si no hay, se usa "texto"
+//             filas 1-8  = los primeros 3 productos de las hojas 2 a 9,
+//             fila 9     = primeras 3 etiquetas (Ver más abre la zona de Etiquetas),
+//             fila 10    = primeras 3 velas de velaskukumita.com (Ver más abre ese sitio).
+// Para que cada hoja sea una categoría, ordena tu Google Sheets en bloques de 30 filas (ver NOMBRES_HOJAS).
 // ══════════════════════════════════════════════════════════════════════════════
-var HOJAS_CATEGORIAS = [
-    { texto: 'Bases',          tipo: 'bases' },                       // hoja 2
-    { texto: 'Figuras de $5',  nota: 'Figuras de $5 MXN',  tipo: 'figuras', precio: 5 },          // hoja 3
-    { texto: 'Figuras de $10', nota: 'Figuras de $10 MXN', tipo: 'figuras', precio: 10 },         // hoja 4
-    { texto: 'Figuras de $15', nota: 'Figuras de $15 MXN', tipo: 'figuras', precio: 15 },         // hoja 5
-    { texto: 'Macetas',        tipo: 'macetas' },                      // hoja 6
-    { texto: 'Alajeros',       tipo: 'alajeros' },                     // hoja 7
-    { texto: 'Figuras de $20', nota: 'Figuras de $20 MXN', tipo: 'figuras', precio: 20 },         // hoja 8
-    { texto: 'Figuras de $25', nota: 'Figuras de $25 MXN', tipo: 'figuras', precio: 25 },         // hoja 9
-    { texto: 'Arreglos',       tipo: 'arreglo', sinFilaEnResumen: true }, // hoja 10 (no tiene fila en la Hoja 1)
-    { texto: 'Velas',          origenExterno: 'velas', enlace: 'https://velaskukumita.com' } // hoja 11
-];
+var PRODUCTOS_POR_HOJA = 30;
+var PRIMERA_HOJA_PRODUCTOS = 2;   // la hoja 1 es el resumen
 
-// Índice de la categoría a la que pertenece una tarjeta: 0..n-1, -1 = otros, -2 = no va en estas hojas
-function _indiceHojaDeCard(card) {
-    var origen = card.getAttribute('data-origen-externo') || '';
-    if (origen === 'etiquetas-externas') return -2;
-    var i, cfg;
-    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
-        if (HOJAS_CATEGORIAS[i].origenExterno && HOJAS_CATEGORIAS[i].origenExterno === origen) return i;
-    }
-    if (origen) return -2;
-    var raw = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
-    var tipos = raw.split(/[|,]/).map(function(t) { return _normalizarCategoriaBarra(t.replace(/^"+|"+$/g, '')); }).filter(Boolean);
-    var precio = parseInt(card.getAttribute('data-precio'), 10) || 0;
-    function tiene(clave) {
-        var lista = (_VARIANTES_CATEGORIA_BARRA[clave] || [clave]).map(_normalizarCategoriaBarra);
-        return tipos.some(function(t) { return lista.indexOf(t) !== -1; });
-    }
-    // Primero las formas sin precio (bases, macetas, alajeros, arreglos); después las figuras por precio
-    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
-        cfg = HOJAS_CATEGORIAS[i];
-        if (!cfg.tipo || cfg.precio !== undefined) continue;
-        if (tiene(cfg.tipo)) return i;
-    }
-    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
-        cfg = HOJAS_CATEGORIAS[i];
-        if (!cfg.tipo || cfg.precio === undefined) continue;
-        if (tiene(cfg.tipo) && precio === cfg.precio) return i;
-    }
-    return -1;
+// Nombre de cada hoja (en orden, empezando en la hoja 2). texto = etiqueta de la fila en la Hoja 1;
+// nota = texto que se muestra arriba de la hoja (si no se pone, se usa "texto");
+// sinFilaEnResumen = la hoja existe pero no tiene fila en la Hoja 1. Las hojas que no estén aquí no llevan nota.
+var NOMBRES_HOJAS = [
+    { texto: 'Bases' },                                         // hoja 2   (filas 2-31)
+    { texto: 'Figuras de $5',  nota: 'Figuras de $5 MXN' },     // hoja 3   (filas 32-61)
+    { texto: 'Figuras de $10', nota: 'Figuras de $10 MXN' },    // hoja 4   (filas 62-91)
+    { texto: 'Figuras de $15', nota: 'Figuras de $15 MXN' },    // hoja 5   (filas 92-121)
+    { texto: 'Macetas' },                                       // hoja 6   (filas 122-151)
+    { texto: 'Alajeros' },                                      // hoja 7   (filas 152-181)
+    { texto: 'Figuras de $20', nota: 'Figuras de $20 MXN' },    // hoja 8   (filas 182-211)
+    { texto: 'Figuras de $25', nota: 'Figuras de $25 MXN' },    // hoja 9   (filas 212-241)
+    { texto: 'Arreglos', sinFilaEnResumen: true }               // hoja 10  (filas 242-271)
+];
+var ENLACE_VELAS = 'https://velaskukumita.com';
+
+function _nombreHoja(n) { return NOMBRES_HOJAS[n - PRIMERA_HOJA_PRODUCTOS] || null; }
+
+// Hoja que le corresponde a una tarjeta según su fila en Google Sheets; -2 = viene de otra zona (no va en las hojas)
+function _hojaDeCard(card) {
+    if ((card.getAttribute('data-origen-externo') || '') !== '') return -2;
+    var fila = parseInt(card.getAttribute('data-sheet-row'), 10);
+    if (!fila || fila < 2) return -1;
+    return Math.floor((fila - 2) / PRODUCTOS_POR_HOJA) + PRIMERA_HOJA_PRODUCTOS;
 }
 
 // Arma las hojas a partir de las tarjetas del grid. paginas[0] = Hoja 1 (resumen).
 function _construirPlanHojas(cards) {
-    var porHoja = HOJAS_CATEGORIAS.map(function() { return []; });
-    var otros = [], etiquetasExt = [];
+    var porHoja = {}, maxHoja = PRIMERA_HOJA_PRODUCTOS, etiquetasExt = [], velas = [];
     cards.forEach(function(c) {
-        if ((c.getAttribute('data-origen-externo') || '') === 'etiquetas-externas') { etiquetasExt.push(c); return; }
-        var i = _indiceHojaDeCard(c);
-        if (i >= 0) porHoja[i].push(c);
-        else if (i === -1) otros.push(c);
+        var origen = c.getAttribute('data-origen-externo') || '';
+        if (origen === 'etiquetas-externas') { etiquetasExt.push(c); return; }
+        if (origen === 'velas') { velas.push(c); return; }
+        var h = _hojaDeCard(c);
+        if (h < PRIMERA_HOJA_PRODUCTOS) return;
+        (porHoja[h] = porHoja[h] || []).push(c);
+        if (h > maxHoja) maxHoja = h;
     });
-    // Hoja 1: filas de categorías (con su hoja), luego la fila de Etiquetas y al final la de Velas
+    // Siempre se muestran al menos las hojas con nombre que ya tienen algún producto o están antes de la última con productos
+    Object.keys(porHoja).forEach(function(h) {
+        porHoja[h].sort(function(a, b) { return parseInt(a.getAttribute('data-sheet-row'), 10) - parseInt(b.getAttribute('data-sheet-row'), 10); });
+    });
+
+    // Hoja 1: primeros 3 de las hojas 2 a 9, luego Etiquetas y al final Velas
     var resumen = [], filas = [];
     function agregarFila(info, lista) {
-        if (!lista.length) return;
+        if (!lista || !lista.length) return;
         filas.push(Object.assign({ inicio: resumen.length }, info));
         resumen = resumen.concat(lista.slice(0, 3));
     }
-    var idxVelas = -1;
-    HOJAS_CATEGORIAS.forEach(function(cfg, i) {
-        if (cfg.origenExterno) { idxVelas = i; return; }
+    NOMBRES_HOJAS.forEach(function(cfg, i) {
         if (cfg.sinFilaEnResumen) return;
-        agregarFila({ cfgIndex: i }, porHoja[i]);
+        var n = i + PRIMERA_HOJA_PRODUCTOS;
+        agregarFila({ texto: cfg.texto, pagina: n }, porHoja[n]);
     });
     agregarFila({ texto: 'Etiquetas', irAModo: 'etiquetas' }, etiquetasExt);
-    if (idxVelas >= 0) agregarFila({ cfgIndex: idxVelas }, porHoja[idxVelas]);
+    agregarFila({ texto: 'Velas', enlace: ENLACE_VELAS }, velas);
+
     var paginas = [{ titulo: 'Inicio', nota: '', cards: resumen, filas: filas }];
-    HOJAS_CATEGORIAS.forEach(function(cfg, i) {
-        paginas.push({ titulo: cfg.texto, nota: cfg.nota || cfg.texto, cards: porHoja[i], cfgIndex: i });
-    });
-    if (otros.length) paginas.push({ titulo: 'Otros productos', nota: 'Otros productos', cards: otros, otros: true });
+    for (var n = PRIMERA_HOJA_PRODUCTOS; n <= maxHoja; n++) {
+        var cfg = _nombreHoja(n);
+        paginas.push({
+            titulo: cfg ? cfg.texto : 'Hoja ' + n,
+            nota: cfg ? (cfg.nota || cfg.texto) : '',
+            cards: porHoja[n] || []
+        });
+    }
     return paginas;
 }
 
@@ -1184,8 +1179,7 @@ function insertarBarrasCategoriaProductos() {
         var pag = plan.pag;
         if (plan.num === 1) {
             pag.filas.forEach(function(f) {
-                var textoFila = f.texto || HOJAS_CATEGORIAS[f.cfgIndex].texto;
-                var barra = _crearBarraHoja(textoFila, [{
+                var barra = _crearBarraHoja(f.texto, [{
                     texto: 'Ver más →',
                     onClick: function() {
                         if (f.irAModo) {
@@ -1193,8 +1187,10 @@ function insertarBarrasCategoriaProductos() {
                             if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas(f.irAModo);
                             var zona = document.getElementById('zona-catalogo');
                             if (zona) zona.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        } else if (f.enlace) {
+                            window.open(f.enlace, '_blank', 'noopener');   // Velas: el sitio de velas
                         } else {
-                            window.irAPaginaCatalogo(f.cfgIndex + 2);
+                            window.irAPaginaCatalogo(f.pagina);
                         }
                     }
                 }]);
@@ -1202,10 +1198,6 @@ function insertarBarrasCategoriaProductos() {
             });
         } else {
             var botones = [{ texto: '← Inicio', onClick: function() { window.irAPaginaCatalogo(1); } }];
-            var cfgPag = (pag.cfgIndex !== undefined) ? HOJAS_CATEGORIAS[pag.cfgIndex] : null;
-            if (cfgPag && cfgPag.enlace) {
-                botones.push({ texto: 'Ver todas en velaskukumita.com ↗', onClick: function() { window.open(cfgPag.enlace, '_blank', 'noopener'); } });
-            }
             var barraTitulo = _crearBarraHoja(pag.titulo, botones);
             if (pag.cards.length) {
                 grid.insertBefore(barraTitulo, pag.cards[0]);
@@ -1213,7 +1205,7 @@ function insertarBarrasCategoriaProductos() {
                 grid.appendChild(barraTitulo);
                 var vacio = document.createElement('div');
                 vacio.className = 'hoja-vacia';
-                vacio.textContent = 'Aún no hay productos en esta categoría.';
+                vacio.textContent = 'Aún no hay productos en esta hoja.';
                 grid.appendChild(vacio);
             }
         }
