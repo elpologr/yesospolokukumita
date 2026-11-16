@@ -83,6 +83,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=6">
     <link rel="stylesheet" href="admin-producto.css?v=6">
+    <link rel="stylesheet" href="mesa-admin.css?v=1">
 
     <!-- Estilos botones de modo catálogo -->
     <style>
@@ -416,6 +417,15 @@
                 <div>
                     Agregar producto
                     <span class="op-sub">Agrega un producto nuevo a la hoja de Polo</span>
+                </div>
+            </button>
+
+            <!-- ══ BOTÓN MESA — SOLO ADMINISTRADORES (mesa-admin.js) ══ -->
+            <button class="btn-opcion-perfil" id="btnAbrirMesa" style="display:none;" onclick="abrirMesa()">
+                <span class="op-icono">🖤</span>
+                <div>
+                    Mesa
+                    <span class="op-sub">Mesa isométrica de 100×100 para tus imágenes</span>
                 </div>
             </button>
 
@@ -2243,6 +2253,7 @@
     <script src="config.js?v=12"></script>
     <script src="app.js?v=7"></script>
     <script src="admin-producto.js?v=7"></script>
+    <script src="mesa-admin.js?v=1"></script>
     <script src="editor-imagen.js?v=1"></script>
 
     <!-- ── AUTO-FIX MÓVIL: detecta y elimina cualquier elemento que desborde el viewport ── -->

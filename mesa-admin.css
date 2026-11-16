@@ -1,0 +1,87 @@
+/* ══════════════════════════════════════════════════════════════
+   Yesos Polo Kukúmita — Mesa (solo administradores)
+   Todo va acotado a #pantallaMesa para no tocar el resto del sitio.
+   ══════════════════════════════════════════════════════════════ */
+#pantallaMesa,
+#pantallaMesa * {
+    box-sizing: border-box;
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+#pantallaMesa {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 30000;
+    flex-direction: column;
+    background: radial-gradient(ellipse at 50% 35%, #34343e 0%, #1b1b22 55%, #0d0d11 100%);
+    color: #e8e2dc;
+}
+#pantallaMesa.abierta { display: flex; }
+
+/* Encabezado: flecha a la izquierda, título centrado, contador a la derecha */
+#pantallaMesa .mesa-header {
+    position: relative; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    height: 64px; padding: 0 16px;
+    background: rgba(0,0,0,0.35); border-bottom: 1px solid #2c2c35;
+}
+#pantallaMesa .mesa-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: #f1ebe4; }
+#pantallaMesa .mesa-volver {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border: none; border-radius: 50%;
+    background: transparent; color: #f1ebe4; cursor: pointer;
+    font-size: 30px; line-height: 1; padding-bottom: 4px;
+}
+#pantallaMesa .mesa-volver:hover { background: rgba(255,255,255,0.1); }
+#pantallaMesa .mesa-contador {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; font-weight: 700; color: #a8a0b0; white-space: nowrap;
+}
+
+/* Lienzo */
+#pantallaMesa .mesa-lienzo { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+#pantallaMesa .mesa-lienzo canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    touch-action: none; cursor: grab; display: block;
+}
+#pantallaMesa .mesa-lienzo canvas:active { cursor: grabbing; }
+#pantallaMesa .mesa-zoom {
+    position: absolute; right: 12px; bottom: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+#pantallaMesa .mesa-zoom button {
+    width: 42px; height: 42px; border: 1px solid #3a3a46; border-radius: 12px;
+    background: rgba(20,20,26,0.85); color: #f1ebe4; font-size: 22px; font-weight: 700;
+    cursor: pointer; line-height: 1;
+}
+#pantallaMesa .mesa-zoom button:active { background: #e8607a; border-color: #e8607a; }
+
+/* Panel inferior */
+#pantallaMesa .mesa-panel {
+    flex: 0 0 auto; max-height: 46vh; overflow-y: auto; overscroll-behavior: contain;
+    padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px;
+    background: #15151b; border-top: 1px solid #2c2c35;
+}
+#pantallaMesa .mesa-celda-info { font-size: 13px; font-weight: 700; color: #cfc7d6; }
+#pantallaMesa .mesa-fila { display: flex; gap: 8px; }
+#pantallaMesa .mesa-input {
+    flex: 1; min-width: 0; width: 100%; padding: 10px 12px; font-size: 14px; color: #f1ebe4;
+    background: #0d0d11; border: 1.5px solid #34343f; border-radius: 10px; outline: none;
+}
+#pantallaMesa .mesa-input:focus { border-color: #e8607a; }
+#pantallaMesa textarea.mesa-input { resize: vertical; min-height: 70px; margin: 8px 0; }
+#pantallaMesa .mesa-btn {
+    padding: 10px 16px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700;
+    cursor: pointer; background: #2a2a33; color: #e8e2dc; white-space: nowrap;
+}
+#pantallaMesa .mesa-btn.principal { background: #e8607a; color: #fff; }
+#pantallaMesa .mesa-btn.peligro { background: #3a1f24; color: #ff9aa8; }
+#pantallaMesa .mesa-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+#pantallaMesa .mesa-fila .mesa-btn { flex: 1; }
+#pantallaMesa .mesa-fila .mesa-input + .mesa-btn { flex: 0 0 auto; }
+#pantallaMesa .mesa-detalle summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #a8a0b0; }
+#pantallaMesa .mesa-estado { min-height: 16px; font-size: 12px; color: #a8a0b0; }
+#pantallaMesa .mesa-estado.error { color: #ff8a8a; }
+#pantallaMesa .mesa-link-peligro {
+    align-self: flex-start; background: none; border: none; padding: 2px 0; cursor: pointer;
+    font-size: 12px; color: #8a7f92; text-decoration: underline;
+}
