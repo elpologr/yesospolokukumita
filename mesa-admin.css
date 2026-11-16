@@ -101,3 +101,6 @@
 }
 #pantallaMesa .mesa-previa-titulo { font-size: 13px; font-weight: 700; color: #f5c46b; }
 #pantallaMesa .mesa-previa-titulo small { font-weight: 400; color: #a8a0b0; }
+
+/* Descripción de cada mesa chica */
+#pantallaMesa .mesa-desc-titulo { font-size: 13px; font-weight: 700; color: #f5c46b; }

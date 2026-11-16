@@ -18,7 +18,9 @@
 (function () {
     'use strict';
 
-    var N = 100;                 // celdas por lado
+    var NC = 100, NF = 150;      // la mesa grande: 100 columnas × 150 filas de celdas
+    var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
+    var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 5 mesas a lo ancho × 10 a lo largo = 50 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
     var M = 1.5;                 // margen de la mesa alrededor de la cuadrícula (en celdas)
     var DEPTH = 40, LEG = 300;   // grosor del tablero y largo de las patas
@@ -46,7 +48,7 @@
     var RE_VARIAS = /(?:https:\/\/i\.ibb\.co\/|imagenes\/)[^\s,"'<>\[\]()]+/gi;
 
     var S = {
-        celdas: {}, previas: {}, ts: 0, sel: null, mover: null,
+        celdas: {}, previas: {}, mesas: {}, ts: 0, sel: null, mover: null,
         scale: 0.05, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, minEscala: 0.03, fitEscala: 0.05,
         raf: 0, abierta: false, ajustada: false, vista3d: true,
         thumb: {}, full: {}, fullOrden: [], fallo: {}, vuelo: {}, pend: [], enVuelo: 0,
@@ -57,6 +59,8 @@
     function $(id) { return document.getElementById(id); }
     function proj(c, r) { return [(c - r) * TW / 2, (c + r) * TH / 2]; }
     function clave(r, c) { return r + ',' + c; }
+    function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..50, de izquierda a derecha y de arriba abajo
+    function mesaDe(ce) { return { mr: Math.floor(ce.r / MF), mc: Math.floor(ce.c / MC) }; }
 
     // ── Botón del perfil: solo administradores ──
     function actualizarBotonMesa() {
@@ -131,6 +135,10 @@
                         '<button class="mesa-btn" type="button" id="mesaPonerVarios">Colocar links</button>' +
                     '</details>' +
                 '</div>' +
+                '<div id="mesaDescBloque" style="display:none; flex-direction:column; gap:2px;">' +
+                    '<div class="mesa-desc-titulo" id="mesaDescTitulo"></div>' +
+                    '<textarea id="mesaDesc" class="mesa-input" rows="3" maxlength="1000" placeholder="Descripción de esta mesa… (se guarda sola y se copia a la hoja de Google, pestaña «Mesa»)"></textarea>' +
+                '</div>' +
                 '<div class="mesa-estado" id="mesaEstado"></div>' +
                 '<button class="mesa-link-peligro" type="button" id="mesaVaciar">Vaciar toda la mesa</button>' +
             '</div>';
@@ -155,6 +163,8 @@
         $('mesaUrl').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ponerDesdeCampo(); } });
         $('mesaQuitar').addEventListener('click', quitarSeleccionada);
         $('mesaSinFondo').addEventListener('click', quitarFondoSeleccionada);
+        $('mesaDesc').addEventListener('input', function () { clearTimeout(S.descTimer); S.descTimer = setTimeout(guardarDescripcion, 800); });
+        $('mesaDesc').addEventListener('blur', function () { clearTimeout(S.descTimer); guardarDescripcion(); });
         $('mesaPreviaPoner').addEventListener('click', ponerPrevia);
         $('mesaPreviaUrl').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ponerPrevia(); } });
         $('mesaPreviaQuitar').addEventListener('click', quitarPrevia);
@@ -243,12 +253,12 @@
     }
 
     function ajustarVista() {
-        var bw = (N + 2 * M) * TW;
-        var yArriba = -M * TH, yAbajo = (N + M) * TH + DEPTH + LEG;
+        var bw = (NC + NF + 4 * M) * TW / 2;
+        var yArriba = -M * TH, yAbajo = (NC + NF + 2 * M) * TH / 2 + DEPTH + LEG;
         var k = Math.min(S.w * 0.94 / bw, S.h * 0.94 / (yAbajo - yArriba));
         S.fitEscala = k; S.minEscala = k * 0.7;
         S.scale = k;
-        S.ox = S.w / 2;
+        S.ox = S.w / 2 - (NC - NF) * TW / 4 * k;   // centra la mesa aunque no sea cuadrada
         S.oy = S.h / 2 - (yArriba + yAbajo) / 2 * k;
     }
 
@@ -378,7 +388,7 @@
     function celdaEn(sx, sy) {
         var wx = (sx - S.ox) / S.scale, wy = (sy - S.oy) / S.scale;
         var c = Math.floor(wy / TH + wx / TW), r = Math.floor(wy / TH - wx / TW);
-        return (c >= 0 && c < N && r >= 0 && r < N) ? { r: r, c: c } : null;
+        return (c >= 0 && c < NC && r >= 0 && r < NF) ? { r: r, c: c } : null;
     }
 
     function seleccionarEn(sx, sy) {
@@ -395,11 +405,17 @@
         if (!S.sel) {
             info.textContent = 'Toca una celda para elegirla. Mantén presionada una pieza para moverla.';
             ed.style.display = 'none';
+            $('mesaDescBloque').style.display = 'none';
         } else {
             var url = S.celdas[clave(S.sel.r, S.sel.c)] || '';
             var previa = S.previas[clave(S.sel.r, S.sel.c)] || '';
             info.textContent = 'Fila ' + (S.sel.r + 1) + ' · Columna ' + (S.sel.c + 1) +
                 (url ? ' · con 3D' + (previa ? ' (su vista previa ya no se muestra)' : '') : previa ? ' · solo vista previa: falta el 3D' : ' · vacía');
+            var ms = mesaDe(S.sel), kms = ms.mr + ',' + ms.mc;
+            info.textContent += ' · Mesa ' + numeroMesa(ms.mr, ms.mc);
+            $('mesaDescBloque').style.display = 'flex';
+            $('mesaDescTitulo').textContent = '📝 Mesa ' + numeroMesa(ms.mr, ms.mc) + ' (fila ' + (ms.mr + 1) + ', columna ' + (ms.mc + 1) + ' de mesas · celdas ' + (ms.mr * MF + 1) + '–' + ((ms.mr + 1) * MF) + ' × ' + (ms.mc * MC + 1) + '–' + ((ms.mc + 1) * MC) + ')';
+            if (document.activeElement !== $('mesaDesc')) $('mesaDesc').value = S.mesas[kms] || '';
             $('mesaPreviaUrl').value = previa;
             $('mesaPreviaQuitar').disabled = !previa;
             ed.style.display = 'flex';
@@ -410,7 +426,7 @@
         var total = Object.keys(S.celdas).length;
         var cont = $('mesaContador');
         var faltan = listaFaltantes().length;
-        if (cont) cont.textContent = total + ' / ' + (N * N) + (faltan ? ' · ' + faltan + ' sin 3D' : '');
+        if (cont) cont.textContent = total + ' / ' + (NC * NF) + (faltan ? ' · ' + faltan + ' sin 3D' : '');
         var bf = $('mesaFaltan');
         if (bf) { bf.textContent = '🔎 Siguiente pieza sin 3D (' + faltan + ')'; bf.disabled = !faltan; }
     }
@@ -439,6 +455,32 @@
         S.celdas[clave(S.sel.r, S.sel.c)] = url;
         estado('✔ Imagen colocada.');
         cambioGuardable();
+    }
+
+    // ── Descripción de cada mesa chica: se guarda en el dispositivo, en Firestore y se copia a la hoja de Google ──
+    function guardarDescripcion() {
+        if (!S.sel) return;
+        var ms = mesaDe(S.sel), k = ms.mr + ',' + ms.mc, txt = String($('mesaDesc').value || '').trim().slice(0, 1000);
+        if ((S.mesas[k] || '') === txt) return;
+        if (txt) S.mesas[k] = txt; else delete S.mesas[k];
+        guardar(); pintarPanel(); pedirDibujo();
+        clearTimeout(S.hojaTimer);
+        S.hojaTimer = setTimeout(sincronizarHoja, 2500);
+        estado('✔ Descripción guardada en este dispositivo. Copiando a la hoja de Google…');
+    }
+    async function sincronizarHoja() {
+        var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+        if (!user || typeof esCorreoAdmin !== 'function' || !esCorreoAdmin(user)) return;
+        if (typeof _postAppsScript !== 'function' || !CONFIG.APPS_SCRIPT_URL) { estado('La descripción quedó guardada aquí, pero falta admin-producto.js o APPS_SCRIPT_URL para copiarla a la hoja.', true); return; }
+        try {
+            var idToken = await user.getIdToken(true);
+            var j = await _postAppsScript({ idToken: idToken, accion: 'mesaDescripciones', mesas: S.mesas });
+            if (!j || !j.ok) throw new Error((j && j.error) || 'La hoja no aceptó los datos.');
+            estado('✔ Descripción guardada y copiada a la hoja de Google (pestaña «Mesa»).');
+        } catch (e) {
+            console.error('[mesa] sincronizar hoja', e);
+            estado('⚠ Quedó guardada en tu cuenta, pero no se pudo copiar a la hoja: ' + (e && e.message ? e.message : 'error'), true);
+        }
     }
 
     // ── Vista previa: imagen temporal (imgbb) que se muestra mientras la celda no tenga su 3D ──
@@ -493,8 +535,8 @@
     }
 
     function siguiente(pos) {
-        var i = pos.r * N + pos.c + 1;
-        return i < N * N ? { r: Math.floor(i / N), c: i % N } : null;
+        var i = pos.r * NC + pos.c + 1;
+        return i < NC * NF ? { r: Math.floor(i / NC), c: i % NC } : null;
     }
 
     function ponerVarios() {
@@ -673,13 +715,13 @@
     function cargarLocal() {
         try {
             var o = JSON.parse(localStorage.getItem(claveLocal()) || 'null');
-            if (o && (o.celdas || o.previas)) { S.celdas = o.celdas || {}; S.previas = o.previas || {}; S.ts = o.ts || 0; }
+            if (o && (o.celdas || o.previas || o.mesas)) { S.celdas = o.celdas || {}; S.previas = o.previas || {}; S.mesas = o.mesas || {}; S.ts = o.ts || 0; }
         } catch (e) { /* sin datos guardados: se empieza vacía */ }
     }
 
     function guardar() {
         S.ts = Date.now();
-        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
+        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas, mesas: S.mesas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
         clearTimeout(S.nubeTimer);
         S.nubeTimer = setTimeout(guardarNube, 1500);
     }
@@ -695,7 +737,7 @@
     function guardarNube() {
         var ref = refNube();
         if (!ref) return;
-        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas) })
+        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas), mesas: JSON.stringify(S.mesas) })
             .then(function () { S.nubeOk = true; })
             .catch(function (e) { S.nubeOk = false; console.warn('[mesa] no se pudo sincronizar con Firestore:', e); });
     }
@@ -704,13 +746,14 @@
         var ref = refNube();
         if (!ref) return;
         ref.get().then(function (doc) {
-            if (!doc.exists) { if (Object.keys(S.celdas).length || Object.keys(S.previas).length) guardarNube(); return; }
+            if (!doc.exists) { if (Object.keys(S.celdas).length || Object.keys(S.previas).length || Object.keys(S.mesas).length) guardarNube(); return; }
             var d = doc.data() || {};
             if ((d.ts || 0) > S.ts && d.datos) {
                 try {
                     S.celdas = JSON.parse(d.datos); S.ts = d.ts;
                     S.previas = d.previas ? JSON.parse(d.previas) : {};
-                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas }));
+                    S.mesas = d.mesas ? JSON.parse(d.mesas) : {};
+                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));
                     pintarPanel(); pedirDibujo();
                 } catch (e) { console.warn('[mesa] datos de la nube dañados', e); }
             } else if (S.ts > (d.ts || 0)) {
@@ -782,6 +825,7 @@
         S.pend.length = 0;
         dibujarMesa(ctx, k);
         dibujarRejilla(ctx, k);
+        dibujarNombresMesas(ctx, k);
         dibujarImagenes(ctx);
         dibujarSeleccion(ctx, k);
         dibujarMovimiento(ctx, k);
@@ -789,10 +833,10 @@
     }
 
     function dibujarMesa(ctx, k) {
-        var A = proj(-M, -M), B = proj(N + M, -M), C = proj(N + M, N + M), D = proj(-M, N + M);
+        var A = proj(-M, -M), B = proj(NC + M, -M), C = proj(NC + M, NF + M), D = proj(-M, NF + M);
         var LW = TW * 2.4;
         // patas (de atrás hacia adelante)
-        [[-M + 2.5, -M + 2.5], [-M + 2.5, N + M - 2.5], [N + M - 2.5, -M + 2.5], [N + M - 2.5, N + M - 2.5]].forEach(function (p) {
+        [[-M + 2.5, -M + 2.5], [-M + 2.5, NF + M - 2.5], [NC + M - 2.5, -M + 2.5], [NC + M - 2.5, NF + M - 2.5]].forEach(function (p) {
             var q = proj(p[0], p[1]), alto = DEPTH + LEG;
             ctx.fillStyle = '#040405'; ctx.fillRect(q[0] - LW / 2, q[1], LW / 2, alto);
             ctx.fillStyle = '#0e0e11'; ctx.fillRect(q[0], q[1], LW / 2, alto);
@@ -804,25 +848,45 @@
         ctx.beginPath(); ctx.moveTo(D[0], D[1]); ctx.lineTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(D[0], D[1]);
         ctx.strokeStyle = '#2d2d34'; ctx.lineWidth = 1.5 / k; ctx.stroke();
         // zona de la cuadrícula, un poco más clara
-        poli(ctx, [proj(0, 0), proj(N, 0), proj(N, N), proj(0, N)], '#121216');
+        poli(ctx, [proj(0, 0), proj(NC, 0), proj(NC, NF), proj(0, NF)], '#121216');
     }
 
     function dibujarRejilla(ctx, k) {
-        var chica = TW * k < 8; // muy alejado: solo líneas cada 10 celdas
+        var chica = TW * k < 8; // muy alejado: solo las divisiones entre mesas
         for (var pasada = 0; pasada < 2; pasada++) {
             ctx.beginPath();
-            for (var i = 0; i <= N; i++) {
-                var mayor = i % 10 === 0;
-                if ((pasada === 1) !== mayor) continue;
-                if (chica && !mayor) continue;
-                var a = proj(i, 0), b = proj(i, N), c = proj(0, i), d = proj(N, i);
+            var i, a, b;
+            for (i = 0; i <= NC; i++) {                       // líneas de columna
+                var mayorC = i % MC === 0;
+                if ((pasada === 1) !== mayorC || (chica && !mayorC)) continue;
+                a = proj(i, 0); b = proj(i, NF);
                 ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-                ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
             }
-            ctx.strokeStyle = pasada ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.10)';
-            ctx.lineWidth = (pasada ? 1.4 : 1) / k;
+            for (i = 0; i <= NF; i++) {                       // líneas de fila
+                var mayorF = i % MF === 0;
+                if ((pasada === 1) !== mayorF || (chica && !mayorF)) continue;
+                a = proj(0, i); b = proj(NC, i);
+                ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+            }
+            ctx.strokeStyle = pasada ? 'rgba(245,196,107,0.55)' : 'rgba(255,255,255,0.10)';
+            ctx.lineWidth = (pasada ? 2.2 : 1) / k;
             ctx.stroke();
         }
+    }
+
+    // Nombre de cada mesa ("Mesa 7", con ✎ si tiene descripción) en el centro de su zona, solo cuando se ve de lejos
+    function dibujarNombresMesas(ctx, k) {
+        if (TW * k >= 45) return;
+        var px = Math.max(11, Math.min(26, TW * k * 5)) / k;
+        ctx.save();
+        ctx.font = '700 ' + px + 'px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(245,196,107,0.55)';
+        for (var mr = 0; mr < MESAS_F; mr++) for (var mc = 0; mc < MESAS_C; mc++) {
+            var p = proj(mc * MC + MC / 2, mr * MF + MF / 2);
+            ctx.fillText('Mesa ' + numeroMesa(mr, mc) + (S.mesas[mr + ',' + mc] ? ' ✎' : ''), p[0], p[1]);
+        }
+        ctx.restore();
     }
 
     function rangoVisible() {
@@ -835,8 +899,8 @@
             if (r < r0) r0 = r; if (r > r1) r1 = r;
         });
         return {
-            c0: Math.max(0, Math.floor(c0)), c1: Math.min(N - 1, Math.ceil(c1)),
-            r0: Math.max(0, Math.floor(r0)), r1: Math.min(N - 1, Math.ceil(r1))
+            c0: Math.max(0, Math.floor(c0)), c1: Math.min(NC - 1, Math.ceil(c1)),
+            r0: Math.max(0, Math.floor(r0)), r1: Math.min(NF - 1, Math.ceil(r1))
         };
     }
 
@@ -1001,6 +1065,11 @@
 
     function dibujarSeleccion(ctx, k) {
         if (!S.sel) return;
+        var mr = Math.floor(S.sel.r / MF), mc = Math.floor(S.sel.c / MC);
+        var q0 = proj(mc * MC, mr * MF), q1 = proj((mc + 1) * MC, mr * MF), q2 = proj((mc + 1) * MC, (mr + 1) * MF), q3 = proj(mc * MC, (mr + 1) * MF);
+        ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.closePath();
+        ctx.fillStyle = 'rgba(245,196,107,0.05)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(245,196,107,0.9)'; ctx.lineWidth = Math.max(2.5 / k, 1.5); ctx.stroke();
         var p = proj(S.sel.c, S.sel.r);
         ctx.beginPath();
         ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + TW / 2, p[1] + TH / 2);
