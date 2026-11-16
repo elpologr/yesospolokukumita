@@ -46,6 +46,7 @@
 
 // ──────────── CONFIGURACIÓN ────────────
 
+var VERSION_POLO = '2026-10-28-a'; // sello para comprobar qué versión está publicada (abre el link /exec en el navegador)
 var SPREADSHEET_ID = '1LX-jUhxnbWYEQ8aa8cfbmCenWRYLGI8aHlojkfG7oNA'; // hoja de Yesos Polo
 var NOMBRE_HOJA    = 'Hoja 1';                                       // pestaña de productos
 var MAX_IMAGENES   = 50;                                             // máximo por producto (columna E)
@@ -53,11 +54,7 @@ var MAX_EVENTOS    = 20;                                             // máximo 
 
 // Mover / intercambiar de fila (mismo sistema que Yesos Fer).
 var FILA_MAX = 1000;            // fila máxima que se puede elegir como destino
-// Filas reservadas: la página las deja libres para los productos "prestados" de Etiquetas y Velas
-// (ver FILA_INICIO_ETIQUETAS / FILA_INICIO_VELAS en app.js). No se pueden usar como destino ni mover.
-// Si cambias estos números, cámbialos también en admin-producto.js (FILA_RESERVADA_INI / FIN).
-var FILA_RESERVADA_INICIO = 26;
-var FILA_RESERVADA_FIN    = 31;
+// Ya no hay filas reservadas: los productos de Etiquetas y Velas se muestran en la página sin ocupar filas.
 
 // API Key pública del Firebase de Polo (la misma de config.js; no es secreta, solo identifica el proyecto).
 var FIREBASE_API_KEY = 'AIzaSyBc_AUz1lfgAPFuQd9oKvDYGm1lyrHALGs';
@@ -79,6 +76,10 @@ function respuesta_(obj) {
     return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+function doGet() {
+    return ContentService.createTextOutput('Script de Polo activo. Versión ' + VERSION_POLO);
+}
+
 function doPost(e) {
     var lock = LockService.getScriptLock();
     try {
@@ -96,7 +97,7 @@ function doPost(e) {
             if (d.accion === 'mover') return moverProducto_(d, lock);
             if (d.accion === 'etiquetasLeer') return respuesta_({ ok: true, etiquetas: leerEtiquetasPersonalizadas_() });
             if (d.accion === 'etiquetaAgregar') return agregarEtiquetaPersonalizada_(d, lock);
-            if (d.accion !== 'agregar' && d.accion !== 'subirImagen') {
+            if (d.accion !== 'agregar' && d.accion !== 'subirImagen' && d.accion !== 'subirImagenMesa') {
                 return respuesta_({ ok: false, error: 'Acción no reconocida.' });
             }
         } else {
@@ -111,6 +112,13 @@ function doPost(e) {
         if (d.accion === 'subirImagen') {
             if (!d.imagenBase64) return respuesta_({ ok: false, error: 'Falta la imagen.' });
             return respuesta_({ ok: true, url: subirImagenAImgbb_(d.imagenBase64, d.nombreArchivo) });
+        }
+
+        // Mesa: sube la pieza sin fondo a la OTRA cuenta de imgbb (IMGBB_KEY_MESA). Solo administradores (idToken).
+        if (d.accion === 'subirImagenMesa') {
+            if (!d.idToken) return respuesta_({ ok: false, error: 'No autorizado.' });
+            if (!d.imagenBase64) return respuesta_({ ok: false, error: 'Falta la imagen.' });
+            return respuesta_({ ok: true, url: subirImagenMesaConRespaldo_(d.imagenBase64, d.nombreArchivo) });
         }
 
         if (d.accion === 'agregar') return agregarProducto_(d, lock);
@@ -209,7 +217,7 @@ function agregarProducto_(d, lock) {
     var urlPrincipal = '';
     if (!d.imagenBase64) {
         urlPrincipal = String(d.imagenUrl || '').trim();
-        if (!urlPrincipal) return respuesta_({ ok: false, error: 'Falta la imagen principal (fondo azul).' });
+        if (!urlPrincipal) return respuesta_({ ok: false, error: 'Falta la imagen principal (fondo azul). [Polo ' + VERSION_POLO + ' recibió: imagenBase64=' + (d.imagenBase64 ? 'sí' : 'no') + ', imagenUrl=' + (d.imagenUrl ? 'sí' : 'no') + ']' });
         if (!/^https:\/\/i\.ibb\.co\/[^\s,]+$/i.test(urlPrincipal)) return respuesta_({ ok: false, error: 'La imagen principal no es un link válido de imgbb.' });
     }
     var imagenes = [];
@@ -246,8 +254,13 @@ function agregarProducto_(d, lock) {
 
 // ──────────── ELIMINAR PRODUCTO (solo administradores) ────────────
 // Borra la fila indicada por su NÚMERO (los productos de abajo suben una fila).
-// El producto se identifica solo por la fila, así que dos productos con el mismo nombre no causan problema.
-// Solo se protege que la fila exista y tenga un producto (no se pueden borrar el encabezado ni filas vacías).
+// La página manda también el nombre del producto que cree estar borrando. Si la fila ya no es ese producto
+// (porque la hoja cambió: se borró o movió otro producto, o la página muestra una copia atrasada),
+// se busca ese nombre en la hoja: si aparece UNA sola vez se borra esa fila; si no, no se borra nada.
+function nombreComparable_(v) {
+    return String(v == null ? '' : v).replace(/^'/, '').replace(/\s+/g, ' ').trim();
+}
+
 function eliminarProducto_(d, lock) {
     var fila = Math.floor(Number(d.fila));
     if (!isFinite(fila) || fila < 2) return respuesta_({ ok: false, error: 'La fila del producto no es válida.' });
@@ -255,19 +268,36 @@ function eliminarProducto_(d, lock) {
     lock.waitLock(20000);
     var hoja = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(NOMBRE_HOJA);
     if (!hoja) return respuesta_({ ok: false, error: 'No se encontró la pestaña "' + NOMBRE_HOJA + '" en la hoja de Polo.' });
-    if (fila > hoja.getLastRow()) return respuesta_({ ok: false, error: 'La fila ' + fila + ' ya no existe en la hoja. Recarga la página.' });
 
-    var nombreBorrado = String(hoja.getRange(fila, 1).getDisplayValue()).replace(/^'/, '').trim();
-    if (!nombreBorrado) return respuesta_({ ok: false, error: 'La fila ' + fila + ' está vacía en la hoja. Recarga la página.' });
-    // Si la página mandó el nombre que cree estar borrando, debe coincidir con el de la fila (evita borrar otro producto)
-    if (d.nombreOriginal != null && String(d.nombreOriginal).replace(/^'/, '').trim() !== nombreBorrado) {
-        return respuesta_({ ok: false, error: 'La fila ' + fila + ' ahora es «' + nombreBorrado + '», no «' + String(d.nombreOriginal).trim() + '». La hoja cambió: recarga la página y vuelve a intentar. No se borró nada.' });
+    var ultima = hoja.getLastRow();
+    var esperado = (d.nombreOriginal != null) ? nombreComparable_(d.nombreOriginal) : '';
+    var nombreEnFila = (fila <= ultima) ? nombreComparable_(hoja.getRange(fila, 1).getDisplayValue()) : '';
+
+    // La fila indicada sigue siendo el producto esperado (o la página no mandó nombre): se borra esa fila
+    if (nombreEnFila && (!esperado || nombreEnFila === esperado)) {
+        hoja.deleteRow(fila);
+        SpreadsheetApp.flush();
+        return respuesta_({ ok: true, accion: 'eliminar', fila: fila, nombre: nombreEnFila });
     }
 
-    hoja.deleteRow(fila);
-    SpreadsheetApp.flush();
-    // Se devuelve el nombre de lo que realmente se borró, para que la página lo muestre
-    return respuesta_({ ok: true, accion: 'eliminar', fila: fila, nombre: nombreBorrado });
+    // La fila cambió: se busca el producto por nombre en toda la columna A
+    if (!esperado) return respuesta_({ ok: false, error: 'La fila ' + fila + ' está vacía o ya no existe en la hoja. Recarga la página.' });
+    var coincidencias = [];
+    if (ultima >= 2) {
+        var nombres = hoja.getRange(2, 1, ultima - 1, 1).getDisplayValues();
+        for (var i = 0; i < nombres.length; i++) {
+            if (nombreComparable_(nombres[i][0]) === esperado) coincidencias.push(i + 2);
+        }
+    }
+    if (coincidencias.length === 1) {
+        hoja.deleteRow(coincidencias[0]);
+        SpreadsheetApp.flush();
+        return respuesta_({ ok: true, accion: 'eliminar', fila: coincidencias[0], nombre: esperado });
+    }
+    if (coincidencias.length === 0) {
+        return respuesta_({ ok: false, error: '«' + esperado + '» ya no está en la hoja (puede que ya se haya eliminado). Recarga la página. No se borró nada.' });
+    }
+    return respuesta_({ ok: false, error: 'La hoja cambió y hay ' + coincidencias.length + ' productos llamados «' + esperado + '» (filas ' + coincidencias.join(', ') + '), así que no se sabe cuál borrar. Recarga la página y vuelve a intentar. No se borró nada.' });
 }
 
 // ──────────── EDITAR PRODUCTO (solo administradores) ────────────
@@ -353,9 +383,6 @@ function moverProducto_(d, lock) {
 function intercambiarProducto_(d, lock) {
     var filaOrigen = Math.floor(Number(d.fila));
     if (!isFinite(filaOrigen) || filaOrigen < 2) return respuesta_({ ok: false, error: 'La fila del producto no es válida.' });
-    if (filaOrigen >= FILA_RESERVADA_INICIO && filaOrigen <= FILA_RESERVADA_FIN) {
-        return respuesta_({ ok: false, error: 'Ese producto está en una fila reservada y no se puede mover desde aquí.' });
-    }
 
     var aUltima = (d.filaDestino === '' || d.filaDestino == null);
     var filaDestino = 0;
@@ -423,16 +450,12 @@ function validarFilaDestino_(n) {
     if (!isFinite(n)) return 'La fila elegida no es válida.';
     if (n < 2) return 'La fila 1 está reservada para los encabezados. Elige la fila 2 o una mayor.';
     if (n > FILA_MAX) return 'La fila máxima permitida es la ' + FILA_MAX + '.';
-    if (n >= FILA_RESERVADA_INICIO && n <= FILA_RESERVADA_FIN) {
-        return 'Las filas ' + FILA_RESERVADA_INICIO + ' a ' + FILA_RESERVADA_FIN + ' están reservadas (productos de Etiquetas y Velas). Elige otra.';
-    }
     return '';
 }
 
-// Primera fila libre después del último producto, saltándose las filas reservadas.
+// Primera fila libre después del último producto.
 function proximaFilaLibre_(hoja) {
     var f = ultimaFilaConNombre_(hoja) + 1;
-    if (f >= FILA_RESERVADA_INICIO && f <= FILA_RESERVADA_FIN) f = FILA_RESERVADA_FIN + 1;
     return f;
 }
 
@@ -575,10 +598,32 @@ function ultimaFilaConNombre_(hoja) {
 
 // ──────────── SUBIR IMAGEN A IMGBB (cuenta de POLO) ────────────
 
-function subirImagenAImgbb_(dataUrlBase64, nombreArchivo) {
+// Segundo imgbb disponible para las piezas sin fondo de la Mesa. Se usa solo si la primera cuenta
+// (propiedad IMGBB_KEY_MESA) falla o no está configurada. Si prefieres no dejarla en el código,
+// crea la propiedad IMGBB_KEY_MESA_2 en el script y esa tendrá prioridad sobre este valor.
+var IMGBB_KEY_MESA_2_RESPALDO = '35598a58c1c2206fd9574cfa0a04ed46';
+
+// Mesa: intenta con la 1ª cuenta (IMGBB_KEY_MESA); si falla, reintenta con la 2ª.
+function subirImagenMesaConRespaldo_(dataUrlBase64, nombreArchivo) {
+    try {
+        return subirImagenAImgbb_(dataUrlBase64, nombreArchivo, 'IMGBB_KEY_MESA');
+    } catch (e1) {
+        console.warn('[mesa] 1ª cuenta de imgbb falló, se usa la 2ª: ' + e1.message);
+        var key2 = PropertiesService.getScriptProperties().getProperty('IMGBB_KEY_MESA_2') || IMGBB_KEY_MESA_2_RESPALDO;
+        try {
+            return subirImagenAImgbb_(dataUrlBase64, nombreArchivo, null, key2);
+        } catch (e2) {
+            throw new Error('Fallaron las dos cuentas de imgbb. 1ª: ' + e1.message + ' | 2ª: ' + e2.message);
+        }
+    }
+}
+
+// nombrePropiedad (opcional): propiedad del script con la API key a usar. Sin ella se usa la de Polo.
+// claveDirecta (opcional): API key ya resuelta; tiene prioridad sobre nombrePropiedad.
+function subirImagenAImgbb_(dataUrlBase64, nombreArchivo, nombrePropiedad, claveDirecta) {
     var props = PropertiesService.getScriptProperties();
-    var apiKey = props.getProperty('IMGBB_KEY') || props.getProperty('IMGBB_API_KEY');
-    if (!apiKey) throw new Error('Falta IMGBB_KEY en las propiedades del script de Polo.');
+    var apiKey = claveDirecta ? claveDirecta : nombrePropiedad ? props.getProperty(nombrePropiedad) : (props.getProperty('IMGBB_KEY') || props.getProperty('IMGBB_API_KEY'));
+    if (!apiKey) throw new Error('Falta ' + (nombrePropiedad || 'IMGBB_KEY') + ' en las propiedades del script de Polo.');
 
     // dataUrlBase64 llega como "data:image/webp;base64,AAAA..."
     var partes = String(dataUrlBase64).split(',');

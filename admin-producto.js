@@ -1127,8 +1127,6 @@ async function _guardarEdicionProducto(user, v) {
 //  • si se deja vacía, pasa a la última fila disponible.
 var FILA_MIN_DESTINO = 2;         // la fila 1 son los encabezados
 var FILA_MAX_DESTINO = 1000;      // igual que FILA_MAX en CodePolo.gs
-var FILA_RESERVADA_INI = 26;      // filas 26-31: productos "prestados" de Etiquetas y Velas
-var FILA_RESERVADA_FIN_ = 31;     // igual que FILA_RESERVADA_FIN en CodePolo.gs
 
 var _moverProducto = null;   // { fila, nombre } del producto que se está por mover
 var _moviendoProducto = false;
@@ -1138,9 +1136,6 @@ function _errorFilaDestino(n) {
     if (!isFinite(n) || Math.floor(n) !== n) return 'Escribe un número de fila entero.';
     if (n < FILA_MIN_DESTINO) return 'La fila 1 son los encabezados. Elige la fila 2 o una mayor.';
     if (n > FILA_MAX_DESTINO) return 'La fila máxima permitida es la ' + FILA_MAX_DESTINO + '.';
-    if (n >= FILA_RESERVADA_INI && n <= FILA_RESERVADA_FIN_) {
-        return 'Las filas ' + FILA_RESERVADA_INI + ' a ' + FILA_RESERVADA_FIN_ + ' están reservadas (Etiquetas y Velas). Elige otra.';
-    }
     return '';
 }
 

@@ -241,11 +241,11 @@ var SHEET_NOMBRE_BAZAR = CONFIG.SHEET_NOMBRE_BAZAR;
 //   J(9):  Existencia            (número de piezas en stock)
 //   K(10): En Oferta             (escribe "si" para activar)
 //   L(11): Mas Vendido           (escribe "si" para activar)
+//   M(12): Etiqueta de Evento    (slugs separados por coma: "boda, bautizo"; filtro "Busca por Evento")
 //
-// NOTA: esta hoja ya NO tiene columnas para "Etiqueta Evento" (filtro por
-// evento), "SubImagen"/aditamentos, ni video de redes sociales por producto.
-// Esas funciones quedan con lista vacía — no rompen nada, pero tampoco
-// mostrarán datos hasta que se agregue una fuente para ellas.
+// NOTA: las etiquetas de FORMA (macetas, bases, tazones…) viven en la columna G junto a la
+// etiqueta principal (de ahí las lee el filtro de formas). Esta hoja no tiene columnas para
+// "SubImagen"/aditamentos ni video de redes sociales por producto.
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Caché en sessionStorage para las descargas de CSV de Google Sheets ──
@@ -349,7 +349,7 @@ function parsearCSV(texto) {
 var _ENCABEZADOS_ESPERADOS = [
     'producto', 'precio original', 'precio bazar', 'descripcion', 'imagenes imgbb',
     'video', 'etiqueta principal', 'sub etiquetas', 'medidas alto/ancho',
-    'existencia', 'en oferta', 'mas vendido'
+    'existencia', 'en oferta', 'mas vendido', 'etiqueta de evento'
 ];
 
 function _normalizarEncabezado(s) {
@@ -410,6 +410,7 @@ function csvAProductos(filas) {
         // J=9  Existencia
         // K=10 En Oferta   (si / vacío)
         // L=11 Mas Vendido (si / vacío)
+        // M=12 Etiqueta de Evento (coma)
 
         // Video principal (F=5)
         var videoPrincipal = get(5).replace(/^"+|"+$/g, '').trim();
@@ -450,9 +451,10 @@ function csvAProductos(filas) {
             tipo:         tipoPrincipal,
             tipos:        tiposArray,
             subtags:      get(7) ? get(7).split(',').map(function(s){ return s.trim(); }).filter(Boolean).join('|') : '',
-            // Ya no hay columna de "Etiqueta Evento" en esta hoja — el filtro por
-            // evento queda inactivo (mostrará todos los productos con "todos").
-            eventos:      '',
+            // Columna M (Etiqueta de Evento): slugs separados por coma → se guardan separados por espacio
+            eventos:      get(12)
+                            ? get(12).replace(/^"+|"+$/g, '').split(/[|,]/).map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean).join(' ')
+                            : '',
             etiquetas:    tiposArray,
             aditivos:     [],
             oferta:       enOferta,
@@ -510,7 +512,7 @@ function renderizarCatalogoEnGrid(gridId, productos) {
         // ── Data-attributes necesarios para filtros y modal ──
         card.setAttribute('data-num',             String(p.id));
         card.setAttribute('data-idx',             String(p.id));
-        card.setAttribute('data-sheet-row',       String(p.id + 1));
+        card.setAttribute('data-sheet-row',       p._origenExterno ? '' : String(p.id + 1));
         card.setAttribute('data-forma',           p.forma || '');
         card.setAttribute('data-evento',          p.eventos || '');
         card.setAttribute('data-precio',          String(parseInt(p.precioNormal, 10) || 0));
@@ -583,7 +585,7 @@ function renderizarCatalogoEnGrid(gridId, productos) {
         badgeFila.textContent = '#' + (p.id + 1);
         badgeFila.title = 'Fila ' + (p.id + 1) + ' en Google Sheets';
         badgeFila.style.cssText = 'position:absolute; top:6px; left:6px; z-index:2; font-size:10px; font-weight:800; color:#9a8878; background:rgba(245,240,235,0.92); border:1.5px solid #e0d5cc; border-radius:8px; padding:2px 7px; letter-spacing:0.3px; line-height:1.4; pointer-events:none; user-select:none;';
-        imgContenedor.appendChild(badgeFila);
+        if (!p._origenExterno) imgContenedor.appendChild(badgeFila); // los productos de otras zonas no tienen fila en esta hoja
 
         // ── Título ──
         var infoDiv = document.createElement('div');
@@ -868,26 +870,19 @@ function cargarProductosEtiquetas(forzar) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PRODUCTOS ESPECIALES INSERTADOS EN LA PRIMERA HOJA (Yesos Polo Kukúmita):
-//   • Zona "Mostrar Más Etiquetas" (fila 9,  posiciones 26-28) → primeras 3
-//     etiquetas de la Hoja 2 de Velas Kukúmita.
-//   • Zona "Mostrar Más Velas"     (fila 10, posiciones 29-31) → primeros 3
-//     productos de la Hoja 1 de Velas Kukúmita.
-// En la hoja de Yesos, las filas 26-31 deben quedar SIN link de imagen en la
-// columna F para que csvAProductos() las ignore y así dejar ese hueco libre
-// para estos 6 productos "prestados".
+// PRODUCTOS "PRESTADOS" DE OTRAS ZONAS (se muestran en la Hoja 1 del catálogo):
+//   • Fila de "Etiquetas" → primeras 3 etiquetas de la Hoja 2 de Velas Kukúmita.
+//   • Fila de "Velas"     → primeros 3 productos de la Hoja 1 de Velas Kukúmita.
+// Ya NO ocupan filas de la hoja de Yesos Polo: no hace falta dejar filas vacías en Google Sheets.
+// Cada uno recibe un id propio muy alto (para no chocar con las filas reales) y sin número de fila.
 // ══════════════════════════════════════════════════════════════════════════════
-var FILA_INICIO_ETIQUETAS = 26; // fila de Google Sheets (Yesos) que le correspondería al 1er producto de "Etiquetas"
-var FILA_INICIO_VELAS     = 29; // ídem para el 1er producto de Velas
+var ID_BASE_EXTERNOS = 100000;  // los externos usan 100000, 100001, ... (nunca coinciden con una fila real)
 var _especialesInsertados = false;
 
-// Clona un producto (ya parseado desde OTRA hoja) y le asigna el "id" que le
-// haría mostrar en el badge del modal la fila que le correspondería dentro
-// del catálogo de Yesos (data-sheet-row = id + 1), en vez de su fila real
-// en la hoja de Velas Kukúmita.
-function _prepararProductoEspecial(p, filaSheetsSimulada, origen) {
+// Clona un producto (ya parseado desde OTRA hoja) y le asigna un id propio y su origen.
+function _prepararProductoEspecial(p, idExterno, origen) {
     var clone = Object.assign({}, p);
-    clone.id = filaSheetsSimulada - 1;
+    clone.id = idExterno;
     clone._origenExterno = origen;
     return clone;
 }
@@ -906,10 +901,10 @@ function cargarProductosEspecialesVelas() {
 
         var especiales = [];
         productosEtiquetas.forEach(function(p, i) {
-            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_ETIQUETAS + i, 'etiquetas-externas'));
+            especiales.push(_prepararProductoEspecial(p, ID_BASE_EXTERNOS + 100 + i, 'etiquetas-externas'));
         });
         productosVelas.forEach(function(p, i) {
-            especiales.push(_prepararProductoEspecial(p, FILA_INICIO_VELAS + i, 'velas'));
+            especiales.push(_prepararProductoEspecial(p, ID_BASE_EXTERNOS + i, 'velas'));
         });
 
         _insertarProductosEspecialesEnListaPrincipal(especiales);
@@ -920,11 +915,8 @@ function cargarProductosEspecialesVelas() {
 
 function _insertarProductosEspecialesEnListaPrincipal(especiales) {
     if (!especiales || especiales.length === 0) return;
-    // Punto de inserción: justo antes del primer producto real cuya fila de
-    // Google Sheets sea igual o mayor a donde deberían ir estos especiales.
-    var idx = listaProductos.findIndex(function(p) { return (p.id + 1) >= FILA_INICIO_ETIQUETAS; });
-    if (idx === -1) idx = listaProductos.length;
-    listaProductos.splice.apply(listaProductos, [idx, 0].concat(especiales));
+    // Van al final de la lista: su lugar en pantalla lo decide la Hoja 1 (filas de Etiquetas y Velas)
+    listaProductos.push.apply(listaProductos, especiales);
 
     renderizarCatalogoCompleto();
     if (typeof syncBotonesLike === 'function') syncBotonesLike();
@@ -1047,25 +1039,181 @@ function _hayBusquedaDeTextoActiva() {
     return false;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// HOJAS DEL CATÁLOGO (modo "Mostrar Todo", sin búsqueda ni filtros)
+//   Hoja 1  = resumen: 10 filas de 3 productos, cada una con su etiqueta y un botón "Ver más →":
+//             filas 1-8 = bases, figuras $5/$10/$15, macetas, alajeros, figuras $20/$25 (hojas 2-9),
+//             fila 9 = primeras 3 etiquetas (Ver más abre la zona de Etiquetas),
+//             fila 10 = primeras 3 velas de velaskukumita.com (hoja 11).
+//             Los arreglos tienen su hoja 10 pero no una fila en la Hoja 1.
+//   Hoja 2 a 11 = una hoja por categoría, en el orden de abajo (la hoja de cada una es su
+//             posición en la lista + 2).
+//   Hoja 12 = "Otros productos" (solo aparece si hay productos que no caen en ninguna categoría).
+// Para cambiar el orden o agregar categorías, edita SOLO esta lista:
+//   tipo   = etiqueta principal (columna G) que debe tener el producto
+//   precio = (opcional) precio original exacto; sirve para separar las figuras por precio
+//   origenExterno = productos "prestados" de otra hoja (Velas Kukúmita)
+// ══════════════════════════════════════════════════════════════════════════════
+var HOJAS_CATEGORIAS = [
+    { texto: 'Bases',          tipo: 'bases' },                       // hoja 2
+    { texto: 'Figuras de $5',  tipo: 'figuras', precio: 5 },          // hoja 3
+    { texto: 'Figuras de $10', tipo: 'figuras', precio: 10 },         // hoja 4
+    { texto: 'Figuras de $15', tipo: 'figuras', precio: 15 },         // hoja 5
+    { texto: 'Macetas',        tipo: 'macetas' },                      // hoja 6
+    { texto: 'Alajeros',       tipo: 'alajeros' },                     // hoja 7
+    { texto: 'Figuras de $20', tipo: 'figuras', precio: 20 },         // hoja 8
+    { texto: 'Figuras de $25', tipo: 'figuras', precio: 25 },         // hoja 9
+    { texto: 'Arreglos',       tipo: 'arreglo', sinFilaEnResumen: true }, // hoja 10 (no tiene fila en la Hoja 1)
+    { texto: 'Velas',          origenExterno: 'velas', enlace: 'https://velaskukumita.com' } // hoja 11
+];
+
+// Índice de la categoría a la que pertenece una tarjeta: 0..n-1, -1 = otros, -2 = no va en estas hojas
+function _indiceHojaDeCard(card) {
+    var origen = card.getAttribute('data-origen-externo') || '';
+    if (origen === 'etiquetas-externas') return -2;
+    var i, cfg;
+    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
+        if (HOJAS_CATEGORIAS[i].origenExterno && HOJAS_CATEGORIAS[i].origenExterno === origen) return i;
+    }
+    if (origen) return -2;
+    var raw = (card.getAttribute('data-tipos') || card.getAttribute('data-tipo') || '');
+    var tipos = raw.split(/[|,]/).map(function(t) { return _normalizarCategoriaBarra(t.replace(/^"+|"+$/g, '')); }).filter(Boolean);
+    var precio = parseInt(card.getAttribute('data-precio'), 10) || 0;
+    function tiene(clave) {
+        var lista = (_VARIANTES_CATEGORIA_BARRA[clave] || [clave]).map(_normalizarCategoriaBarra);
+        return tipos.some(function(t) { return lista.indexOf(t) !== -1; });
+    }
+    // Primero las formas sin precio (bases, macetas, alajeros, arreglos); después las figuras por precio
+    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
+        cfg = HOJAS_CATEGORIAS[i];
+        if (!cfg.tipo || cfg.precio !== undefined) continue;
+        if (tiene(cfg.tipo)) return i;
+    }
+    for (i = 0; i < HOJAS_CATEGORIAS.length; i++) {
+        cfg = HOJAS_CATEGORIAS[i];
+        if (!cfg.tipo || cfg.precio === undefined) continue;
+        if (tiene(cfg.tipo) && precio === cfg.precio) return i;
+    }
+    return -1;
+}
+
+// Arma las hojas a partir de las tarjetas del grid. paginas[0] = Hoja 1 (resumen).
+function _construirPlanHojas(cards) {
+    var porHoja = HOJAS_CATEGORIAS.map(function() { return []; });
+    var otros = [], etiquetasExt = [];
+    cards.forEach(function(c) {
+        if ((c.getAttribute('data-origen-externo') || '') === 'etiquetas-externas') { etiquetasExt.push(c); return; }
+        var i = _indiceHojaDeCard(c);
+        if (i >= 0) porHoja[i].push(c);
+        else if (i === -1) otros.push(c);
+    });
+    // Hoja 1: filas de categorías (con su hoja), luego la fila de Etiquetas y al final la de Velas
+    var resumen = [], filas = [];
+    function agregarFila(info, lista) {
+        if (!lista.length) return;
+        filas.push(Object.assign({ inicio: resumen.length }, info));
+        resumen = resumen.concat(lista.slice(0, 3));
+    }
+    var idxVelas = -1;
+    HOJAS_CATEGORIAS.forEach(function(cfg, i) {
+        if (cfg.origenExterno) { idxVelas = i; return; }
+        if (cfg.sinFilaEnResumen) return;
+        agregarFila({ cfgIndex: i }, porHoja[i]);
+    });
+    agregarFila({ texto: 'Etiquetas', irAModo: 'etiquetas' }, etiquetasExt);
+    if (idxVelas >= 0) agregarFila({ cfgIndex: idxVelas }, porHoja[idxVelas]);
+    var paginas = [{ titulo: 'Inicio', cards: resumen, filas: filas }];
+    HOJAS_CATEGORIAS.forEach(function(cfg, i) {
+        paginas.push({ titulo: cfg.texto, cards: porHoja[i], cfgIndex: i });
+    });
+    if (otros.length) paginas.push({ titulo: 'Otros productos', cards: otros, otros: true });
+    return paginas;
+}
+
+// ¿Está activo el modo por hojas? (Mostrar Todo, sin búsqueda, sin filtros)
+function _modoHojasActivo() {
+    var btn = document.getElementById('btnModoTodosProductos');
+    if (!btn || !btn.classList.contains('activo')) return false;
+    if (_hayBusquedaDeTextoActiva()) return false;
+    if (_filtroBarraCategoriaActivo !== null) return false;
+    var grid = document.getElementById('gridProductos');
+    if (!grid) return false;
+    var cards = grid.querySelectorAll('.card-dinamica');
+    if (!cards.length) return false;
+    return !grid.querySelector('.card-dinamica.oculto, .card-dinamica.oculto-forma-carrusel');
+}
+
+function _crearBarraHoja(titulo, botones) {
+    var barra = document.createElement('div');
+    barra.className = 'barra-categoria-fila barra-hoja';
+    var t = document.createElement('span');
+    t.className = 'barra-hoja-titulo';
+    t.textContent = titulo;
+    barra.appendChild(t);
+    (botones || []).forEach(function(b) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'barra-hoja-btn';
+        btn.textContent = b.texto;
+        btn.addEventListener('click', b.onClick);
+        barra.appendChild(btn);
+    });
+    return barra;
+}
+
 function insertarBarrasCategoriaProductos() {
     var grid = document.getElementById('gridProductos');
     if (!grid) return;
 
-    // Quitar barras insertadas previamente (se recalculan en cada render)
-    grid.querySelectorAll('.barra-categoria-fila').forEach(function(b) { b.remove(); });
+    // Quitar barras y avisos insertados previamente (se recalculan en cada render)
+    grid.querySelectorAll('.barra-categoria-fila, .hoja-vacia').forEach(function(b) { b.remove(); });
 
-    // Solo debe aparecer en el modo "Mostrar Todo"
+    // ── Modo por hojas: etiqueta + "Ver más →" en la Hoja 1; título en las hojas de categoría ──
+    var plan = window._hojaPlanActual;
+    if (plan && _modoHojasActivo()) {
+        var pag = plan.pag;
+        if (plan.num === 1) {
+            pag.filas.forEach(function(f) {
+                var textoFila = f.texto || HOJAS_CATEGORIAS[f.cfgIndex].texto;
+                var barra = _crearBarraHoja(textoFila, [{
+                    texto: 'Ver más →',
+                    onClick: function() {
+                        if (f.irAModo) {
+                            // Etiquetas: abre la zona de Etiquetas
+                            if (typeof window.cambiarModoVelas === 'function') window.cambiarModoVelas(f.irAModo);
+                            var zona = document.getElementById('zona-catalogo');
+                            if (zona) zona.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        } else {
+                            window.irAPaginaCatalogo(f.cfgIndex + 2);
+                        }
+                    }
+                }]);
+                grid.insertBefore(barra, pag.cards[f.inicio]);
+            });
+        } else {
+            var botones = [{ texto: '← Inicio', onClick: function() { window.irAPaginaCatalogo(1); } }];
+            var cfgPag = (pag.cfgIndex !== undefined) ? HOJAS_CATEGORIAS[pag.cfgIndex] : null;
+            if (cfgPag && cfgPag.enlace) {
+                botones.push({ texto: 'Ver todas en velaskukumita.com ↗', onClick: function() { window.open(cfgPag.enlace, '_blank', 'noopener'); } });
+            }
+            var barraTitulo = _crearBarraHoja(pag.titulo, botones);
+            if (pag.cards.length) {
+                grid.insertBefore(barraTitulo, pag.cards[0]);
+            } else {
+                grid.appendChild(barraTitulo);
+                var vacio = document.createElement('div');
+                vacio.className = 'hoja-vacia';
+                vacio.textContent = 'Aún no hay productos en esta categoría.';
+                grid.appendChild(vacio);
+            }
+        }
+        return;
+    }
+
+    // Solo en "Mostrar Todo": mientras haya un filtro de barra activo, una única barra para quitarlo
     var btnTodosProductos = document.getElementById('btnModoTodosProductos');
     var esModoMostrarTodo = btnTodosProductos && btnTodosProductos.classList.contains('activo');
-    if (!esModoMostrarTodo) return;
-
-    // No deben aparecer mientras el usuario esté usando algún buscador: el orden
-    // de resultados ya no corresponde a las 10 categorías acomodadas manualmente
-    if (_hayBusquedaDeTextoActiva()) return;
-
-    // Mientras haya un filtro de barra activo, se muestra una única barra para
-    // quitarlo en vez de las 10 (el listado ya no conserva la estructura de
-    // 10 filas de 3, así que las barras normales no aplican)
+    if (!esModoMostrarTodo || _hayBusquedaDeTextoActiva()) return;
     if (_filtroBarraCategoriaActivo !== null) {
         var primeraCard = grid.querySelector('.card-dinamica');
         var barraQuitar = document.createElement('button');
@@ -1075,30 +1223,6 @@ function insertarBarrasCategoriaProductos() {
         barraQuitar.addEventListener('click', function() { filtrarPorBarraCategoria(_filtroBarraCategoriaActivo); });
         if (primeraCard) grid.insertBefore(barraQuitar, primeraCard);
         else grid.appendChild(barraQuitar);
-        return;
-    }
-
-    // Solo en la página 1 de la paginación
-    var hashMatch = (window.location.hash || '').match(/pagina=(\d+)/);
-    var paginaActualNum = hashMatch ? parseInt(hashMatch[1], 10) : 1;
-    if (paginaActualNum !== 1) return;
-
-    var cards = Array.from(grid.querySelectorAll('.card-dinamica')).filter(function(c) {
-        return !c.classList.contains('oculto') && !c.classList.contains('paginacion-oculto');
-    });
-
-    for (var fila = 0; fila < 10; fila++) {
-        var idx = fila * 3;
-        if (idx >= cards.length) break;
-        var cfg = CATEGORIAS_BARRAS[fila] || { texto: 'Mostrar Más Productos' };
-        var barra = document.createElement('button');
-        barra.type = 'button';
-        barra.className = 'barra-categoria-fila';
-        barra.textContent = cfg.texto;
-        (function(filaCerrada) {
-            barra.addEventListener('click', function() { filtrarPorBarraCategoria(filaCerrada); });
-        })(fila);
-        grid.insertBefore(barra, cards[idx]);
     }
 }
 window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
@@ -1108,6 +1232,8 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
     const POR_PAGINA = 30;
     let paginaActual = 1;
     let tarjetasVisibles = [];
+    var _planHojas = null;        // hojas por categoría (null = paginación normal de 30)
+    var _ordenAlterado = false;   // true si se reordenó el DOM para mostrar las hojas
 
     function obtenerTarjetasVisibles() {
         return Array.from(document.querySelectorAll('#gridProductos .card-dinamica'))
@@ -1118,10 +1244,70 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
     }
 
     function calcularTotalPaginas() {
+        if (_planHojas) return _planHojas.length;
         return Math.ceil(tarjetasVisibles.length / POR_PAGINA);
     }
 
+    function _tituloHoja(n) {
+        var pg = _planHojas && _planHojas[n - 1];
+        return pg ? pg.titulo : '';
+    }
+
+    function _textoInfoPlan() {
+        var pg = _planHojas[paginaActual - 1];
+        if (!pg) return '';
+        if (paginaActual === 1) return 'Hoja 1 · resumen por categoría';
+        return pg.titulo + ': ' + pg.cards.length + (pg.cards.length === 1 ? ' producto' : ' productos');
+    }
+
+    function _guardarPaginaEnHash(num) {
+        var nuevoHash = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '') || '';
+        var hashFinal = (nuevoHash ? nuevoHash + '&' : '') + 'pagina=' + num;
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', '#' + hashFinal);
+        }
+    }
+
+    // Devuelve las tarjetas a su orden original (el de la hoja de cálculo) al salir del modo por hojas
+    function _restaurarOrdenOriginal() {
+        if (!_ordenAlterado) return;
+        var grid = document.getElementById('gridProductos');
+        if (grid) {
+            Array.from(grid.querySelectorAll('.card-dinamica'))
+                .sort(function(a, b) { return (a._ord === undefined ? 1e9 : a._ord) - (b._ord === undefined ? 1e9 : b._ord); })
+                .forEach(function(c) { grid.appendChild(c); });
+        }
+        _ordenAlterado = false;
+    }
+
+    function mostrarPaginaPlan(num) {
+        var grid = document.getElementById('gridProductos');
+        var total = _planHojas.length;
+        if (num < 1) num = 1;
+        if (num > total) num = total;
+        paginaActual = num;
+        _guardarPaginaEnHash(num);
+        // Recuerda el orden original la primera vez (las tarjetas nuevas aún están en su orden de la hoja)
+        Array.from(grid.querySelectorAll('.card-dinamica')).forEach(function(c, i) {
+            if (c._ord === undefined) c._ord = i;
+            c.classList.add('paginacion-oculto');
+        });
+        var pag = _planHojas[num - 1];
+        pag.cards.forEach(function(c) {
+            c.classList.remove('paginacion-oculto');
+            grid.appendChild(c); // el orden del DOM es el orden en pantalla
+        });
+        _ordenAlterado = true;
+        window._hojaPlanActual = { num: num, pag: pag };
+        renderControles();
+        insertarBarrasCategoriaProductos();
+        if (_scrollAlCambiarPagina) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     function mostrarPagina(num) {
+        if (_planHojas) return mostrarPaginaPlan(num);
+        _restaurarOrdenOriginal();
+        window._hojaPlanActual = null;
         paginaActual = num;
         // Guardar página en el hash de la URL para que persista al recargar
         var nuevoHash = (window.location.hash || '').replace(/#?pagina=\d+/, '').replace(/^#?&/, '').replace(/^#/, '') || '';
@@ -1157,7 +1343,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
         const total = calcularTotalPaginas();
         const mostradas = tarjetasVisibles.slice((paginaActual-1)*POR_PAGINA, paginaActual*POR_PAGINA).length;
         const hayTarjetas = document.querySelectorAll('#gridProductos .card-dinamica').length > 0;
-        const infoTexto = tarjetasVisibles.length > 0
+        const infoTexto = _planHojas ? _textoInfoPlan() : tarjetasVisibles.length > 0
             ? "Mostrando " + ((paginaActual-1)*POR_PAGINA+1) + "\u2013" + ((paginaActual-1)*POR_PAGINA+mostradas) + " de " + tarjetasVisibles.length + " productos"
             : (hayTarjetas ? 'Sin resultados para ese filtro' : '');
 
@@ -1191,6 +1377,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
                     var btn = document.createElement('button');
                     btn.className = 'btn-pag' + (pg === paginaActual ? ' activo' : '');
                     btn.textContent = pg;
+                    if (_planHojas) btn.title = _tituloHoja(pg);
                     btn.onclick = function() { _scrollAlCambiarPagina = true; mostrarPagina(pg); _scrollAlCambiarPagina = false; };
                     cont.appendChild(btn);
                 })(i);
@@ -1209,6 +1396,10 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
 
     function actualizarPaginacion() {
         tarjetasVisibles = obtenerTarjetasVisibles();
+        // Modo por hojas (Hoja 1 resumen + una hoja por categoría) o paginación normal de 30
+        _planHojas = _modoHojasActivo()
+            ? _construirPlanHojas(Array.from(document.querySelectorAll('#gridProductos .card-dinamica')))
+            : null;
         var paginaInicial = 1;
         // Solo restaurar la página guardada en el hash durante la carga inicial,
         // no al cambiar filtros (para evitar mostrar páginas desincronizadas).
@@ -1216,7 +1407,7 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
             var hash = window.location.hash || '';
             var match = hash.match(/pagina=(\d+)/);
             var paginaGuardada = match ? parseInt(match[1]) : 1;
-            var totalPags = Math.ceil(tarjetasVisibles.length / POR_PAGINA);
+            var totalPags = calcularTotalPaginas();
             paginaInicial = (paginaGuardada > 1 && paginaGuardada <= totalPags) ? paginaGuardada : 1;
             _primeraVez = false;
         }
@@ -1256,6 +1447,12 @@ window.insertarBarrasCategoriaProductos = insertarBarrasCategoriaProductos;
     });
 
     window.actualizarPaginacion = actualizarPaginacion;
+    // Lleva a una hoja del catálogo (usado por los botones "Ver más")
+    window.irAPaginaCatalogo = function(n) {
+        _scrollAlCambiarPagina = true;
+        mostrarPagina(n);
+        _scrollAlCambiarPagina = false;
+    };
 })();
 
 
