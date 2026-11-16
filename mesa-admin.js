@@ -73,8 +73,9 @@
             setTimeout(engancharAuth, 300);
             return;
         }
-        auth.onAuthStateChanged(function () { actualizarBotonMesa(); });
+        auth.onAuthStateChanged(function () { actualizarBotonMesa(); intentarAbrirDirecto(); });
         actualizarBotonMesa();
+        intentarAbrirDirecto();
     })();
 
     // ── Construcción de la pantalla (una sola vez) ──
@@ -88,6 +89,7 @@
         root.innerHTML =
             '<div class="mesa-header">' +
                 '<button class="mesa-volver" type="button" id="mesaVolver" aria-label="Volver">‹</button>' +
+                '<button class="mesa-nueva-pestana" type="button" id="mesaNuevaPestana" title="Abrir la Mesa en una pestaña nueva">↗ Nueva pestaña</button>' +
                 '<h3>Mesa</h3>' +
                 '<span class="mesa-contador" id="mesaContador"></span>' +
             '</div>' +
@@ -125,6 +127,9 @@
         cv = $('mesaCanvas');
 
         $('mesaVolver').addEventListener('click', cerrarMesa);
+        $('mesaNuevaPestana').addEventListener('click', abrirMesaEnPestanaNueva);
+        // Si esta pestaña ya se abrió directamente en la Mesa, el botón sobra
+        if (abrirDirecto || window._mesaPestanaPropia) $('mesaNuevaPestana').style.display = 'none';
         $('mesaMas').addEventListener('click', function () { zoomCentro(1.4); });
         $('mesaMenos').addEventListener('click', function () { zoomCentro(1 / 1.4); });
         $('mesaAjustar').addEventListener('click', function () { ajustarVista(); pedirDibujo(); });
@@ -141,6 +146,36 @@
             if (S.abierta && e.key === 'Escape' && document.activeElement && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') cerrarMesa();
         });
         engancharGestos();
+    }
+
+    // ── Abrir la Mesa en una pestaña nueva ──
+    // La Mesa es una pantalla dentro de la misma página, así que "pestaña nueva" significa abrir el sitio con
+    // ?mesa=1: esa pestaña entra directo a la Mesa en cuanto Firebase confirma que eres administrador
+    // (la sesión se comparte entre pestañas del mismo sitio, no hay que volver a iniciar sesión).
+    var abrirDirecto = /(?:^|[?&])mesa=1(?:&|$)/.test(window.location.search);
+    window._mesaPestanaPropia = abrirDirecto;
+    function abrirMesaEnPestanaNueva() {
+        var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+        if (!(typeof esCorreoAdmin === 'function' && esCorreoAdmin(user))) return;
+        var url = window.location.origin + window.location.pathname + '?mesa=1';
+        var w = window.open(url, '_blank');
+        if (!w) { if (typeof mostrarToast === 'function') mostrarToast('El navegador bloqueó la pestaña nueva. Permite ventanas emergentes para este sitio.'); return; }
+        cerrarMesa(); // esta pestaña vuelve al sitio; la Mesa queda en la nueva
+    }
+    window.abrirMesaEnPestanaNueva = abrirMesaEnPestanaNueva;
+    // Botón "Mesa" del perfil: con Ctrl/Cmd/Mayús abre la pestaña nueva; con clic normal, como siempre
+    window.abrirMesaDesdeBoton = function (ev) {
+        if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) abrirMesaEnPestanaNueva();
+        else abrirMesa();
+    };
+    function intentarAbrirDirecto() {
+        if (!abrirDirecto) return;
+        var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+        if (!(typeof esCorreoAdmin === 'function' && esCorreoAdmin(user))) return;
+        abrirDirecto = false;
+        abrirMesa();
+        // Deja la dirección sin ?mesa=1 para que al recargar no vuelva a abrirse sola
+        if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     }
 
     // ── Abrir / cerrar ──

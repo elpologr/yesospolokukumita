@@ -32,6 +32,14 @@
     font-size: 30px; line-height: 1; padding-bottom: 4px;
 }
 #pantallaMesa .mesa-volver:hover { background: rgba(255,255,255,0.1); }
+#pantallaMesa .mesa-nueva-pestana {
+    position: absolute; left: 54px; top: 50%; transform: translateY(-50%);
+    padding: 7px 12px; border: 1px solid #3a3a46; border-radius: 10px;
+    background: rgba(20,20,26,0.85); color: #f1ebe4; font-size: 12px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+}
+#pantallaMesa .mesa-nueva-pestana:hover { background: #e8607a; border-color: #e8607a; }
+@media (max-width: 480px) { #pantallaMesa .mesa-nueva-pestana { font-size: 11px; padding: 6px 8px; } }
 #pantallaMesa .mesa-contador {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
     font-size: 11px; font-weight: 700; color: #a8a0b0; white-space: nowrap;
