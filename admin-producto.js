@@ -28,6 +28,7 @@ var _guardandoProducto = false;
 
 // Modo edición (paso 4b)
 var _edicionProducto = null;       // null = agregando; { fila, nombre, etiquetasExtra: [], eventosExtra: [], medidasTexto: '' } = editando
+var _idxExistenteSel = 0;          // cuál de las imágenes actuales (modo edición) usan los botones "Copiar link" / "Abrir en imgbb"
 var _imagenesExistentes = [];      // links de imgbb que el producto ya tiene en la hoja (la 1ª es la principal)
 var _filasEditadas = {};           // filas que ya se guardaron en esta sesión (hay que recargar antes de volver a editarlas)
 var _catalogoMovido = false;       // true si se movió un producto: los números de fila de la página ya no valen
@@ -905,12 +906,90 @@ function _renderExistentesProducto() {
         quitar.addEventListener('click', function () {
             if (_guardandoProducto) return;
             _imagenesExistentes.splice(i, 1);
+            if (i < _idxExistenteSel) _idxExistenteSel--;
             _renderExtrasProducto();
             validarFormularioProducto();
         });
         caja.appendChild(img); caja.appendChild(num); caja.appendChild(quitar);
+        // Tocar una miniatura la elige para los botones de imgbb (borde rosa)
+        if (i === _idxExistenteSel) caja.style.borderColor = '#e8607a';
+        caja.style.cursor = 'pointer';
+        caja.addEventListener('click', function (ev) {
+            if (ev.target === quitar) return;
+            _idxExistenteSel = i;
+            _renderExistentesProducto();
+        });
         lista.appendChild(caja);
     });
+    _renderAccionesImgbb(bloque, lista);
+}
+
+// ── Botones de imgbb (solo administradores) ──
+// Viven dentro de "Imágenes actuales del producto", que solo aparece al abrir "⚙️ Editar" (botón que ya es solo
+// para administradores). Actúan sobre la miniatura elegida (por defecto la principal ★).
+// Un link directo https://i.ibb.co/ID/nombre.ext corresponde a la página https://ibb.co/ID.
+function _urlImgbbSeleccionada() {
+    if (!_imagenesExistentes.length) return '';
+    if (_idxExistenteSel >= _imagenesExistentes.length) _idxExistenteSel = _imagenesExistentes.length - 1;
+    if (_idxExistenteSel < 0) _idxExistenteSel = 0;
+    return String(_imagenesExistentes[_idxExistenteSel] || '').trim();
+}
+function _paginaImgbbDe(url) {
+    var m = String(url || '').match(/^https?:\/\/i\.ibb\.co\/([A-Za-z0-9]+)\//i);
+    return m ? 'https://ibb.co/' + m[1] : '';
+}
+function _copiarTextoAdmin(texto, okMsg) {
+    function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        mostrarToast(ok ? okMsg : 'No se pudo copiar. Copia el link a mano: ' + texto, ok ? undefined : 8000);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).then(function () { mostrarToast(okMsg); }).catch(fallback);
+    } else fallback();
+}
+function copiarLinkImgbbProducto() {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) return; // por si acaso
+    var url = _urlImgbbSeleccionada();
+    if (!url) { mostrarToast('Este producto no tiene imágenes.'); return; }
+    _copiarTextoAdmin(url, '✅ Link de la imagen copiado.');
+}
+function abrirImgbbProducto() {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) return; // por si acaso
+    var pagina = _paginaImgbbDe(_urlImgbbSeleccionada());
+    if (!pagina) { mostrarToast('Esta imagen no está en imgbb (no es un link https://i.ibb.co/...).'); return; }
+    window.open(pagina, '_blank', 'noopener');
+}
+function _renderAccionesImgbb(bloque, lista) {
+    if (!bloque || !lista) return;
+    var cont = document.getElementById('sapImgbbAcciones');
+    if (!cont) {
+        cont = document.createElement('div');
+        cont.id = 'sapImgbbAcciones';
+        cont.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:10px;';
+        cont.innerHTML =
+            '<p class="sap-nota" id="sapImgbbNota"></p>' +
+            '<div class="panel-nombre-acciones" style="justify-content:flex-start;margin-top:0;">' +
+                '<button type="button" class="panel-nombre-btn cancelar" id="btnCopiarLinkImgbb">📋 Copiar link de imgbb</button>' +
+                '<button type="button" class="panel-nombre-btn cancelar" id="btnAbrirImgbb">🔗 Abrir en imgbb</button>' +
+            '</div>';
+        lista.insertAdjacentElement('afterend', cont);
+        document.getElementById('btnCopiarLinkImgbb').addEventListener('click', copiarLinkImgbbProducto);
+        document.getElementById('btnAbrirImgbb').addEventListener('click', abrirImgbbProducto);
+    }
+    var url = _urlImgbbSeleccionada();
+    var nota = document.getElementById('sapImgbbNota');
+    if (nota) nota.textContent = 'Los botones de abajo usan la imagen ' + (_idxExistenteSel === 0 ? 'principal (★)' : 'nº ' + (_idxExistenteSel + 1)) + '. Toca otra miniatura para cambiarla.';
+    var b = document.getElementById('btnAbrirImgbb');
+    if (b) { b.disabled = !_paginaImgbbDe(url); b.title = b.disabled ? 'Esta imagen no es de imgbb' : 'Abrir la imagen en la página de imgbb'; }
 }
 
 // "12/8" → alto 12, ancho 8. Texto que no tiene ese formato (ej. "20 cm") se conserva aparte.
@@ -973,6 +1052,7 @@ function abrirSubmenuEditarProducto() {
     var med = _separarMedidasProducto(_atributoCard(card, 'data-alto'));
     _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, eventosExtra: eventosExtra, medidasTexto: med.texto };
     _imagenesExistentes = imgs;
+    _idxExistenteSel = 0;
 
     function poner(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
     poner('inputNombreProducto', datos.nombre);
