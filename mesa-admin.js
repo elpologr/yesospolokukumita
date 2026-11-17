@@ -539,7 +539,7 @@
         if (v.n) for (i = 0; i < L.length; i++) { if (L[i].nombre === v.n) return L[i]; }
         return null;
     }
-    function normBusqueda(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+    function normBusqueda(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f\u200b-\u200d\ufeff]/g, '').replace(/\u00a0/g, ' '); }
     function pintarVinculo() {
         var act = $('mesaVinculoActual'); if (!act || !S.sel) return;
         var k = clave(S.sel.r, S.sel.c), v = S.vinculos[k], p = productoDeVinculo(v);
@@ -644,7 +644,7 @@
         { n: 'Paquetes',        prod: /paquete/, mesa: /paquete/ },
         { n: 'Arreglos',        prod: /arreglo/, mesa: /arreglo/ },
         { n: 'Figuras de precios altos', prod: /\bfigur/, mesa: /\bfigur/, alta: true },
-        { n: 'Flores',          prod: /\bflor(?:es)?\b/, mesa: /\bflor(?:es)?\b/ },
+        { n: 'Flores',          prod: /flor/, mesa: /flor/ },
         { n: 'Velas',           prod: /\bvelas?\b|\bveladora/, mesa: /\bvelas?\b|\bveladora/, sinPortaVela: true },
         { n: 'Pintura',         prod: /pintur/, mesa: /pintur/ },
         { n: 'Religiosos',      prod: /religios/, mesa: /religios/ }
@@ -694,12 +694,23 @@
             await asegurarDatos();
             var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0, motivo = '';
             // 1) Prioridad: la categoría del producto (por nombre o etiquetas)
-            var cats = categoriasDe(prod, precio), ci;
+            var cats = categoriasDe(prod, precio), ci, nota = '', llenas = [], sinMesa = [];
             for (ci = 0; ci < cats.length && !celda; ci++) {
+                var hubo = false;
                 for (num = 1; num <= total && !celda; num++) {
                     if (!mesaSirveCategoria(cats[ci], num, precio)) continue;
+                    hubo = true;
                     celda = primeraCeldaLibre(num);
                     if (celda) { elegida = num; motivo = cats[ci].n; }
+                }
+                if (!celda) (hubo ? llenas : sinMesa).push(cats[ci].n);
+            }
+            if (!celda && cats.length) {
+                console.warn('[mesa] categorías detectadas:', cats.map(function (c) { return c.n; }), '· textos de mesas leídos:', JSON.parse(JSON.stringify(S.mesas)));
+                if (!Object.keys(S.mesas).length) nota = ' ⚠ No pude leer los textos de las mesas (ninguna tiene texto guardado en esta cuenta).';
+                else {
+                    if (sinMesa.length) nota += ' ℹ Se detectó «' + sinMesa.join('», «') + '» pero ninguna mesa lleva esa palabra en su texto.';
+                    if (llenas.length) nota += ' ℹ Las mesas de «' + llenas.join('», «') + '» están llenas.';
                 }
             }
             // 2) Si no hubo mesa de categoría con lugar: por precio original
@@ -717,8 +728,9 @@
                 texto = coincide
                     ? ' · 📍 Las mesas con el precio $' + precio + ' están llenas: quedó en la última mesa (' + total + ').'
                     : ' · 📍 Ninguna mesa lleva su categoría ni el precio $' + precio + ' en su texto: quedó en la última mesa (' + total + ').';
+                texto += nota;
             } else if (motivo) texto = ' · 📍 Por ser de «' + motivo + '» quedó en la mesa ' + elegida + ' de la Mesa.';
-            else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa (por su precio).';
+            else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa (por su precio).' + nota;
             var k = clave(celda.r, celda.c);
             S.celdas[k] = url;
             S.vinculos[k] = { n: String(prod.nombre || ''), i: url };
