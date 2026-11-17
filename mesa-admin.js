@@ -314,6 +314,7 @@
     window.abrirMesa = abrirMesa;
 
     function cerrarMesa() {
+        if (typeof cerrarVisorImagen === 'function') cerrarVisorImagen();
         if (!root || !S.abierta) return;
         root.classList.remove('abierta');
         S.abierta = false;
@@ -448,7 +449,12 @@
             var eraToque = drag && !drag.movido && Object.keys(ptrs).length === 1 && e.type === 'pointerup';
             var punto = ptrs[e.pointerId], teclaMulti = !!(drag && drag.tecla);
             delete ptrs[e.pointerId];
-            if (eraToque) seleccionarEn(punto.x, punto.y, teclaMulti);
+            if (eraToque) {
+                // Toque sobre la tapa triangular de una pieza (no sobre la mesa) → ver la imagen en pantalla completa
+                var urlTapa = (!S.modoMulti && !teclaMulti) ? urlDeTapaEn(punto.x, punto.y) : '';
+                if (urlTapa) abrirVisorImagen(urlTapa);
+                else seleccionarEn(punto.x, punto.y, teclaMulti);
+            }
             if (Object.keys(ptrs).length < 2) pinch = null;
             drag = null;
         }
@@ -1571,6 +1577,68 @@
         ctx.beginPath(); ctx.moveTo(xi, yF - h); ctx.lineTo(cx, yA - h); ctx.lineTo(xd, yF - h); ctx.stroke();
     }
     function esDeImgbb(url) { return /^https:\/\/i\.ibb\.co\//i.test(url || ''); }
+
+    // ── Ver la imagen en pantalla completa al tocar la tapa triangular de una pieza ──
+    // Misma geometría que dibujarPrisma: la tapa es el triángulo (xi, yF-h) (xd, yF-h) (cx, yA-h).
+    // Devuelve la URL de la pieza tocada (la más cercana a ti si se empalman) o '' si el toque no cayó en ninguna tapa.
+    function urlDeTapaEn(sx, sy) {
+        if (!S.vista3d) return '';
+        var k = S.scale, wx = (sx - S.ox) / k, wy = (sy - S.oy) / k, m = 6 / k;   // margen de ~6 px para que sea fácil acertar con el dedo
+        var mejor = null;
+        function revisar(mapa) {
+            Object.keys(mapa).forEach(function (kc) {
+                var url = mapa[kc];
+                if (!url || !esDeImgbb(url)) return;
+                var q = kc.split(','), r = +q[0], c = +q[1];
+                if (r >= NF) return;
+                var im = S.full[url] || S.thumb[url];
+                if (!im) return;
+                var iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+                if (!iw || !ih) return;
+                var o = pc(c, r), cx = o[0], cy = o[1] + TH / 2;
+                var s = Math.min(TW * 0.92 / iw, TW * 1.25 / ih), w = iw * s, h = ih * s;
+                var yF = cy + TH * 0.16, yA = cy - TH * 0.28;
+                var P = [[cx - w / 2, yF - h], [cx + w / 2, yF - h], [cx, yA - h]];
+                // punto dentro del triángulo (con margen): debe quedar del lado interior de sus 3 aristas
+                var dentro = true;
+                for (var i = 0; i < 3 && dentro; i++) {
+                    var a = P[i], b = P[(i + 1) % 3], cc = P[(i + 2) % 3];
+                    var ex = b[0] - a[0], ey = b[1] - a[1], len = Math.hypot(ex, ey) || 1;
+                    var dp = ((wx - a[0]) * ey - (wy - a[1]) * ex) / len;
+                    var di = ((cc[0] - a[0]) * ey - (cc[1] - a[1]) * ex) / len;
+                    if (di < 0) dp = -dp;
+                    if (dp < -m) dentro = false;
+                }
+                if (!dentro) return;
+                var orden = (r + c) * 1000 + r;
+                if (!mejor || orden > mejor.orden) mejor = { orden: orden, url: url };
+            });
+        }
+        revisar(S.previas); revisar(S.celdas);   // las celdas con 3D pasan por encima de su vista previa
+        return mejor ? mejor.url : '';
+    }
+
+    var visor = null;
+    function abrirVisorImagen(url) {
+        if (!visor) {
+            visor = document.createElement('div');
+            visor.className = 'mesa-visor';
+            visor.innerHTML = '<button type="button" class="mesa-visor-x" aria-label="Cerrar">✕</button><img alt="Imagen de la pieza">';
+            visor.addEventListener('click', cerrarVisorImagen);
+            root.appendChild(visor);
+            // Escape cierra primero el visor (sin cerrar la Mesa)
+            window.addEventListener('keydown', function (e) {
+                if (visor && visor.classList.contains('abierto') && e.key === 'Escape') { e.stopImmediatePropagation(); cerrarVisorImagen(); }
+            }, true);
+        }
+        visor.querySelector('img').src = url;
+        visor.classList.add('abierto');
+    }
+    function cerrarVisorImagen() {
+        if (!visor) return;
+        visor.classList.remove('abierto');
+        visor.querySelector('img').removeAttribute('src');
+    }
 
     function dibujarImagenes(ctx) {
         var rg = rangoVisible(), cw = TW * S.scale, enPie = [];
