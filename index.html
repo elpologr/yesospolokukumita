@@ -1749,12 +1749,9 @@
             <input id="inputUrlImagenProducto" class="panel-nombre-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://i.ibb.co/..." oninput="alCambiarUrlImagen()">
             <div id="sapUrlImagenEstado" class="sap-estado"></div>
             <img id="previewUrlImagenProducto" src="" alt="Vista previa del link" style="display:none;">
-            <p class="sap-nota">Usa el <strong>enlace directo</strong> de imgbb (empieza con https://i.ibb.co/). En Polo la imagen principal es la pieza sobre el fondo azul.</p>
         </div>
 
         <div id="sapExtrasBloque">
-            <div class="sap-seccion-titulo">Fotos adicionales (galería)</div>
-            <p class="sap-nota">Puedes tener hasta 50 imágenes por producto. Las adicionales se suben tal cual (reducidas) y se ven en la galería del producto. Al elegir la imagen principal también puedes marcar varias fotos: la 1ª es la principal y las demás quedan aquí.</p>
             <div id="sapExtrasEstado" class="sap-estado"></div>
             <div id="sapExtrasLista" class="sap-extras-lista" style="display:none;"></div>
             <input type="file" id="inputImagenesExtraProducto" accept="image/*" multiple style="display:none" onchange="agregarImagenesExtraProducto(event)">
@@ -1827,7 +1824,6 @@
         <div class="sap-seccion-titulo">Video</div>
         <label class="panel-nombre-label" for="inputVideoProducto">▶ Link de YouTube (opcional)</label>
         <input id="inputVideoProducto" class="panel-nombre-input" type="text" inputmode="url" maxlength="400" placeholder="https://www.youtube.com/watch?v=… o código embed">
-        <p class="sap-nota">Puedes pegar el link normal, el link embed o el código &lt;iframe&gt; de YouTube. Se guarda en la columna F como link embed.</p>
 
         <div class="sap-seccion-titulo">Existencia, oferta y más vendido</div>
         <label class="panel-nombre-label" for="inputExistenciaProducto">📦 Existencia (piezas ya fabricadas)</label>
@@ -1840,7 +1836,6 @@
             <button type="button" class="sap-toggle" id="btnEnOfertaProducto" aria-pressed="false" onclick="alternarToggleProducto(this)">🔥 En Oferta: <span class="sap-toggle-estado">No</span></button>
             <button type="button" class="sap-toggle" id="btnMasVendidoProducto" aria-pressed="false" onclick="alternarToggleProducto(this)">🏆 Más Vendido: <span class="sap-toggle-estado">No</span></button>
         </div>
-        <p class="sap-nota">Existencia va en la columna J, En Oferta en la K y Más Vendido en la L (se escribe "si" o "no"). El producto se agrega al final de la hoja.</p>
       </div><!-- /sap-col-img -->
 
       <div class="sap-col-datos">
@@ -1856,7 +1851,6 @@
                 <button type="button" class="sap-chip" data-valor="figuras" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">🗿 Figuras</button>
                 <button type="button" class="sap-chip" data-valor="religioso" aria-pressed="false" onclick="alternarEtiquetaPrincipal(this)">⛪ Religioso</button>
             </div>
-            <p class="sap-nota">Puedes elegir más de una. Se guarda en la columna G de la hoja.</p>
             <p class="sap-nota" id="sapEtiquetasExtraNota" style="display:none;"></p>
         </div>
 
@@ -1893,7 +1887,6 @@
                 <button type="button" class="sap-chip" data-valor="apertura-de-negocio" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🏪 Apertura de negocio</button>
                 <button type="button" class="sap-chip" data-valor="condolencias" aria-pressed="false" onclick="alternarEtiquetaEvento(this)">🤍 Condolencias</button>
             </div>
-            <p class="sap-nota">Opcional. Puedes elegir varias. Se guarda en la columna M de la hoja (agrega el encabezado "Etiqueta de Evento" en M1) y es la que usa el filtro "Busca por Evento".</p>
             <p class="sap-nota" id="sapEventosExtraNota" style="display:none;"></p>
         </div>
 
@@ -1909,18 +1902,6 @@
                 <button type="button" class="sap-chip" data-valor="porta velas" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🕯️ Porta Velas</button>
                 <button type="button" class="sap-chip" data-valor="porta inciensos" aria-pressed="false" onclick="alternarEtiquetaForma(this)">🪔 Porta Inciensos</button>
             </div>
-            <p class="sap-nota">Opcional. Puedes elegir varias. Se guardan en la columna G junto a la etiqueta principal, que es de donde las lee el filtro de formas del sitio.</p>
-        </div>
-
-        <div class="sap-zona">
-            <div class="sap-seccion-titulo">Sub-etiquetas (opcional)</div>
-            <div class="sap-fila-titulo">
-                <input id="inputSubEtiqueta" class="panel-nombre-input" type="text" maxlength="60" list="listaSubEtiquetas" autocomplete="off" enterkeyhint="done" placeholder="Ej. cirio, tazón, stich…">
-                <button class="panel-nombre-btn guardar" type="button" onclick="agregarSubEtiquetaProducto()">＋ Agregar</button>
-            </div>
-            <datalist id="listaSubEtiquetas"></datalist>
-            <div id="sapSubEtiquetasLista" class="sap-subtags-lista"></div>
-            <p class="sap-nota">Se guardan en la columna H. Se ven debajo de la imagen del producto y ayudan a que lo encuentren en la búsqueda. Escribe una y presiona Enter o "Agregar" (también puedes separar varias con coma); al escribir salen las que ya usas en otros productos.</p>
         </div>
       </div><!-- /sap-col-datos -->
 
