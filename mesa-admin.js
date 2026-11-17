@@ -21,7 +21,8 @@
 
     var NC = 200, NF = 75;       // la mesa grande, en horizontal: 200 columnas × 75 filas de celdas
     var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
-    var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra
+    var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra, a lo ancho (columnas)
+    var GF = 6;                  // hueco entre una mesa y la de arriba (filas): el doble, ahí se escribe la descripción de cada mesa
     var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 10 mesas a lo ancho × 5 a lo largo = 50 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
     var M = 1.5;                 // margen de la mesa alrededor de la cuadrícula (en celdas)
@@ -65,23 +66,23 @@
     function clave(r, c) { return r + ',' + c; }
     // Posición de una columna/fila en la mesa grande, contando los huecos entre mesas
     function px(c) { return c + Math.floor(c / MC) * G; }
-    function py(r) { return r + Math.floor(r / MF) * G; }
+    function py(r) { return r + Math.floor(r / MF) * GF; }
     function pc(c, r) { return proj(px(c), py(r)); }        // esquina de la celda (columna c, fila r), como proj pero con huecos
-    var AC = NC + (MESAS_C - 1) * G, AF = NF + (MESAS_F - 1) * G;   // medidas totales con huecos
+    var AC = NC + (MESAS_C - 1) * G, AF = NF + (MESAS_F - 1) * GF;   // medidas totales con huecos
     // índice de celda a partir de una posición continua (null si cae en un hueco o fuera de la mesa)
-    function idxExacto(f, m, n) {
+    function idxExacto(f, m, n, g) {
         if (f < 0) return -1;
-        var b = m + G, bl = Math.floor(f / b), d = f - bl * b;
+        var b = m + g, bl = Math.floor(f / b), d = f - bl * b;
         if (d >= m) return -1;
         var i = bl * m + Math.floor(d);
         return i < n ? i : -1;
     }
     // límite del rango visible: si cae en un hueco, se toma la celda más cercana de la mesa vecina
-    function idxLimite(f, m, n, modo) {
+    function idxLimite(f, m, n, modo, g) {
         var i;
         if (f < 0) i = modo === 'ini' ? 0 : -1;
         else {
-            var b = m + G, bl = Math.floor(f / b), d = f - bl * b;
+            var b = m + g, bl = Math.floor(f / b), d = f - bl * b;
             i = d >= m ? (modo === 'ini' ? (bl + 1) * m : (bl + 1) * m - 1) : bl * m + Math.floor(d);
         }
         return Math.max(-1, Math.min(n, i));
@@ -315,7 +316,7 @@
 
     function ajustarVista() {
         var bw = (AC + AF + 4 * M) * TW / 2;
-        var yArriba = -(M + G / 2) * TH, yAbajo = (AC + AF + 2 * M) * TH / 2 + DEPTH + 30;
+        var yArriba = -(M + GF / 2) * TH, yAbajo = (AC + AF + 2 * M) * TH / 2 + DEPTH + 30;
         var k = Math.min(S.w * 0.94 / bw, S.h * 0.94 / (yAbajo - yArriba));
         S.fitEscala = k; S.minEscala = k * 0.7;
         S.scale = k;
@@ -516,7 +517,7 @@
     }
     function limitarVista() {
         // Evita irse al vacío: el centro de la pantalla se queda dentro de la mesa
-        var xmin = -AF * TW / 2 - TW, xmax = AC * TW / 2 + TW, ymin = -TH, ymax = (AC + AF) * TH / 2 + DEPTH + TH;
+        var xmin = -AF * TW / 2 - TW, xmax = AC * TW / 2 + TW, ymin = -(GF / 2 + 1) * TH, ymax = (AC + AF) * TH / 2 + DEPTH + TH;
         var cx = (S.w / 2 - S.ox) / S.scale, cy = (S.h / 2 - S.oy) / S.scale;
         cx = Math.max(xmin, Math.min(xmax, cx)); cy = Math.max(ymin, Math.min(ymax, cy));
         S.ox = S.w / 2 - cx * S.scale; S.oy = S.h / 2 - cy * S.scale;
@@ -549,7 +550,7 @@
     // ── Selección de celda ──
     function celdaEn(sx, sy) {
         var wx = (sx - S.ox) / S.scale, wy = (sy - S.oy) / S.scale;
-        var c = idxExacto(wy / TH + wx / TW, MC, NC), r = idxExacto(wy / TH - wx / TW, MF, NF);
+        var c = idxExacto(wy / TH + wx / TW, MC, NC, G), r = idxExacto(wy / TH - wx / TW, MF, NF, GF);
         return (c >= 0 && r >= 0) ? { r: r, c: c } : null;
     }
 
@@ -1021,7 +1022,7 @@
     function dibujarMesa(ctx, k) {
         for (var mr = 0; mr < MESAS_F; mr++) {
             for (var mc = 0; mc < MESAS_C; mc++) {
-                var x0 = mc * (MC + G), x1 = x0 + MC, y0 = mr * (MF + G), y1 = y0 + MF;
+                var x0 = mc * (MC + G), x1 = x0 + MC, y0 = mr * (MF + GF), y1 = y0 + MF;
                 var A = proj(x0, y0), B = proj(x1, y0), C = proj(x1, y1), D = proj(x0, y1);
                 poli(ctx, [D, C, [C[0], C[1] + DEPTH], [D[0], D[1] + DEPTH]], '#070708');          // costado izquierdo
                 poli(ctx, [C, B, [B[0], B[1] + DEPTH], [C[0], C[1] + DEPTH]], '#101013');          // costado derecho
@@ -1037,7 +1038,7 @@
         ctx.beginPath();
         for (var mr = 0; mr < MESAS_F; mr++) {
             for (var mc = 0; mc < MESAS_C; mc++) {
-                var x0 = mc * (MC + G), y0 = mr * (MF + G), i, a, b;
+                var x0 = mc * (MC + G), y0 = mr * (MF + GF), i, a, b;
                 for (i = 1; i < MC; i++) { a = proj(x0 + i, y0); b = proj(x0 + i, y0 + MF); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
                 for (i = 1; i < MF; i++) { a = proj(x0, y0 + i); b = proj(x0 + MC, y0 + i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
             }
@@ -1068,20 +1069,19 @@
     function dibujarDescripciones(ctx, k) {
         if (TW * k < 5) return;   // muy alejado: sería ilegible
         ctx.save();
-        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(245,196,107,0.95)';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#ffffff';
         for (var mr = 0; mr < MESAS_F; mr++) {
             for (var mc = 0; mc < MESAS_C; mc++) {
                 var texto = S.mesas[mr + ',' + mc];
                 if (!texto) continue;
-                var o = proj(mc * (MC + G), mr * (MF + G));
+                var o = proj(mc * (MC + G), mr * (MF + GF));
                 ctx.save();
                 ctx.transform(TW / 2, TH / 2, -TW / 2, TH / 2, o[0], o[1]);   // el plano del piso: 1 unidad = 1 celda
                 ctx.scale(0.01, 0.01);                                       // ahora 1 unidad = 1/100 de celda
-                var tam = 125;                                               // letra de 1.25 celdas de alto
+                var tam = 140, lh = 170;                                     // letra de 1.4 celdas de alto, hasta 3 renglones dentro del hueco de arriba
                 ctx.font = '600 ' + tam + 'px Segoe UI, system-ui, sans-serif';
-                var lineas = partirTexto(ctx, texto, MC * 100 - 60, 2);
-                if (lineas.length === 1) ctx.fillText(lineas[0], MC * 50, -(G * 100) / 2 + tam * 0.35);
-                else { ctx.fillText(lineas[0], MC * 50, -(G * 100) + tam * 1.1); ctx.fillText(lineas[1], MC * 50, -30); }
+                var lineas = partirTexto(ctx, texto, MC * 100 - 60, 3);
+                lineas.forEach(function (ln, i) { ctx.fillText(ln, MC * 50, -(GF * 100) / 2 - (lineas.length - 1) * lh / 2 + i * lh + tam * 0.35); });
                 ctx.restore();
             }
         }
@@ -1097,8 +1097,8 @@
             if (r < r0) r0 = r; if (r > r1) r1 = r;
         });
         return {
-            c0: Math.max(0, idxLimite(Math.floor(c0), MC, NC, 'ini')), c1: Math.min(NC - 1, idxLimite(Math.ceil(c1), MC, NC, 'fin')),
-            r0: Math.max(0, idxLimite(Math.floor(r0), MF, NF, 'ini')), r1: Math.min(NF - 1, idxLimite(Math.ceil(r1), MF, NF, 'fin'))
+            c0: Math.max(0, idxLimite(Math.floor(c0), MC, NC, 'ini', G)), c1: Math.min(NC - 1, idxLimite(Math.ceil(c1), MC, NC, 'fin', G)),
+            r0: Math.max(0, idxLimite(Math.floor(r0), MF, NF, 'ini', GF)), r1: Math.min(NF - 1, idxLimite(Math.ceil(r1), MF, NF, 'fin', GF))
         };
     }
     // Dibuja una imagen acostada sobre la celda (r, c), ajustada con un pequeño margen
@@ -1319,7 +1319,7 @@
     function dibujarSeleccion(ctx, k) {
         if (!S.sel) return;
         var mr = Math.floor(S.sel.r / MF), mc = Math.floor(S.sel.c / MC);
-        var xa = mc * (MC + G), ya = mr * (MF + G);
+        var xa = mc * (MC + G), ya = mr * (MF + GF);
         var q0 = proj(xa, ya), q1 = proj(xa + MC, ya), q2 = proj(xa + MC, ya + MF), q3 = proj(xa, ya + MF);
         ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.closePath();
         ctx.fillStyle = 'rgba(245,196,107,0.05)'; ctx.fill();
