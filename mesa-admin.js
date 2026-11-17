@@ -3,8 +3,8 @@
 // Se carga DESPUÉS de app.js y admin-producto.js (usa: auth, esCorreoAdmin, mostrarToast, CONFIG,
 // y, para subir fotos, _leerImagenProducto y _postAppsScript de admin-producto.js).
 //
-// Una mesa negra en vista isométrica de 200 columnas × 75 filas de celdas, dividida en 50 mesas chicas
-// (10 a lo ancho × 5 a lo largo, de 20 columnas × 15 filas cada una), separadas por un hueco.
+// Una mesa negra en vista isométrica de 200 columnas × 60 filas de celdas, dividida en 40 mesas chicas
+// (10 a lo ancho × 4 a lo largo, de 20 columnas × 15 filas cada una), separadas por un hueco.
 // Cada celda puede llevar una imagen de imgbb (link https://i.ibb.co/...), pegando el link, pegando
 // varios links de golpe o subiendo fotos (se suben a imgbb por el Apps Script, igual que en "Agregar producto").
 //
@@ -19,11 +19,11 @@
 (function () {
     'use strict';
 
-    var NC = 200, NF = 75;       // la mesa grande, en horizontal: 200 columnas × 75 filas de celdas
+    var NC = 200, NF = 60;       // la mesa grande, en horizontal: 200 columnas × 60 filas de celdas
     var MC = 20, MF = 15;        // cada mesa chica mide 20 columnas × 15 filas
     var G = 3;                   // hueco vacío (en celdas) entre una mesa y otra, a lo ancho (columnas)
     var GF = 6;                  // hueco entre una mesa y la de arriba (filas): el doble, ahí se escribe la descripción de cada mesa
-    var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 10 mesas a lo ancho × 5 a lo largo = 50 mesas
+    var MESAS_C = NC / MC, MESAS_F = NF / MF;   // 10 mesas a lo ancho × 4 a lo largo = 40 mesas
     var TW = 80, TH = 40;        // ancho y alto de una celda en pantalla (proyección isométrica 2:1)
     var M = 1.5;                 // margen de la mesa alrededor de la cuadrícula (en celdas)
     var DEPTH = 40, LEG = 300;   // grosor del tablero y largo de las patas
@@ -114,7 +114,7 @@
         if (d < 3) { celdas = transponerDentroDeMesas(celdas); previas = transponerDentroDeMesas(previas); }
         return { celdas: celdas, previas: previas, mesas: mesas };
     }
-    function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..50, de izquierda a derecha y de arriba abajo
+    function numeroMesa(mr, mc) { return mr * MESAS_C + mc + 1; }                 // 1..40, de izquierda a derecha y de arriba abajo
     function mesaDe(ce) { return { mr: Math.floor(ce.r / MF), mc: Math.floor(ce.c / MC) }; }
 
     // ── Botón del perfil: solo administradores ──
@@ -160,6 +160,8 @@
                     '<button type="button" id="mesaAjustar" aria-label="Ver toda la mesa">⤢</button>' +
                     '<button type="button" id="mesaVista" aria-label="Cambiar entre vista de pie y plana" title="Piezas de pie / acostadas">🧊</button>' +
                     '<button type="button" id="mesaMulti" aria-label="Selección múltiple" title="Selección múltiple (también: Ctrl o Mayús + clic)">☑</button>' +
+                    '<button type="button" id="mesaSelMesa" aria-label="Seleccionar todas las piezas de la mesa" title="Seleccionar todas las piezas de la mesa elegida (para moverlas juntas)">▦</button>' +
+                    '<button type="button" id="mesaRecorrer" aria-label="Recorrer la mesa una posición a la derecha" title="Recorrer la mesa elegida una posición a la derecha (las siguientes se recorren hasta llegar a una mesa vacía)">⇉</button>' +
                 '</div>' +
             '</div>' +
             '<div class="mesa-panel">' +
@@ -231,6 +233,8 @@
         $('mesaFaltan').addEventListener('click', irAFaltante);
         $('mesaMulti').addEventListener('click', alternarModoMulti);
         $('mesaMultiLimpiar').addEventListener('click', function () { limpiarMulti(); estado('Selección quitada.'); });
+        $('mesaSelMesa').addEventListener('click', seleccionarTodasDeMesa);
+        $('mesaRecorrer').addEventListener('click', recorrerMesaADerecha);
         $('mesaCubo').addEventListener('click', function () {
             if (typeof window.abrirCubo3D === 'function') window.abrirCubo3D();
             else estado('Falta cargar cubo-3d.js en index.html.', true);
@@ -509,6 +513,83 @@
         estado(S.modoMulti ? 'Selección múltiple activada: toca las piezas para marcarlas o desmarcarlas.' : 'Selección múltiple desactivada (las piezas marcadas siguen marcadas).');
     }
 
+    // ── Seleccionar todas las piezas de la mesa chica elegida ──
+    // Marca todas las piezas (3D o vista previa) de la mesa donde está la celda elegida; después,
+    // mantén presionada una de ellas y arrastra para moverlas juntas.
+    function seleccionarTodasDeMesa() {
+        if (!S.sel) { estado('Primero toca una celda de la mesa cuyas piezas quieres seleccionar.', true); return; }
+        var ms = mesaDe(S.sel), r0 = ms.mr * MF, c0 = ms.mc * MC, n = 0, r, c;
+        var marcadas = {};
+        for (r = r0; r < r0 + MF; r++) {
+            for (c = c0; c < c0 + MC; c++) {
+                if (tieneContenido({ r: r, c: c })) { marcadas[clave(r, c)] = 1; n++; }
+            }
+        }
+        var num = numeroMesa(ms.mr, ms.mc);
+        if (!n) { estado('La mesa ' + num + ' no tiene piezas.', true); return; }
+        S.multi = marcadas;
+        pintarPanel(); pedirDibujo();
+        estado('☑ ' + n + (n === 1 ? ' pieza seleccionada' : ' piezas seleccionadas') + ' en la mesa ' + num + '. Mantén presionada una y arrástrala para moverlas juntas (deben caer en celdas vacías).');
+    }
+
+    // ── Recorrer una mesa una posición a la derecha ──
+    // Las mesas se cuentan de izquierda a derecha y de arriba abajo (1..40). La mesa elegida pasa a la
+    // siguiente, la siguiente a la que sigue, y así hasta llegar a la primera mesa vacía (sin piezas, sin vistas
+    // previas y sin nombre). Se mueven juntos las piezas, las vistas previas y el texto de cada mesa.
+    function mesaVacia(n) {
+        var mr = Math.floor((n - 1) / MESAS_C), mc = (n - 1) % MESAS_C, r, c;
+        if (S.mesas[mr + ',' + mc]) return false;
+        for (r = mr * MF; r < (mr + 1) * MF; r++) {
+            for (c = mc * MC; c < (mc + 1) * MC; c++) { if (tieneContenido({ r: r, c: c })) return false; }
+        }
+        return true;
+    }
+    function recorrerMesaADerecha() {
+        if (!S.sel) { estado('Primero toca una celda de la mesa que quieres recorrer a la derecha.', true); return; }
+        var ms = mesaDe(S.sel), ini = numeroMesa(ms.mr, ms.mc), total = MESAS_C * MESAS_F;
+        if (mesaVacia(ini)) { estado('La mesa ' + ini + ' está vacía: no hay nada que recorrer.', true); return; }
+        var fin = ini + 1;
+        while (fin <= total && !mesaVacia(fin)) fin++;
+        if (fin > total) {
+            estado('No se puede: de la mesa ' + ini + ' a la ' + total + ' no hay ninguna mesa vacía, y la última se saldría de la mesa grande. Libera alguna primero.', true);
+            return;
+        }
+        var msg = fin === ini + 1
+            ? 'La mesa ' + ini + ' pasará a la mesa ' + fin + ' (que está vacía), con sus piezas, vistas previas y nombre. ¿Continuar?'
+            : 'Se recorrerán las mesas ' + ini + ' a ' + (fin - 1) + ' una posición a la derecha (cada una pasa a la siguiente). La mesa ' + ini + ' quedará vacía y la ' + fin + ' recibirá lo de la ' + (fin - 1) + '. Incluye piezas, vistas previas y nombres. ¿Continuar?';
+        if (!window.confirm(msg)) { estado('No se recorrió nada.'); return; }
+
+        function nuevaPos(r, c) {      // posición nueva de una celda (o la misma si su mesa no se mueve)
+            var mr = Math.floor(r / MF), mc = Math.floor(c / MC);
+            if (mr >= MESAS_F) return r + ',' + c;
+            var num = numeroMesa(mr, mc);
+            if (num < ini || num >= fin) return r + ',' + c;
+            var n2 = num + 1, mr2 = Math.floor((n2 - 1) / MESAS_C), mc2 = (n2 - 1) % MESAS_C;
+            return (mr2 * MF + (r - mr * MF)) + ',' + (mc2 * MC + (c - mc * MC));
+        }
+        function mapear(M) {
+            var o = {};
+            Object.keys(M).forEach(function (k) { var q = k.split(','); o[nuevaPos(+q[0], +q[1])] = M[k]; });
+            return o;
+        }
+        S.celdas = mapear(S.celdas);
+        S.previas = mapear(S.previas);
+        var nuevasMesas = {};
+        Object.keys(S.mesas).forEach(function (k) {
+            var q = k.split(','), mr = +q[0], mc = +q[1], num = numeroMesa(mr, mc);
+            if (num >= ini && num < fin) {
+                var n2 = num + 1;
+                nuevasMesas[Math.floor((n2 - 1) / MESAS_C) + ',' + ((n2 - 1) % MESAS_C)] = S.mesas[k];
+            } else nuevasMesas[k] = S.mesas[k];
+        });
+        S.mesas = nuevasMesas;
+        S.multi = {};
+        estado('✔ Mesas ' + ini + ' a ' + (fin - 1) + ' recorridas a la derecha (ahora ' + (ini + 1) + ' a ' + fin + '). La mesa ' + ini + ' quedó vacía.');
+        cambioGuardable();
+        clearTimeout(S.hojaTimer);
+        S.hojaTimer = setTimeout(sincronizarHoja, 2500);   // copia los nombres nuevos a la hoja de Google
+    }
+
     // ── Desplazamiento automático al arrastrar cerca del borde de la zona visible ──
     function factorBorde(p, largo, borde) {
         if (p < borde) return -Math.min(1, (borde - p) / borde);
@@ -605,13 +686,16 @@
             $('mesaQuitar').disabled = !url;
             $('mesaSinFondo').disabled = !url || S.procesando;
         }
-        var total = Object.keys(S.celdas).length;
+        var total = Object.keys(S.celdas).filter(enRango).length;
         var cont = $('mesaContador');
         var faltan = listaFaltantes().length;
         if (cont) cont.textContent = total + ' / ' + (NC * NF) + (faltan ? ' · ' + faltan + ' sin 3D' : '');
         var bf = $('mesaFaltan');
         if (bf) { bf.textContent = '🔎 Siguiente pieza sin 3D (' + faltan + ')'; bf.disabled = !faltan; }
     }
+
+    // Piezas guardadas en filas que ya no existen (antiguas mesas 41–50): se conservan en los datos pero no se muestran ni se cuentan
+    function enRango(k) { return +k.split(',')[0] < NF; }
 
     function estado(txt, error) {
         var e = $('mesaEstado');
@@ -686,7 +770,7 @@
     function listaFaltantes() {
         var out = [];
         Object.keys(S.previas).forEach(function (k) {
-            if (S.celdas[k]) return;
+            if (S.celdas[k] || !enRango(k)) return;
             var p = k.split(',');
             out.push({ r: +p[0], c: +p[1] });
         });
