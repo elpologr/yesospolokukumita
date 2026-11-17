@@ -687,51 +687,56 @@
         }
         return false;
     }
+    // Busca dónde acomodar un producto: 1) mesa de su categoría, 2) mesa con su precio, 3) la última mesa.
+    // Devuelve { celda, elegida, motivo, coincide, nota } (celda = null si no hay lugar ni en la última mesa).
+    function buscarLugar(prod, precio) {
+        var total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0, motivo = '';
+        var cats = categoriasDe(prod, precio), ci, nota = '', llenas = [], sinMesa = [];
+        for (ci = 0; ci < cats.length && !celda; ci++) {
+            var hubo = false;
+            for (num = 1; num <= total && !celda; num++) {
+                if (!mesaSirveCategoria(cats[ci], num, precio)) continue;
+                hubo = true;
+                celda = primeraCeldaLibre(num);
+                if (celda) { elegida = num; motivo = cats[ci].n; }
+            }
+            if (!celda) (hubo ? llenas : sinMesa).push(cats[ci].n);
+        }
+        if (!celda && cats.length) {
+            console.warn('[mesa] categorías detectadas:', cats.map(function (c) { return c.n; }), '· textos de mesas leídos:', JSON.parse(JSON.stringify(S.mesas)));
+            if (!Object.keys(S.mesas).length) nota = ' ⚠ No pude leer los textos de las mesas (ninguna tiene texto guardado en esta cuenta).';
+            else {
+                if (sinMesa.length) nota += ' ℹ Se detectó «' + sinMesa.join('», «') + '» pero ninguna mesa lleva esa palabra en su texto.';
+                if (llenas.length) nota += ' ℹ Las mesas de «' + llenas.join('», «') + '» están llenas.';
+            }
+        }
+        for (num = 1; num <= total && !celda; num++) {
+            if (!isFinite(precio) || !precioCoincide(textoMesaNum(num), precio)) continue;
+            coincide = true;
+            celda = primeraCeldaLibre(num);
+            if (celda) elegida = num;
+        }
+        var porUltima = false;
+        if (!celda) { celda = primeraCeldaLibre(total); elegida = total; porUltima = true; }
+        return { celda: celda, elegida: elegida, motivo: motivo, coincide: coincide, nota: nota, porUltima: porUltima };
+    }
+
     window.mesaAgregarProductoNuevo = async function (prod) {
         try {
             var url = extraerUrl(prod && prod.imagenUrl);
             if (!url) return '';
             await asegurarDatos();
-            var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0, motivo = '';
-            // 1) Prioridad: la categoría del producto (por nombre o etiquetas)
-            var cats = categoriasDe(prod, precio), ci, nota = '', llenas = [], sinMesa = [];
-            for (ci = 0; ci < cats.length && !celda; ci++) {
-                var hubo = false;
-                for (num = 1; num <= total && !celda; num++) {
-                    if (!mesaSirveCategoria(cats[ci], num, precio)) continue;
-                    hubo = true;
-                    celda = primeraCeldaLibre(num);
-                    if (celda) { elegida = num; motivo = cats[ci].n; }
-                }
-                if (!celda) (hubo ? llenas : sinMesa).push(cats[ci].n);
-            }
-            if (!celda && cats.length) {
-                console.warn('[mesa] categorías detectadas:', cats.map(function (c) { return c.n; }), '· textos de mesas leídos:', JSON.parse(JSON.stringify(S.mesas)));
-                if (!Object.keys(S.mesas).length) nota = ' ⚠ No pude leer los textos de las mesas (ninguna tiene texto guardado en esta cuenta).';
-                else {
-                    if (sinMesa.length) nota += ' ℹ Se detectó «' + sinMesa.join('», «') + '» pero ninguna mesa lleva esa palabra en su texto.';
-                    if (llenas.length) nota += ' ℹ Las mesas de «' + llenas.join('», «') + '» están llenas.';
-                }
-            }
-            // 2) Si no hubo mesa de categoría con lugar: por precio original
-            for (num = 1; num <= total && !celda; num++) {
-                if (!isFinite(precio) || !precioCoincide(textoMesaNum(num), precio)) continue;
-                coincide = true;
-                celda = primeraCeldaLibre(num);
-                if (celda) elegida = num;
-            }
-            var texto;
-            if (!celda) {
-                // 3) Último recurso: la última mesa
-                celda = primeraCeldaLibre(total); elegida = total;
-                if (!celda) return ' · ⚠ No se puso en la Mesa: la mesa ' + total + ' (la última) está llena.';
-                texto = coincide
+            var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F;
+            var L = buscarLugar(prod, precio), texto;
+            if (!L.celda) return ' · ⚠ No se puso en la Mesa: la mesa ' + total + ' (la última) está llena.';
+            if (L.porUltima) {
+                texto = L.coincide
                     ? ' · 📍 Las mesas con el precio $' + precio + ' están llenas: quedó en la última mesa (' + total + ').'
                     : ' · 📍 Ninguna mesa lleva su categoría ni el precio $' + precio + ' en su texto: quedó en la última mesa (' + total + ').';
-                texto += nota;
-            } else if (motivo) texto = ' · 📍 Por ser de «' + motivo + '» quedó en la mesa ' + elegida + ' de la Mesa.';
-            else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa (por su precio).' + nota;
-            var k = clave(celda.r, celda.c);
+                texto += L.nota;
+            } else if (L.motivo) texto = ' · 📍 Por ser de «' + L.motivo + '» quedó en la mesa ' + L.elegida + ' de la Mesa.';
+            else texto = ' · 📍 También quedó en la mesa ' + L.elegida + ' de la Mesa (por su precio).' + L.nota;
+            var k = clave(L.celda.r, L.celda.c);
             S.celdas[k] = url;
             S.vinculos[k] = { n: String(prod.nombre || ''), i: url };
             guardar();
@@ -739,6 +744,62 @@
             return texto;
         } catch (e) {
             console.warn('[mesa] no se pudo poner el producto nuevo en la mesa', e);
+            return '';
+        }
+    };
+
+    // ¿Es 'num' una mesa donde este producto está bien puesto? Si tiene mesa de categoría, solo esas; si no, las que
+    // llevan su precio; si tampoco hay, la última mesa.
+    function mesaEsAdecuada(prod, precio, num) {
+        var total = MESAS_C * MESAS_F, cats = categoriasDe(prod, precio), n, hayCat = false, hayPrecio = false;
+        for (n = 1; n <= total; n++) {
+            if (cats.some(function (c) { return mesaSirveCategoria(c, n, precio); })) { hayCat = true; if (n === num) return true; }
+        }
+        if (hayCat) return false;
+        for (n = 1; n <= total; n++) {
+            if (isFinite(precio) && precioCoincide(textoMesaNum(n), precio)) { hayPrecio = true; if (n === num) return true; }
+        }
+        return hayPrecio ? false : num === total;
+    }
+
+    // Lo llama admin-producto.js al guardar los cambios de un producto: mantiene el vínculo (nombre / imagen nueva) y,
+    // si cambió el precio original, mueve la(s) celda(s) del producto a la mesa que corresponde al nuevo precio.
+    window.mesaProductoEditado = async function (d) {
+        try {
+            await asegurarDatos();
+            var antesImg = String(d.imagenAntes || ''), antesNom = String(d.nombreAntes || '');
+            var claves = Object.keys(S.vinculos).filter(function (k) {
+                var v = S.vinculos[k];
+                return tieneContenido({ r: +k.split(',')[0], c: +k.split(',')[1] }) && ((antesImg && v.i === antesImg) || (antesNom && v.n === antesNom));
+            });
+            if (!claves.length) return '';
+            var nuevoNom = String(d.nombre || antesNom), nuevaImg = String(d.imagenNueva || antesImg);
+            var precioAntes = Number(d.precioAntes), precioNuevo = Number(d.precioNuevo);
+            var cambioPrecio = isFinite(precioNuevo) && (!isFinite(precioAntes) || Math.abs(precioNuevo - precioAntes) > 0.004);
+            var avisos = [], total = MESAS_C * MESAS_F;
+            var prod = { nombre: nuevoNom, etiquetas: d.etiquetas || [], precioOriginal: precioNuevo };
+            claves.forEach(function (k) {
+                var q = k.split(','), r = +q[0], c = +q[1];
+                S.vinculos[k] = { n: nuevoNom, i: nuevaImg };         // el vínculo sigue al producto aunque cambie nombre o imagen
+                if (!cambioPrecio) return;
+                var numAct = numeroMesa(Math.floor(r / MF), Math.floor(c / MC));
+                if (mesaEsAdecuada(prod, precioNuevo, numAct)) { avisos.push('se queda en la mesa ' + numAct + ' (ya le corresponde)'); return; }
+                var L = buscarLugar(prod, precioNuevo);
+                if (!L.celda) { avisos.push('no se pudo mover: no hay lugar en la mesa que le toca'); return; }
+                var kd = clave(L.celda.r, L.celda.c);
+                [S.celdas, S.previas, S.vinculos].forEach(function (M) {
+                    var va = M[k]; delete M[k];
+                    if (va) M[kd] = va;
+                });
+                if (S.sel && S.sel.r === r && S.sel.c === c) S.sel = { r: L.celda.r, c: L.celda.c };
+                if (S.multi[k]) { delete S.multi[k]; S.multi[kd] = 1; }
+                avisos.push('pasó de la mesa ' + numAct + ' a la mesa ' + L.elegida + (L.porUltima ? ' (última mesa: ninguna lleva su nuevo precio)' : L.motivo ? ' (' + L.motivo + ')' : ' (por su nuevo precio $' + precioNuevo + ')'));
+            });
+            guardar();
+            if (S.abierta) { pintarPanel(); pedirDibujo(); }
+            return avisos.length ? ' · 📍 En la Mesa: ' + avisos.join('; ') + '.' : '';
+        } catch (e) {
+            console.warn('[mesa] no se pudo actualizar el producto editado en la mesa', e);
             return '';
         }
     };

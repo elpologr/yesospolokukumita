@@ -1057,7 +1057,7 @@ function abrirSubmenuEditarProducto() {
     }
 
     var med = _separarMedidasProducto(_atributoCard(card, 'data-alto'));
-    _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, eventosExtra: eventosExtra, medidasTexto: med.texto };
+    _edicionProducto = { fila: datos.fila, nombre: datos.nombre, etiquetasExtra: extra, eventosExtra: eventosExtra, medidasTexto: med.texto, precioOriginal: parseFloat(_atributoCard(card, 'data-precio-exacto') || _atributoCard(card, 'data-precio')), imagenPrincipal: (imgs && imgs[0]) || '' };
     _imagenesExistentes = imgs;
     _idxExistenteSel = 0;
 
@@ -1189,7 +1189,19 @@ async function _guardarEdicionProducto(user, v) {
         if (resultado.ok) {
             _filasEditadas[edicion.fila] = true;
             _limpiarCacheCatalogo();
-            mostrarToast('✅ «' + (resultado.nombre || v.nombre) + '» actualizado en la fila ' + edicion.fila + '. Recarga la página en unos segundos para ver los cambios.', 6000);
+            // Mesa: mantiene el vínculo del producto y, si cambió el precio original, mueve su celda a la mesa que le toca
+            var avisoMesa = '';
+            try {
+                if (typeof window.mesaProductoEditado === 'function') {
+                    avisoMesa = await window.mesaProductoEditado({
+                        nombreAntes: edicion.nombre, imagenAntes: edicion.imagenPrincipal || '',
+                        nombre: resultado.nombre || v.nombre, imagenNueva: imagenes[0] || '',
+                        precioAntes: edicion.precioOriginal, precioNuevo: Number(v.precioOriginal),
+                        etiquetas: (v.etiquetas || []).concat(obtenerEtiquetasForma())
+                    }) || '';
+                }
+            } catch (eMesa) { console.warn('[mesa] producto editado', eMesa); }
+            mostrarToast('✅ «' + (resultado.nombre || v.nombre) + '» actualizado en la fila ' + edicion.fila + '. Recarga la página en unos segundos para ver los cambios.' + avisoMesa, 8000);
             limpiarFormularioProducto();
             _salirModoEdicion();
             cerrarSubmenuAgregarProducto();
