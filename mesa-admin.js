@@ -53,7 +53,7 @@
     var RE_VARIAS = /(?:https:\/\/i\.ibb\.co\/|imagenes\/)[^\s,"'<>\[\]()]+/gi;
 
     var S = {
-        celdas: {}, previas: {}, mesas: {}, ts: 0, sel: null, mover: null, multi: {}, modoMulti: false, autoRaf: 0,
+        celdas: {}, previas: {}, mesas: {}, vinculos: {}, ts: 0, sel: null, mover: null, multi: {}, modoMulti: false, autoRaf: 0,
         scale: 0.05, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, minEscala: 0.03, fitEscala: 0.05,
         raf: 0, abierta: false, ajustada: false, vista3d: true,
         thumb: {}, full: {}, fullOrden: [], fallo: {}, vuelo: {}, pend: [], enVuelo: 0,
@@ -188,6 +188,16 @@
                         '</div>' +
                         '<button class="mesa-btn peligro" type="button" id="mesaPreviaQuitar">Quitar vista previa</button>' +
                     '</div>' +
+                    '<div class="mesa-vinculo">' +
+                        '<div class="mesa-vinculo-titulo">🔗 Producto asociado</div>' +
+                        '<div class="mesa-vinculo-actual" id="mesaVinculoActual"></div>' +
+                        '<input id="mesaVinculoBuscar" class="mesa-input" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar producto por nombre…">' +
+                        '<div class="mesa-vinculo-lista" id="mesaVinculoLista"></div>' +
+                        '<div class="mesa-fila">' +
+                            '<button class="mesa-btn" type="button" id="mesaVinculoImagen">Usar su imagen</button>' +
+                            '<button class="mesa-btn peligro" type="button" id="mesaVinculoQuitar">Quitar</button>' +
+                        '</div>' +
+                    '</div>' +
                     '<button class="mesa-btn principal" type="button" id="mesaCubo">🧊 Pieza en 6 vistas (3D, sin imgbb)</button>' +
                     '<button class="mesa-btn" type="button" id="mesaSinFondo">✂️ Quitar fondo y subir a la otra cuenta</button>' +
                     '<input type="file" id="mesaArchivos" accept="image/*" multiple style="display:none">' +
@@ -233,6 +243,10 @@
         $('mesaFaltan').addEventListener('click', irAFaltante);
         $('mesaMulti').addEventListener('click', alternarModoMulti);
         $('mesaMultiLimpiar').addEventListener('click', function () { limpiarMulti(); estado('Selección quitada.'); });
+        $('mesaVinculoBuscar').addEventListener('input', pintarListaVinculo);
+        $('mesaVinculoBuscar').addEventListener('focus', pintarListaVinculo);
+        $('mesaVinculoQuitar').addEventListener('click', quitarVinculo);
+        $('mesaVinculoImagen').addEventListener('click', usarImagenDelProducto);
         $('mesaSelMesa').addEventListener('click', seleccionarTodasDeMesa);
         $('mesaRecorrer').addEventListener('click', recorrerMesaADerecha);
         $('mesaCubo').addEventListener('click', function () {
@@ -453,7 +467,7 @@
     function tieneContenido(ce) { var k = clave(ce.r, ce.c); return !!(S.celdas[k] || S.previas[k]); }
     function moverCelda(a, b) {
         var ka = clave(a.r, a.c), kb = clave(b.r, b.c), habia = tieneContenido(b);
-        [S.celdas, S.previas].forEach(function (M) {
+        [S.celdas, S.previas, S.vinculos].forEach(function (M) {
             var va = M[ka], vb = M[kb];
             delete M[ka]; delete M[kb];
             if (va) M[kb] = va;
@@ -487,7 +501,7 @@
             pedirDibujo();
             return;
         }
-        [S.celdas, S.previas].forEach(function (M) {
+        [S.celdas, S.previas, S.vinculos].forEach(function (M) {
             var vals = plan.destinos.map(function (d) { return M[clave(d.g.r, d.g.c)]; });
             plan.destinos.forEach(function (d) { delete M[clave(d.g.r, d.g.c)]; });
             plan.destinos.forEach(function (d, i) { if (vals[i]) M[clave(d.r, d.c)] = vals[i]; });
@@ -512,6 +526,140 @@
         pintarBotonMulti(); pintarPanel(); pedirDibujo();
         estado(S.modoMulti ? 'Selección múltiple activada: toca las piezas para marcarlas o desmarcarlas.' : 'Selección múltiple desactivada (las piezas marcadas siguen marcadas).');
     }
+
+    // ── Producto asociado a una celda ──
+    // Cada celda puede asociarse a un producto del catálogo (lista que ya carga app.js en «listaProductos»).
+    // Se guarda {n: nombre, i: primera imagen del producto}; para encontrarlo después se compara primero la
+    // imagen y, si cambió, el nombre. El vínculo viaja con la celda al moverla, intercambiarla o recorrer mesas.
+    function catalogo() { return (typeof listaProductos !== 'undefined' && listaProductos && listaProductos.length) ? listaProductos : []; }
+    function productoDeVinculo(v) {
+        if (!v) return null;
+        var L = catalogo(), i;
+        if (v.i) for (i = 0; i < L.length; i++) { if (L[i].imagen === v.i) return L[i]; }
+        if (v.n) for (i = 0; i < L.length; i++) { if (L[i].nombre === v.n) return L[i]; }
+        return null;
+    }
+    function normBusqueda(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+    function pintarVinculo() {
+        var act = $('mesaVinculoActual'); if (!act || !S.sel) return;
+        var k = clave(S.sel.r, S.sel.c), v = S.vinculos[k], p = productoDeVinculo(v);
+        act.textContent = !v ? 'Ninguno todavía.' : p ? '✔ ' + p.nombre + (p.precioNormal ? ' · $' + p.precioNormal : '') : '⚠ ' + v.n + ' (ya no aparece en el catálogo)';
+        $('mesaVinculoQuitar').disabled = !v;
+        $('mesaVinculoImagen').disabled = !p || !p.imagen;
+        if (S.vinKey !== k) {            // cambió la celda elegida: se limpia la búsqueda
+            S.vinKey = k;
+            var b = $('mesaVinculoBuscar'); if (b) b.value = '';
+            pintarListaVinculo();
+        }
+    }
+    function pintarListaVinculo() {
+        var cont = $('mesaVinculoLista'); if (!cont) return;
+        var q = normBusqueda($('mesaVinculoBuscar').value.trim());
+        cont.innerHTML = '';
+        if (!q) { cont.style.display = 'none'; return; }     // la lista solo aparece al escribir
+        var L = catalogo();
+        if (!L.length) { cont.style.display = 'block'; cont.textContent = 'El catálogo todavía no ha cargado (o está vacío).'; return; }
+        var hallados = L.filter(function (p) { return normBusqueda(p.nombre).indexOf(q) !== -1; });
+        cont.style.display = 'block';
+        if (!hallados.length) { cont.textContent = 'Sin resultados.'; return; }
+        hallados.slice(0, 30).forEach(function (p) {
+            var b = document.createElement('button');
+            b.type = 'button'; b.className = 'mesa-vinculo-item';
+            if (p.imagen) { var im = document.createElement('img'); im.loading = 'lazy'; im.alt = ''; im.src = p.imagen; b.appendChild(im); }
+            var sp = document.createElement('span'); sp.textContent = p.nombre;
+            var sm = document.createElement('small'); sm.textContent = p.precioNormal ? '$' + p.precioNormal : '';
+            sp.appendChild(sm); b.appendChild(sp);
+            b.addEventListener('click', function () { asociarProducto(p); });
+            cont.appendChild(b);
+        });
+        if (hallados.length > 30) { var mas = document.createElement('div'); mas.className = 'mesa-vinculo-mas'; mas.textContent = '…y ' + (hallados.length - 30) + ' más. Escribe más letras para acotar.'; cont.appendChild(mas); }
+    }
+    function asociarProducto(p) {
+        if (!S.sel) return;
+        S.vinculos[clave(S.sel.r, S.sel.c)] = { n: p.nombre, i: p.imagen || '' };
+        $('mesaVinculoBuscar').value = '';
+        estado('✔ Celda asociada al producto «' + p.nombre + '».');
+        cambioGuardable();
+        pintarListaVinculo();
+    }
+    function quitarVinculo() {
+        if (!S.sel) return;
+        delete S.vinculos[clave(S.sel.r, S.sel.c)];
+        estado('Asociación quitada.');
+        cambioGuardable();
+    }
+    function usarImagenDelProducto() {
+        if (!S.sel) return;
+        var k = clave(S.sel.r, S.sel.c), p = productoDeVinculo(S.vinculos[k]);
+        var url = p ? extraerUrl(p.imagen) : '';
+        if (!url) { estado('La imagen de ese producto no es un link de imgbb, no se puede poner en la celda.', true); return; }
+        S.celdas[k] = url;
+        estado('✔ La celda ahora usa la imagen del producto.');
+        cambioGuardable();
+    }
+
+    // ── Producto nuevo → celda automática en la Mesa ──
+    // Lo llama admin-producto.js justo después de guardar un producto nuevo. Pone la imagen principal (imgbb) en la
+    // primera celda libre de la primera mesa cuyo texto contenga su precio original; si ninguna lo tiene, en la última mesa.
+    // Se entiende el texto de cada mesa así: un precio («$150») = ese precio exacto; dos con guion o «a» («$100 - $200»)
+    // = rango; «hasta $100» = ese precio o menos; «desde $200» / «más de $200» = ese precio o más; varios sueltos = lista.
+    function precioCoincide(texto, precio) {
+        var t = String(texto || '').toLowerCase().replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+        var nums = [], m, re;
+        if (t.indexOf('$') !== -1) { re = /\$\s*(\d+(?:\.\d+)?)/g; while ((m = re.exec(t))) nums.push(parseFloat(m[1])); }
+        else { re = /\d+(?:\.\d+)?/g; while ((m = re.exec(t))) nums.push(parseFloat(m[0])); }
+        if (!nums.length) return false;
+        if (/(hasta|menos de|menor|m[aá]ximo|<)/.test(t)) return precio <= nums[0] + 0.005;
+        if (/(desde|a partir|m[aá]s de|mayor|m[ií]nimo|en adelante|\+|>)/.test(t)) return precio >= nums[0] - 0.005;
+        if (nums.length === 2 && /\d\s*(?:-|–|—|a|al|hasta|y|to)\s*\$?\s*\d/.test(t)) {
+            return precio >= Math.min(nums[0], nums[1]) - 0.005 && precio <= Math.max(nums[0], nums[1]) + 0.005;
+        }
+        return nums.some(function (n) { return Math.abs(n - precio) < 0.005; });
+    }
+    function primeraCeldaLibre(num) {
+        var mr = Math.floor((num - 1) / MESAS_C), mc = (num - 1) % MESAS_C, r, c;
+        for (r = mr * MF; r < (mr + 1) * MF; r++) {
+            for (c = mc * MC; c < (mc + 1) * MC; c++) { if (!tieneContenido({ r: r, c: c })) return { r: r, c: c }; }
+        }
+        return null;
+    }
+    function asegurarDatos() {
+        cargarLocal();
+        var p = cargarNube();   // si Firestore tiene algo más reciente, lo trae
+        return Promise.race([p, new Promise(function (ok) { setTimeout(ok, 4000); })]);
+    }
+    window.mesaAgregarProductoNuevo = async function (prod) {
+        try {
+            var url = extraerUrl(prod && prod.imagenUrl);
+            if (!url) return '';
+            await asegurarDatos();
+            var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0;
+            for (num = 1; num <= total && !celda; num++) {
+                var mr = Math.floor((num - 1) / MESAS_C), mc = (num - 1) % MESAS_C;
+                if (!isFinite(precio) || !precioCoincide(S.mesas[mr + ',' + mc], precio)) continue;
+                coincide = true;
+                celda = primeraCeldaLibre(num);
+                if (celda) elegida = num;
+            }
+            var texto;
+            if (!celda) {
+                celda = primeraCeldaLibre(total); elegida = total;
+                if (!celda) return ' · ⚠ No se puso en la Mesa: la mesa ' + total + ' (la última) está llena.';
+                texto = coincide
+                    ? ' · 📍 Las mesas con el precio $' + precio + ' están llenas: quedó en la última mesa (' + total + ').'
+                    : ' · 📍 Ninguna mesa tiene el precio $' + precio + ' en su texto: quedó en la última mesa (' + total + ').';
+            } else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa.';
+            var k = clave(celda.r, celda.c);
+            S.celdas[k] = url;
+            S.vinculos[k] = { n: String(prod.nombre || ''), i: url };
+            guardar();
+            if (S.abierta) { pintarPanel(); pedirDibujo(); }
+            return texto;
+        } catch (e) {
+            console.warn('[mesa] no se pudo poner el producto nuevo en la mesa', e);
+            return '';
+        }
+    };
 
     // ── Seleccionar todas las piezas de la mesa chica elegida ──
     // Marca todas las piezas (3D o vista previa) de la mesa donde está la celda elegida; después,
@@ -574,6 +722,7 @@
         }
         S.celdas = mapear(S.celdas);
         S.previas = mapear(S.previas);
+        S.vinculos = mapear(S.vinculos);
         var nuevasMesas = {};
         Object.keys(S.mesas).forEach(function (k) {
             var q = k.split(','), mr = +q[0], mc = +q[1], num = numeroMesa(mr, mc);
@@ -685,6 +834,7 @@
             $('mesaUrl').value = url;
             $('mesaQuitar').disabled = !url;
             $('mesaSinFondo').disabled = !url || S.procesando;
+            pintarVinculo();
         }
         var total = Object.keys(S.celdas).filter(enRango).length;
         var cont = $('mesaContador');
@@ -763,6 +913,7 @@
     function quitarPrevia() {
         if (!S.sel) return;
         delete S.previas[clave(S.sel.r, S.sel.c)];
+        if (!S.celdas[clave(S.sel.r, S.sel.c)]) delete S.vinculos[clave(S.sel.r, S.sel.c)];
         estado('Vista previa quitada.');
         cambioGuardable();
     }
@@ -796,6 +947,7 @@
     function quitarSeleccionada() {
         if (!S.sel) return;
         delete S.celdas[clave(S.sel.r, S.sel.c)];
+        if (!S.previas[clave(S.sel.r, S.sel.c)]) delete S.vinculos[clave(S.sel.r, S.sel.c)];
         estado('Imagen quitada.');
         cambioGuardable();
     }
@@ -961,7 +1113,7 @@
         var total = Object.keys(S.celdas).length + Object.keys(S.previas).length;
         if (!total) { estado('La mesa ya está vacía.'); return; }
         if (!window.confirm('¿Quitar las ' + total + ' imágenes de la mesa (3D y vistas previas)? Esto no se puede deshacer.')) return;
-        S.celdas = {}; S.previas = {}; S.multi = {};
+        S.celdas = {}; S.previas = {}; S.vinculos = {}; S.multi = {};
         estado('Mesa vaciada.');
         cambioGuardable();
     }
@@ -983,15 +1135,15 @@
             var o = JSON.parse(localStorage.getItem(claveLocal()) || 'null');
             if (o && (o.celdas || o.previas || o.mesas)) {
                 var n = normalizarDatos(o.celdas, o.previas, o.mesas, o.disp);
-                S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.ts = o.ts || 0;
-                if ((o.disp || 1) < DISPOSICION) localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));   // ya queda guardado con la disposición nueva
+                S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.vinculos = (o.vinculos && typeof o.vinculos === 'object') ? o.vinculos : {}; S.ts = o.ts || 0;
+                if ((o.disp || 1) < DISPOSICION) localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas, vinculos: S.vinculos }));   // ya queda guardado con la disposición nueva
             }
         } catch (e) { /* sin datos guardados: se empieza vacía */ }
     }
 
     function guardar() {
         S.ts = Date.now();
-        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
+        try { localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas, vinculos: S.vinculos })); } catch (e) { console.warn('[mesa] no se pudo guardar localmente', e); }
         clearTimeout(S.nubeTimer);
         S.nubeTimer = setTimeout(guardarNube, 1500);
     }
@@ -1007,22 +1159,22 @@
     function guardarNube() {
         var ref = refNube();
         if (!ref) return;
-        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas), mesas: JSON.stringify(S.mesas), disp: DISPOSICION })
+        ref.set({ ts: S.ts, total: Object.keys(S.celdas).length, datos: JSON.stringify(S.celdas), previas: JSON.stringify(S.previas), mesas: JSON.stringify(S.mesas), vinculos: JSON.stringify(S.vinculos), disp: DISPOSICION })
             .then(function () { S.nubeOk = true; })
             .catch(function (e) { S.nubeOk = false; console.warn('[mesa] no se pudo sincronizar con Firestore:', e); });
     }
 
     function cargarNube() {
         var ref = refNube();
-        if (!ref) return;
-        ref.get().then(function (doc) {
+        if (!ref) return Promise.resolve();
+        return ref.get().then(function (doc) {
             if (!doc.exists) { if (Object.keys(S.celdas).length || Object.keys(S.previas).length || Object.keys(S.mesas).length) guardarNube(); return; }
             var d = doc.data() || {};
             if ((d.ts || 0) > S.ts && d.datos) {
                 try {
                     var n = normalizarDatos(JSON.parse(d.datos), d.previas ? JSON.parse(d.previas) : {}, d.mesas ? JSON.parse(d.mesas) : {}, d.disp);
-                    S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.ts = d.ts;
-                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas }));
+                    S.celdas = n.celdas; S.previas = n.previas; S.mesas = n.mesas; S.vinculos = d.vinculos ? JSON.parse(d.vinculos) : {}; S.ts = d.ts;
+                    localStorage.setItem(claveLocal(), JSON.stringify({ ts: S.ts, disp: DISPOSICION, celdas: S.celdas, previas: S.previas, mesas: S.mesas, vinculos: S.vinculos }));
                     pintarPanel(); pedirDibujo();
                 } catch (e) { console.warn('[mesa] datos de la nube dañados', e); }
             } else if (S.ts > (d.ts || 0)) {
@@ -1298,7 +1450,6 @@
                 if (src) {
                     if (S.vista3d) enPie.push({ src: src, r: r, c: c, previa: esPrevia, prisma: esDeImgbb(url) });
                     else {
-                        if (esPrevia) ctx.globalAlpha = 0.6;
                         dibujarSprite(ctx, src, src.naturalWidth || src.width, src.naturalHeight || src.height, r, c);
                         ctx.globalAlpha = 1;
                     }
@@ -1312,7 +1463,7 @@
         if (enPie.length) {
             enPie.sort(function (a, b) { return (a.r + a.c) - (b.r + b.c) || a.r - b.r; });
             enPie.forEach(function (f) {
-                if (f.previa) ctx.globalAlpha = 0.6;   // la vista previa se ve semitransparente: aún falta su 3D
+                // (la vista previa ya no se dibuja semitransparente: se distingue por su contorno ámbar en el piso)
                 (f.prisma ? dibujarPrisma : dibujarFigura)(ctx, f.src, f.src.naturalWidth || f.src.width, f.src.naturalHeight || f.src.height, f.r, f.c);
                 ctx.globalAlpha = 1;
             });

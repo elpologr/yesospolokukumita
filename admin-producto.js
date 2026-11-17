@@ -808,7 +808,14 @@ async function guardarProductoAdmin() {
         });
 
         if (resultado.ok) {
-            mostrarToast('✅ Producto agregado en la fila ' + resultado.fila + ' de la hoja de Polo. Recarga la página en unos segundos para verlo.', 6000);
+            // Mesa: la imagen principal (imgbb) del producto nuevo se pone sola en la mesa que corresponde a su precio original
+            var avisoMesa = '';
+            try {
+                if (typeof window.mesaAgregarProductoNuevo === 'function') {
+                    avisoMesa = await window.mesaAgregarProductoNuevo({ nombre: nombre, precioOriginal: Number(precioOriginal), imagenUrl: resultado.url || urlImagen || '' }) || '';
+                }
+            } catch (eMesa) { console.warn('[mesa] producto nuevo', eMesa); }
+            mostrarToast('✅ Producto agregado en la fila ' + resultado.fila + ' de la hoja de Polo. Recarga la página en unos segundos para verlo.' + avisoMesa, 8000);
             limpiarFormularioProducto();
             cerrarSubmenuAgregarProducto();
         } else {
