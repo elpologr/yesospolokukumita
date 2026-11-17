@@ -1663,3 +1663,66 @@ document.addEventListener('editorImagenCambio', function () {
     _renderExtrasProducto();
     validarFormularioProducto();
 });
+
+
+// ══════════════════════════════════════════════════════════════
+// ⚙️ Editar desde la lista de productos (solo administradores)
+// Pone un botón ⚙️ en la esquina superior derecha de cada tarjeta del catálogo de Polo (#gridProductos),
+// para abrir "Configurar producto" sin entrar al producto. Los botones se agregan solo cuando hay un
+// administrador con sesión iniciada y se quitan si cierra sesión; no existen para los demás usuarios.
+// Las tarjetas se vuelven a dibujar cuando cambian los filtros, así que se vigila el grid.
+// ══════════════════════════════════════════════════════════════
+function editarProductoDesdeTarjeta(card) {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    if (!esCorreoAdmin(user)) return; // por si acaso; el servidor vuelve a verificar
+    window._cardModalActual = card;   // abrirSubmenuEditarProducto lee de aquí la tarjeta (igual que cuando se abre desde el modal)
+    abrirSubmenuEditarProducto();
+}
+
+function actualizarBotonesEditarTarjetas() {
+    var user = (typeof auth !== 'undefined') ? auth.currentUser : null;
+    var admin = (typeof esCorreoAdmin === 'function') && esCorreoAdmin(user);
+    document.querySelectorAll('#gridProductos .card-dinamica').forEach(function (card) {
+        var actual = card.querySelector('.btn-editar-card-admin');
+        // Solo los productos de la hoja de Polo se pueden editar (mismo criterio que el botón del modal)
+        var editable = admin && !card.getAttribute('data-origen-externo') && !!card.getAttribute('data-sheet-row');
+        if (!editable) { if (actual) actual.remove(); return; }
+        if (actual) return;
+        var cont = card.querySelector('.img-contenedor-dinamico');
+        if (!cont) return;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-editar-card-admin';
+        b.setAttribute('aria-label', 'Editar producto');
+        b.title = 'Configurar producto';
+        b.textContent = '⚙️';
+        b.style.cssText = 'position:absolute; top:6px; right:6px; z-index:10; width:38px; height:38px; padding:0; border:none; border-radius:50%; ' +
+            'background:rgba(255,255,255,0.92); box-shadow:0 2px 8px rgba(0,0,0,0.18); cursor:pointer; font-size:18px; line-height:1; ' +
+            'display:flex; align-items:center; justify-content:center;';
+        b.addEventListener('click', function (e) {
+            e.stopPropagation(); // que no se abra el modal del producto
+            editarProductoDesdeTarjeta(card);
+        });
+        cont.appendChild(b);
+    });
+}
+
+(function engancharBotonesEditarTarjetas() {
+    if (typeof auth === 'undefined' || !auth.onAuthStateChanged || typeof esCorreoAdmin !== 'function') {
+        setTimeout(engancharBotonesEditarTarjetas, 300);
+        return;
+    }
+    var pendiente = 0;
+    function programar() {
+        if (pendiente) return;
+        pendiente = requestAnimationFrame(function () { pendiente = 0; actualizarBotonesEditarTarjetas(); });
+    }
+    function vigilarGrid() {
+        var grid = document.getElementById('gridProductos');
+        if (!grid) { setTimeout(vigilarGrid, 300); return; }
+        new MutationObserver(programar).observe(grid, { childList: true });
+        programar();
+    }
+    auth.onAuthStateChanged(programar);
+    vigilarGrid();
+})();
