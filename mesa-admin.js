@@ -628,27 +628,97 @@
         var p = cargarNube();   // si Firestore tiene algo más reciente, lo trae
         return Promise.race([p, new Promise(function (ok) { setTimeout(ok, 4000); })]);
     }
+    // Categorías con prioridad: si el NOMBRE del producto (o, si el nombre no dice nada, sus etiquetas principales y
+    // de forma) corresponde a una de estas, se acomoda en la mesa cuyo texto menciona esa categoría, en vez de
+    // guiarse por el precio. El orden de la lista es el orden de prioridad cuando coinciden varias.
+    // "alta" (solo Figuras): si el texto de la mesa trae un precio ($500, desde $500…) se usa esa regla; si no lo
+    // trae, la figura cuenta como de precio alto cuando cuesta UMBRAL_FIGURA_ALTA o más.
+    var UMBRAL_FIGURA_ALTA = 500;
+    var CATEGORIAS = [
+        { n: 'Porta Inciensos', prod: /porta\s*-?\s*(?:incens|inciens)|incensari/, mesa: /porta\s*-?\s*(?:incens|inciens)|incensari/ },
+        { n: 'Porta Velas',     prod: /porta\s*-?\s*vel/, mesa: /porta\s*-?\s*vel/ },
+        { n: 'Alhajeros',       prod: /alh?ajer/, mesa: /alh?ajer/ },
+        { n: 'Alcancías',       prod: /alcanci/, mesa: /alcanci/ },
+        { n: 'Macetas',         prod: /macet/, mesa: /macet/ },
+        { n: 'Bases',           prod: /\bbases?\b/, mesa: /\bbases?\b/ },
+        { n: 'Paquetes',        prod: /paquete/, mesa: /paquete/ },
+        { n: 'Arreglos',        prod: /arreglo/, mesa: /arreglo/ },
+        { n: 'Figuras de precios altos', prod: /\bfigur/, mesa: /\bfigur/, alta: true },
+        { n: 'Flores',          prod: /\bflor(?:es)?\b/, mesa: /\bflor(?:es)?\b/ },
+        { n: 'Velas',           prod: /\bvelas?\b|\bveladora/, mesa: /\bvelas?\b|\bveladora/, sinPortaVela: true },
+        { n: 'Pintura',         prod: /pintur/, mesa: /pintur/ },
+        { n: 'Religiosos',      prod: /religios/, mesa: /religios/ }
+    ];
+    function limpioCat(t, cat) {
+        t = normBusqueda(t);
+        return cat.sinPortaVela ? t.replace(/porta\s*-?\s*velas?/g, ' ') : t;
+    }
+    function textoMesaNum(num) { return S.mesas[Math.floor((num - 1) / MESAS_C) + ',' + ((num - 1) % MESAS_C)] || ''; }
+    // ¿La mesa 'num' sirve para esa categoría (y, en las figuras, para ese precio)?
+    function mesaSirveCategoria(cat, num, precio) {
+        var t = textoMesaNum(num);
+        if (!t || !cat.mesa.test(limpioCat(t, cat))) return false;
+        if (cat.alta) {
+            var tn = normBusqueda(t);
+            if (/\d/.test(tn)) return precioCoincide(t, precio);
+            if (!/\balt[oa]s?\b/.test(tn)) return false;       // sin precio en el texto, solo la mesa de figuras «altas»
+            return precio >= UMBRAL_FIGURA_ALTA;
+        }
+        return true;
+    }
+    // Categorías que le tocan al producto: primero por el nombre; si el nombre no dice nada, por sus etiquetas
+    function categoriasDe(prod, precio) {
+        function buscar(texto) {
+            return CATEGORIAS.filter(function (cat) {
+                if (!cat.prod.test(limpioCat(texto, cat))) return false;
+                if (cat.alta && !(precio >= UMBRAL_FIGURA_ALTA) && !textoMesasConPrecioFigura(precio)) return false;
+                return true;
+            });
+        }
+        var porNombre = buscar(prod.nombre || '');
+        if (porNombre.length) return porNombre;
+        return buscar((prod.etiquetas || []).join(' '));
+    }
+    // ¿Hay alguna mesa de figuras cuyo texto lleve un precio que incluya este? (para figuras con regla propia en la mesa)
+    function textoMesasConPrecioFigura(precio) {
+        for (var n = 1; n <= MESAS_C * MESAS_F; n++) {
+            var t = textoMesaNum(n), tn = normBusqueda(t);
+            if (/\bfigur/.test(tn) && /\d/.test(tn) && precioCoincide(t, precio)) return true;
+        }
+        return false;
+    }
     window.mesaAgregarProductoNuevo = async function (prod) {
         try {
             var url = extraerUrl(prod && prod.imagenUrl);
             if (!url) return '';
             await asegurarDatos();
-            var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0;
+            var precio = Number(prod.precioOriginal), total = MESAS_C * MESAS_F, num, celda = null, coincide = false, elegida = 0, motivo = '';
+            // 1) Prioridad: la categoría del producto (por nombre o etiquetas)
+            var cats = categoriasDe(prod, precio), ci;
+            for (ci = 0; ci < cats.length && !celda; ci++) {
+                for (num = 1; num <= total && !celda; num++) {
+                    if (!mesaSirveCategoria(cats[ci], num, precio)) continue;
+                    celda = primeraCeldaLibre(num);
+                    if (celda) { elegida = num; motivo = cats[ci].n; }
+                }
+            }
+            // 2) Si no hubo mesa de categoría con lugar: por precio original
             for (num = 1; num <= total && !celda; num++) {
-                var mr = Math.floor((num - 1) / MESAS_C), mc = (num - 1) % MESAS_C;
-                if (!isFinite(precio) || !precioCoincide(S.mesas[mr + ',' + mc], precio)) continue;
+                if (!isFinite(precio) || !precioCoincide(textoMesaNum(num), precio)) continue;
                 coincide = true;
                 celda = primeraCeldaLibre(num);
                 if (celda) elegida = num;
             }
             var texto;
             if (!celda) {
+                // 3) Último recurso: la última mesa
                 celda = primeraCeldaLibre(total); elegida = total;
                 if (!celda) return ' · ⚠ No se puso en la Mesa: la mesa ' + total + ' (la última) está llena.';
                 texto = coincide
                     ? ' · 📍 Las mesas con el precio $' + precio + ' están llenas: quedó en la última mesa (' + total + ').'
-                    : ' · 📍 Ninguna mesa tiene el precio $' + precio + ' en su texto: quedó en la última mesa (' + total + ').';
-            } else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa.';
+                    : ' · 📍 Ninguna mesa lleva su categoría ni el precio $' + precio + ' en su texto: quedó en la última mesa (' + total + ').';
+            } else if (motivo) texto = ' · 📍 Por ser de «' + motivo + '» quedó en la mesa ' + elegida + ' de la Mesa.';
+            else texto = ' · 📍 También quedó en la mesa ' + elegida + ' de la Mesa (por su precio).';
             var k = clave(celda.r, celda.c);
             S.celdas[k] = url;
             S.vinculos[k] = { n: String(prod.nombre || ''), i: url };

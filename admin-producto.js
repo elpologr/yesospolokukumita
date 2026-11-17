@@ -812,7 +812,7 @@ async function guardarProductoAdmin() {
             var avisoMesa = '';
             try {
                 if (typeof window.mesaAgregarProductoNuevo === 'function') {
-                    avisoMesa = await window.mesaAgregarProductoNuevo({ nombre: nombre, precioOriginal: Number(precioOriginal), imagenUrl: resultado.url || urlImagen || '' }) || '';
+                    avisoMesa = await window.mesaAgregarProductoNuevo({ nombre: nombre, precioOriginal: Number(precioOriginal), etiquetas: etiquetas.concat(obtenerEtiquetasForma()), imagenUrl: resultado.url || urlImagen || '' }) || '';
                 }
             } catch (eMesa) { console.warn('[mesa] producto nuevo', eMesa); }
             mostrarToast('✅ Producto agregado en la fila ' + resultado.fila + ' de la hoja de Polo. Recarga la página en unos segundos para verlo.' + avisoMesa, 8000);
