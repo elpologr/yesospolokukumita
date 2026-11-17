@@ -1065,24 +1065,32 @@
         return lineas;
     }
 
-    // La descripción de cada mesa se escribe "pintada en el piso", en el hueco oscuro que queda arriba de la mesa
+    // La descripción de cada mesa se escribe "pintada en el piso", en el hueco de arriba, pegada a su mesa, dentro de un
+    // recuadro amarillo delgado que sale del borde de la mesa (comparte con ella el lado de abajo y el mismo ancho)
     function dibujarDescripciones(ctx, k) {
         if (TW * k < 5) return;   // muy alejado: sería ilegible
+        var tam = 125, lh = 145, pad = 50;   // letra de 1.25 celdas de alto; renglón de 1.45; margen del recuadro (en 1/100 de celda)
         ctx.save();
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#ffffff';
         for (var mr = 0; mr < MESAS_F; mr++) {
             for (var mc = 0; mc < MESAS_C; mc++) {
                 var texto = S.mesas[mr + ',' + mc];
                 if (!texto) continue;
-                var o = proj(mc * (MC + G), mr * (MF + GF));
+                var xa = mc * (MC + G), ya = mr * (MF + GF);
+                var o = proj(xa, ya), alto;
                 ctx.save();
                 ctx.transform(TW / 2, TH / 2, -TW / 2, TH / 2, o[0], o[1]);   // el plano del piso: 1 unidad = 1 celda
                 ctx.scale(0.01, 0.01);                                       // ahora 1 unidad = 1/100 de celda
-                var tam = 140, lh = 170;                                     // letra de 1.4 celdas de alto, hasta 3 renglones dentro del hueco de arriba
                 ctx.font = '600 ' + tam + 'px Segoe UI, system-ui, sans-serif';
                 var lineas = partirTexto(ctx, texto, MC * 100 - 60, 3);
-                lineas.forEach(function (ln, i) { ctx.fillText(ln, MC * 50, -(GF * 100) / 2 - (lineas.length - 1) * lh / 2 + i * lh + tam * 0.35); });
+                alto = lineas.length * lh + pad;                              // alto del recuadro, en 1/100 de celda
+                lineas.forEach(function (ln, i) { ctx.fillText(ln, MC * 50, -alto / 2 - (lineas.length - 1) * lh / 2 + i * lh + tam * 0.35); });
                 ctx.restore();
+                // Recuadro: tres lados (izquierdo, de arriba y derecho); el cuarto es el borde de la mesa
+                var h = alto / 100;
+                var D = proj(xa, ya), A = proj(xa, ya - h), B = proj(xa + MC, ya - h), C = proj(xa + MC, ya);
+                ctx.beginPath(); ctx.moveTo(D[0], D[1]); ctx.lineTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]);
+                ctx.strokeStyle = 'rgba(245,196,107,0.75)'; ctx.lineWidth = Math.max(1.5 / k, 0.8); ctx.lineJoin = 'miter'; ctx.stroke();
             }
         }
         ctx.restore();
