@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
    Yesos Polo Kukúmita — Agregar producto (solo administradores)
    Estilos propios del formulario; todo va acotado a #submenuAgregarProducto
-   para no tocar el resto del sitio. Versión: paso 4b (formulario + fotos adicionales + editor de imagen + sub-etiquetas + modo edición).
+   para no tocar el resto del sitio. Versión: paso 4c (3 columnas a todo el ancho) (formulario + fotos adicionales + editor de imagen + sub-etiquetas + modo edición).
    ══════════════════════════════════════════════════════════════ */
 #submenuAgregarProducto,
 #submenuAgregarProducto * {
@@ -113,15 +113,41 @@
     .sap-chips .sap-chip:nth-child(2n) { border-right: 0; }
 }
 
-/* Dos columnas en pantallas grandes: imagen y datos a la izquierda, etiquetas a la derecha */
-.sap-col-img, .sap-col-datos { display: contents; }
+/* Bloques del formulario. En celular van uno debajo de otro (imágenes → datos → etiquetas → eventos). */
+.sap-bloque { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* Pantallas grandes: 3 columnas que usan todo el ancho, pegadas a los bordes de la pantalla.
+     izquierda: imagen principal → más fotos → link imgbb → editor → etiquetas de evento
+     centro:    nombre y precio → descripción → medidas → video → existencia
+     derecha:   etiqueta principal y etiquetas de forma */
 @media (min-width: 900px) {
     #submenuAgregarProducto .sap-cuerpo {
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        column-gap: 28px; row-gap: 12px; align-items: start;
+        width: 100%; max-width: none; margin: 0; padding: 12px 8px 24px;
+        border: 0; border-radius: 0; background: transparent;
+        display: grid; align-items: start; column-gap: 14px; row-gap: 12px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "img datos etiq"
+            "evt datos etiq"
+            "acc acc   acc";
     }
-    .sap-col-img, .sap-col-datos { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-    #submenuAgregarProducto .sap-cuerpo > .panel-nombre-acciones { grid-column: 1 / -1; }
+    .sap-bloque-imagenes { grid-area: img; }
+    .sap-bloque-datos { grid-area: datos; }
+    .sap-bloque-etiquetas { grid-area: etiq; }
+    .sap-bloque-evento { grid-area: evt; }
+    #submenuAgregarProducto .sap-cuerpo > .panel-nombre-acciones { grid-area: acc; }
+
+    /* Un poco más compacto */
+    .sap-bloque { gap: 10px; }
+    .sap-seccion-titulo { margin-top: 6px; }
+    .sap-chip { min-height: 40px; padding: 8px 5px; }
+    #submenuAgregarProducto .sap-header { height: 60px; }
+}
+/* Entre 900 y 1099 px las columnas son angostas: las etiquetas van de 2 en 2 */
+@media (min-width: 900px) and (max-width: 1099px) {
+    .sap-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sap-chips .sap-chip:nth-child(3n) { border-right: 1px solid #eee5dc; }
+    .sap-chips .sap-chip:nth-child(2n) { border-right: 0; }
 }
 
 /* Modo oscuro */
@@ -195,3 +221,8 @@ body.modo-oscuro .sap-subtag button { background: #34506b; color: #cfe3f7; }
 body.modo-oscuro .sap-btn-etiqueta-nueva { color: #cfe3f7; background: rgba(0,0,0,0.2); border-color: #34506b; }
 body.modo-oscuro .sap-modal-etiqueta-caja { background: #211a14; border-color: #3a3028; }
 body.modo-oscuro .sap-modal-etiqueta-caja h4 { color: #e0d5cc; }
+
+/* Modo oscuro en pantallas grandes: sin tarjeta, las columnas van directo sobre el fondo */
+@media (min-width: 900px) {
+    body.modo-oscuro #submenuAgregarProducto .sap-cuerpo { background: transparent; border: 0; }
+}
